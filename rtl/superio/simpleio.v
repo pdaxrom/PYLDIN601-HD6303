@@ -62,7 +62,7 @@ module simpleio (
 		end
 	end
 	
-	always @ (posedge clk) begin
+	always @ (cs or rw or clk) begin
 		if (rst) begin
 			leds <= 8'b11111111;
 			rgb1 <= 8'b111;
@@ -74,8 +74,7 @@ module simpleio (
 		end else begin
 			if (timer_eq_flag) timer_mode[7] <= 1;
 
-			if (cs) begin
-				if (rw) begin
+				if (cs && rw && clk) begin
 					case (AD[3:0])
 					4'b0000: DO <= ~leds;
 					4'b0001: DO <= led7hi;
@@ -93,7 +92,8 @@ module simpleio (
 					4'b1010: DO <= timer_mode[0]?timer_cnt[15:8]:timer_prescaler[15:8];
 					4'b1011: DO <= timer_mode[0]?timer_cnt[7:0]:timer_prescaler[7:0];
 					endcase
-				end else begin
+				end
+				if (cs && !rw && !clk) begin
 					case (AD[3:0])
 					4'b0000: leds <= ~DI;
 					4'b0001: led7hi <= DI;
@@ -108,7 +108,6 @@ module simpleio (
 					4'b1011: timer_prescaler[7:0] <= DI;
 					endcase
 				end
-			end
 		end
 	end
 
