@@ -1,5 +1,5 @@
 module superio (
-	input			RESET,
+	output			RESET,
 	output			NMI,
 	output	[1:0]	IRQ,
 	input			EXTCS,
@@ -41,19 +41,39 @@ module superio (
 	
 	parameter LED_DIV_PERIOD = (PCLK_CLOCK / LED_REFRESH_CLOCK) / 2;
 
+	reg			sys_res;
+	reg	[3:0]	sys_res_delay = 4'b1000;
+
 	reg		[1:0]	led_anode;
 	reg		[24:0]	led_cnt;
 
 	always @ (posedge pclk)
 	begin
-		if (led_cnt == (LED_DIV_PERIOD - 1)) begin
-			led_anode <= ~led_anode;
-			led_cnt <= 0;
-		end else led_cnt <= led_cnt + 1'b1;
+		if (sys_res) led_anode <= 2'b01;
+		else begin
+			if (led_cnt == (LED_DIV_PERIOD - 1)) begin
+				led_anode <= ~led_anode;
+				led_cnt <= 0;
+			end else led_cnt <= led_cnt + 1'b1;
+		end
 	end
 
 	assign seg_led_h[8] = led_anode[1];
 	assign seg_led_l[8] = led_anode[0];
+
+	always @ (posedge E or negedge keys[3])
+	begin
+		if (!keys[3]) begin
+			sys_res <= 1;
+			sys_res_delay <= 4'b1000;
+		end else begin
+			if (sys_res_delay == 4'b0000) begin
+				sys_res <= 0;
+			end else sys_res_delay <= sys_res_delay - 4'b0001;
+		end
+	end
+
+	assign RESET = ~sys_res;
 
 	/*
 		Mapping IO
@@ -73,7 +93,7 @@ module superio (
 	wire simpleio_irq;
 	simpleio simpleio1 (
 		.clk(E),
-		.rst(~RESET),
+		.rst(sys_res),
 		.AD(ADDR[3:0]),
 		.DI(DATA),
 		.DO(simpleio_dout),
@@ -93,7 +113,7 @@ module superio (
 	wire [7:0] spiio_dout;
 	spiio spi_impl(
 		.clk(E),
-		.rst(~RESET),
+		.rst(sys_res),
 		.AD(ADDR[2:0]),
 		.DI(DATA),
 		.DO(spiio_dout),
