@@ -167,7 +167,7 @@ disp_init proc
 	oraa	#(SPI_SSM | SPI_SS0)
 	staa	SPI_CONFIG
 
-	ldaa	#$5C	; 01001100
+	ldaa	#$68	; 01001100
 	jsr	send_cmd
 
 	rts
