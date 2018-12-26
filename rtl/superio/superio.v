@@ -120,7 +120,7 @@ module superio (
 		.rw(RW),
 		.cs(spiio_cs),
 		
-		.clk_in(pclk),
+		.clk_in(E),
 		
 		.mosi(MOSI),
 		.msck(MSCK),

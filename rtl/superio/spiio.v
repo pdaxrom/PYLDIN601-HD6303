@@ -54,6 +54,18 @@ module spiio (
 	wire data_ready = ((bit_counter == 0) && (!msck))?1'b1:1'b0;
 
 	always @ (posedge clk) begin
+		if (!rst && cs && rw) begin
+			case (AD[2:0])
+			3'b000: DO <= rx_data[15:8];
+			3'b001: DO <= rx_data[7:0];
+			3'b010: DO <= {data_ready, 1'b0, cfg_ssm, cfg_16b, 1'b0, 1'b0, cfg_ss};
+			3'b011: DO <= prescaler;
+			3'b100: DO <= { 6'b0, reg_out };
+			endcase
+		end
+	end
+
+	always @ (negedge clk) begin
 		if (rst) begin
 			cfg_ssm <= 0;
 			cfg_16b <= 0;
@@ -64,16 +76,7 @@ module spiio (
 			start_lo <= 0;
 			reg_out <= 0;
 		end else begin
-			if (cs) begin
-				if (rw) begin
-					case (AD[2:0])
-					3'b000: DO <= rx_data[15:8];
-					3'b001: DO <= rx_data[7:0];
-					3'b010: DO <= {data_ready, 1'b0, cfg_ssm, cfg_16b, 1'b0, 1'b0, cfg_ss};
-					3'b011: DO <= prescaler;
-					3'b100: DO <= { 6'b0, reg_out };
-					endcase
-				end else begin
+			if (cs && !rw) begin
 					case (AD[2:0])
 					3'b000: begin
 							tx_data[15:8] <= DI;
@@ -91,7 +94,6 @@ module spiio (
 					3'b011: prescaler <= DI;
 					3'b100: reg_out <= DI[1:0];
 					endcase
-				end
 			end else begin
 				if (!data_ready) begin
 					start_hi <= 1'b0;
