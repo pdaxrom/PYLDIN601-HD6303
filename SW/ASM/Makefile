@@ -7,7 +7,8 @@ all: $(UNIASM)		\
     MICROBASIC.CMD	\
     MON.BIN		\
     SIMPLEIO.CMD	\
-    IRQTEST.CMD
+    IRQTEST.CMD		\
+    HCMSSPI.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))

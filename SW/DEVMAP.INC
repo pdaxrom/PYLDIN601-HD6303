@@ -1,4 +1,4 @@
-; BUILTIN UART
+; MCU BUILTIN IO
 
 REG_DDRP2   equ $01     ; PORT 2 DDR
 REG_PORT2   equ $03     ; PORT 2 I/O Address
@@ -61,3 +61,4 @@ SPI_READY	equ	$80
 SPI_SSM		equ	$20
 SPI_16B		equ	$10
 SPI_SS0		equ	$01
+SPI_SS1		equ	$02
