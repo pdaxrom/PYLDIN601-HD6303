@@ -41,7 +41,6 @@ module vpu (
 
 	reg			IncFlagR;
 	reg			IncFlagW;
-	reg			ReadOkay;
 	reg			WriteOkay;
 
 	wire		VAData_En = ((AD == 4'b0000) || (AD == 4'b0001)) && cs;
@@ -70,8 +69,7 @@ module vpu (
 			4'b1100: DO_REG <= VSOffset;
 			endcase
 		end
-		
-		if (ReadOkay) IncFlagR <= 0;
+		if (IncFlagR) IncFlagR <= 0;
 
 		if (IncFlagW) WriteOkay <= 1;
 		else WriteOkay <= 0;
@@ -92,7 +90,6 @@ module vpu (
 			VSOffset <= 50;
 			
 			IncFlagW <= 0;
-			ReadOkay <= 0;
 		end else if (cs && !rw) begin
 			case (AD[3:0])
 			4'b0000: begin
@@ -113,9 +110,6 @@ module vpu (
 			4'b1100: VSOffset <= DI;
 			endcase
 		end
-
-		if (IncFlagR) ReadOkay <= 1;
-		else ReadOkay <= 0;
 
 		if (IncFlagR || (IncFlagW && WriteOkay)) begin
 			IncFlagW <= 0;
