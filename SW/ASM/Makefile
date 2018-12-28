@@ -8,7 +8,9 @@ all: $(UNIASM)		\
     MON.BIN		\
     SIMPLEIO.CMD	\
     IRQTEST.CMD		\
-    HCMSSPI.CMD
+    HCMSSPI.CMD		\
+    VPU.CMD		\
+    VPUGRF.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
