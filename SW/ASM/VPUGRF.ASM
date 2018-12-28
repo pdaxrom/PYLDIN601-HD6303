@@ -33,6 +33,11 @@ VPU_B_AUTO	EQU	$01
 	ldx	#hello
 	jsr	F_UART_PUTS
 
+	ldaa	VPU_HSOFFS
+	ldaa	#$60
+	staa	VPU_HSOFFS
+	jsr	F_PUTHEX
+
 	ldaa	#VPU_B_GRF|VPU_B_AUTO
 	staa	VPU_CONFIG
 
@@ -41,9 +46,8 @@ VPU_B_AUTO	EQU	$01
 
 	ldx	#kim
 loop	ldaa	0,x
-	staa	VPU_DATA+1
+	staa	VPU_DATA
 	inx
-;	inx
 	cpx	#kim+8000
 	bne	loop
 
