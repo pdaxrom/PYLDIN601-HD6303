@@ -12,6 +12,18 @@
         <Source name="superio.v" type="Verilog" type_short="Verilog">
             <Options top_module="superio"/>
         </Source>
+        <Source name="vpu.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="tvout.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="vram.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="vrom.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
         <Source name="impl1/impl1.xcf" type="Programming Project File" type_short="Programming">
             <Options/>
         </Source>

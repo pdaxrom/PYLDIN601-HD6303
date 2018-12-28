@@ -22,8 +22,7 @@ module superio (
 	
 	output			PWM,
 	
-	output			TVOUT0,
-	output			TVOUT1,
+	output	[1:0]	TVOUT,
 
 	input			pclk,
 	
@@ -61,6 +60,13 @@ module superio (
 	assign seg_led_h[8] = led_anode[1];
 	assign seg_led_l[8] = led_anode[0];
 
+	wire pixel_clk;
+
+	pll pll1 (
+		.CLKI(pclk),
+		.CLKOS(pixel_clk)
+	);
+
 	always @ (posedge E or negedge keys[3])
 	begin
 		if (!keys[3]) begin
@@ -87,6 +93,22 @@ module superio (
 	wire DS5 = !EXTCS && (ADDR[7:5] == 3'b101); // $E6A0
 	wire DS6 = !EXTCS && (ADDR[7:5] == 3'b110); // $E6C0
 	wire DS7 = !EXTCS && (ADDR[7:5] == 3'b111); // $E6E0
+	
+	wire vpu_cs = DS0;
+	wire [7:0] vpu_dout;
+	wire vpu_irq;
+	vpu vpu1 (
+		.clk(E),
+		.rst(sys_res),
+		.AD(ADDR[3:0]),
+		.DI(DATA),
+		.DO(vpu_dout),
+		.rw(RW),
+		.cs(vpu_cs),
+		.irq(vpu_irq),
+		.pixel_clk(pixel_clk),
+		.tvout(TVOUT)
+	);
 	
 	wire simpleio_cs = DS5 && (ADDR[4] == 1'b0); // $E6A0
 	wire [7:0] simpleio_dout;
@@ -131,6 +153,7 @@ module superio (
 
 	wire [7:0] DOUT = simpleio_cs ? simpleio_dout :
 				spiio_cs ? spiio_dout :
+				vpu_cs ? vpu_dout :
 				8'b10100101;
 	
 	assign DATA = (RW & !EXTCS) ? DOUT : 8'bZZZZZZZZ;
