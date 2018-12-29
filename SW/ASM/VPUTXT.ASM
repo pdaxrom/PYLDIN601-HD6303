@@ -18,21 +18,20 @@
 	ldx	#hello
 	jsr	F_UART_PUTS
 
-	ldaa	#VPU_B_GRF|VPU_B_AUTO
+	ldaa	#VPU_B_AUTO
 	staa	VPU_CONFIG
 
 	ldx	#0
 	stx	VPU_ADDR
 
-	ldx	#kim
-loop	ldaa	0,x
-	staa	VPU_DATA
-	inx
-	cpx	#kim+8000
+	ldx	#40*25
+	clra
+loop	staa	VPU_DATA
+	inca
+	dex
 	bne	loop
 
-	jmp	F_RESET
+exit	jmp	F_RESET
 
-hello	db	'Hello, Graphics mode!', 10, 13, 0
+hello	db	'Hello, Text mode!', 10, 13, 0
 
-kim	INCLUDE KIM.INC
