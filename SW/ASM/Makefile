@@ -10,7 +10,8 @@ all: $(UNIASM)		\
     IRQTEST.CMD		\
     HCMSSPI.CMD		\
     VPU.CMD		\
-    VPUGRF.CMD
+    VPUGRF.CMD		\
+    VPUTXT.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
