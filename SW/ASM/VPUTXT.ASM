@@ -31,6 +31,26 @@ loop	staa	VPU_DATA
 	dex
 	bne	loop
 
+	ldaa	VPU_CONFIG
+	oraa	#VPU_B_CUR|VPU_B_CURINV
+	staa	VPU_CONFIG
+
+	ldaa	#2
+	staa	VPU_CURPOS
+	ldaa	#14
+	staa	VPU_CURLINS
+	ldaa	#15
+	staa	VPU_CURLINE
+
+	ldaa	VPU_CONFIG
+	jsr	F_PUTHEX
+	ldaa	VPU_CURPOS
+	jsr	F_PUTHEX
+	ldaa	VPU_CURLINS
+	jsr	F_PUTHEX
+	ldaa	VPU_CURLINE
+	jsr	F_PUTHEX
+
 exit	jmp	F_RESET
 
 hello	db	'Hello, Text mode!', 10, 13, 0

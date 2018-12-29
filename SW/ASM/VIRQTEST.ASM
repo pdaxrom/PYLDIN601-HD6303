@@ -30,7 +30,7 @@
 
 ; Enable VBL IRQ
 	ldaa	VPU_CONFIG
-	oraa	VPU_B_IEN
+	oraa	#VPU_B_IEN
 	staa	VPU_CONFIG
 
 	ldx	#irqhandler
