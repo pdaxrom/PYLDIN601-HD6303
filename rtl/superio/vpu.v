@@ -2,7 +2,7 @@
 	$0 - RW Data MSB
 	$1 - RW Address MSB
 	$2 - RW Address LSB
-	$3 - RW IRQ|IEN|VBL|XXX|GRF|CUR|I/D|AUT
+	$3 - RW IRQ|IEN|VBL|GRF|CIN|CUR|I/D|AUT
 	$4 - RW AutoOffset
 	$5 - RW Start address MSB
 	$6 - RW Start address LSB
@@ -10,9 +10,9 @@
 	$8 - RW VS Offset
 	$9 - RW HSize (in chars)
 	$A - RW VSize (in lines)
-	$B - RW HCursor
-	$C - RW VCursor
-	$D - RW TTT|TTT|TTT|TTT|LLL|LLL|LLL|LLL
+	$B - RW CurPos
+	$C - RW CurLineStart
+	$D - RW CurLineEnd
  */
 module vpu (
 	input wire clk,
@@ -37,6 +37,7 @@ module vpu (
 	reg			VBLTrigger;
 	reg			IEN;
 	reg			GRF;
+	reg			CURINV;
 	reg			CUR;
 	reg			ID;
 	reg			AUT;
@@ -57,6 +58,10 @@ module vpu (
 	reg [7:0]	HSize;
 	reg	[7:0]	VSize;
 
+	reg [7:0]	CurPos;
+	reg	[7:0]	CurLineStart;
+	reg	[7:0]	CurLineEnd;
+
 	always @ (posedge clk) begin
 		if (rst) begin
 			IncFlagR <= 0;
@@ -69,7 +74,7 @@ module vpu (
 			4'b0001: DO_REG <= {3'b000, VAddr[12:8]};
 			4'b0010: DO_REG <= VAddr[7:0];
 			4'b0011: begin
-				DO_REG <= {VIRQ, IEN, vbl, 1'b0, GRF, CUR, ID, AUT};
+				DO_REG <= {VIRQ, IEN, vbl, GRF, CURINV, CUR, ID, AUT};
 				VIRQ <= 0;
 				end
 			4'b0100: DO_REG <= AutoOffset;
@@ -79,6 +84,9 @@ module vpu (
 			4'b1000: DO_REG <= VSOffset;
 			4'b1001: DO_REG <= HSize;
 			4'b1010: DO_REG <= VSize;
+			4'b1011: DO_REG <= CurPos;
+			4'b1100: DO_REG <= CurLineStart;
+			4'b1101: DO_REG <= CurLineEnd;
 			endcase
 		end else if (vbl && !VBLTrigger) begin
 			VBLTrigger <= 1;
@@ -114,7 +122,7 @@ module vpu (
 				end
 			4'b0001: VAddr[12:8] <= DI[4:0];
 			4'b0010: VAddr[7:0] <= DI;
-			4'b0011: {IEN, GRF, CUR, ID, AUT} <= {DI[6],DI[3:0]};
+			4'b0011: {IEN, GRF, CURINV, CUR, ID, AUT} <= {DI[6], DI[4:0]};
 			4'b0100: AutoOffset <= DI;
 			4'b0101: VAddrStart[12:8] <= DI[4:0];
 			4'b0110: VAddrStart[7:0] <= DI;
@@ -122,6 +130,9 @@ module vpu (
 			4'b1000: VSOffset <= DI;
 			4'b1001: HSize <= DI;
 			4'b1010: VSize <= DI;
+			4'b1011: CurPos <= DI;
+			4'b1100: CurLineStart <= DI;
+			4'b1101: CurLineEnd <= DI;
 			endcase
 		end
 
@@ -175,13 +186,13 @@ module vpu (
 		end
 	end
 
-//	wire cursor_dis = ~(cfg_reg[1] && (cntVS >= cursor_sline) && (cntVS <= cursor_eline) && (cursor_pos == vcache_out_cnt));
+	wire CursorDis = ~(CUR && (cntVS >= VSOffset + CurLineStart) && (cntVS <= VSOffset + CurLineEnd) &&
+						((cntHS >> 3) == (HSOffset >> 3) + CurPos));
 
 	assign tvout[1] = (vbl || ~TVOutEnable) ? 1'b0:
-					  ShiftReg[7];
-//					  (cursor_dis) ? shift_reg[7]:
-//					  (cfg_reg[0]) ? ~shift_reg[7]:
-//					  1'b1;
+					  (CursorDis) ? ShiftReg[7]:
+					  (CURINV) ? ~ShiftReg[7]:
+					  1'b1;
 	assign tvout[0] = out_sync;
 
 	tvout tvout_impl (
