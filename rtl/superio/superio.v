@@ -158,7 +158,7 @@ module superio (
 	
 	assign DATA = (RW & !EXTCS) ? DOUT : 8'bZZZZZZZZ;
 	
-	assign IRQ[0] = !(simpleio_irq);
+	assign IRQ[0] = !(simpleio_irq | vpu_irq);
 	assign IRQ[1] = 1;
 	assign NMI = 1;
 endmodule
