@@ -11,7 +11,8 @@ all: $(UNIASM)		\
     HCMSSPI.CMD		\
     VPU.CMD		\
     VPUGRF.CMD		\
-    VPUTXT.CMD
+    VPUTXT.CMD		\
+    VIRQTEST.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
