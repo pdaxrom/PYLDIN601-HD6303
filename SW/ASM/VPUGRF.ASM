@@ -25,8 +25,10 @@
 	stx	VPU_ADDR
 
 	ldx	#kim
-loop	ldaa	0,x
+loop	ldd	0,x
 	staa	VPU_DATA
+	stab	VPU_DATA
+	inx
 	inx
 	cpx	#kim+8000
 	bne	loop
