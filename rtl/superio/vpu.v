@@ -90,7 +90,7 @@ module vpu (
 			AUT <= 1;
 			AutoOffset <= 1;
 			VAddrStart <= 0;
-			HSOffset <= 80;
+			HSOffset <= 96;
 			VSOffset <= 50;
 			HSize <= 39;
 			VSize <= 199;
@@ -133,6 +133,7 @@ module vpu (
 	wire [8:0] cntHS;
 	wire [8:0] cntVS;
 	reg [2:0] CharLine;
+	reg [12:0] VAddrOutTemp;
 	
 	wire TVOutEnable = (cntHS >= HSOffset) && (cntHS <= (HSOffset + (HSize << 3) + 7)) &&
 					   (cntVS >= VSOffset) && (cntVS <= (VSOffset + VSize));
@@ -140,19 +141,26 @@ module vpu (
 	always @ (posedge pixel_clk) begin
 		if (vbl) begin
 			VAddrOut <= VAddrStart;
+			VAddrOutTemp <= VAddrStart;
 			CharLine <= 3'b111;
-		end else if (hsync) begin
-			if ((cntHS == 1) && (cntVS >= VSOffset)) CharLine <= CharLine + 1'b1;
-			PixelCount <= 0;
 		end else if (TVOutEnable) begin
 			if (PixelCount == 0) begin
 				ShiftReg <= GRF ? VRamData : VRomData;
-				//ShiftReg <= 8'b10101010;
 				VAddrOut <= VAddrOut + 1'b1;
 			end else begin
 				ShiftReg <= ShiftReg << 1;
 			end
 			PixelCount <= PixelCount + 1'b1;
+		end else begin
+			if (!GRF && (cntVS >= VSOffset)) begin
+				if (cntHS == 1) begin
+					CharLine <= CharLine + 1'b1;
+				end else if (cntHS == 511) begin
+					if (CharLine == 3'b111) VAddrOutTemp <= VAddrOut;
+					else VAddrOut <= VAddrOutTemp;
+				end
+			end
+			PixelCount <= 0;
 		end
 	end
 

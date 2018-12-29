@@ -11,7 +11,7 @@ module tvout (
 	output wire out_sync
 );
 	wire screen_sync = (cntHS < 37) ? 1'b0 : 1'b1;
-	wire in_vbl = ((cntVS >= 5) & (cntVS < 309)) ? 1'b0 : 1'b1;
+	wire in_vbl = ((cntVS >= 5) && (cntVS < 309)) ? 1'b0 : 1'b1;
 	reg vbl_sync;
 	reg interlace;
 
