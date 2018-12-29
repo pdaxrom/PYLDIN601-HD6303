@@ -1,17 +1,18 @@
 /*
 	$0 - RW Data MSB
-	$1 - RW Data LSB
-	$2 - RW Address MSB
-	$3 - RW Address LSB
-	$4 - RW IRQ|IEN|GRF|XXX|BLN|CUR|I/D|AUT
-	$5 - RW AutoOffset
-	$6 - RW Start address MSB
-	$7 - RW Start address LSB
-	$8 - RW Cursor address MSB
-	$9 - RW Cursor address LSB
-	$a - RW TTT|TTT|TTT|TTT|LLL|LLL|LLL|LLL
-	$b - RW HS Offset
-	$c - RW VS Offset
+	$1 - RW Address MSB
+	$2 - RW Address LSB
+	$3 - RW IRQ|IEN|GRF|XXX|BLN|CUR|I/D|AUT
+	$4 - RW AutoOffset
+	$5 - RW Start address MSB
+	$6 - RW Start address LSB
+	$7 - RW HS Offset
+	$8 - RW VS Offset
+	$9 - RW HSize (in chars)
+	$A - RW VSize (in lines)
+	$B - RW Cursor address MSB
+	$C - RW Cursor address LSB
+	$D - RW TTT|TTT|TTT|TTT|LLL|LLL|LLL|LLL
  */
 module vpu (
 	input wire clk,
@@ -43,13 +44,15 @@ module vpu (
 	reg			IncFlagW;
 	reg			WriteOkay;
 
-	wire		VAData_En = ((AD == 4'b0000) || (AD == 4'b0001)) && cs;
+	wire		VAData_En = (AD == 4'b0000) && cs;
 
 	assign DO = VAData_En ? VRamDO : DO_REG;
 
 	reg	[12:0]	VAddrStart;
 	reg	[7:0]	HSOffset;
 	reg	[7:0]	VSOffset;
+	reg [7:0]	HSize;
+	reg	[7:0]	VSize;
 
 	always @ (posedge clk) begin
 		if (rst) begin
@@ -58,15 +61,16 @@ module vpu (
 		end else if (cs && rw) begin
 			case (AD[3:0])
 			4'b0000: IncFlagR <= 1;
-			4'b0001: IncFlagR <= 1;
-			4'b0010: DO_REG <= {3'b000, VAddr[12:8]};
-			4'b0011: DO_REG <= VAddr[7:0];
-			4'b0100: DO_REG <= {1'b0, IEN, GRF, 1'b0, BLN, CUR, ID, AUT};
-			4'b0101: DO_REG <= AutoOffset;
-			4'b0110: DO_REG <= {3'b000, VAddrStart[12:8]};
-			4'b0111: DO_REG <= VAddrStart[7:0];
-			4'b1011: DO_REG <= HSOffset;
-			4'b1100: DO_REG <= VSOffset;
+			4'b0001: DO_REG <= {3'b000, VAddr[12:8]};
+			4'b0010: DO_REG <= VAddr[7:0];
+			4'b0011: DO_REG <= {1'b0, IEN, GRF, 1'b0, BLN, CUR, ID, AUT};
+			4'b0100: DO_REG <= AutoOffset;
+			4'b0101: DO_REG <= {3'b000, VAddrStart[12:8]};
+			4'b0110: DO_REG <= VAddrStart[7:0];
+			4'b0111: DO_REG <= HSOffset;
+			4'b1000: DO_REG <= VSOffset;
+			4'b1001: DO_REG <= HSize;
+			4'b1010: DO_REG <= VSize;
 			endcase
 		end
 		if (IncFlagR) IncFlagR <= 0;
@@ -88,7 +92,8 @@ module vpu (
 			VAddrStart <= 0;
 			HSOffset <= 80;
 			VSOffset <= 50;
-			
+			HSize <= 39;
+			VSize <= 199;
 			IncFlagW <= 0;
 		end else if (cs && !rw) begin
 			case (AD[3:0])
@@ -96,18 +101,16 @@ module vpu (
 				VRamDI <= DI;
 				IncFlagW <= 1;
 				end
-			4'b0001: begin
-				VRamDI <= DI;
-				IncFlagW <= 1;
-				end
-			4'b0010: VAddr[12:8] <= DI[4:0];
-			4'b0011: VAddr[7:0] <= DI;
-			4'b0100: {IEN, GRF, BLN, CUR, ID, AUT} <= {DI[6:5],DI[3:0]};
-			4'b0101: AutoOffset <= DI;
-			4'b0110: VAddrStart[12:8] <= DI[4:0];
-			4'b0111: VAddrStart[7:0] <= DI;
-			4'b1011: HSOffset <= DI;
-			4'b1100: VSOffset <= DI;
+			4'b0001: VAddr[12:8] <= DI[4:0];
+			4'b0010: VAddr[7:0] <= DI;
+			4'b0011: {IEN, GRF, BLN, CUR, ID, AUT} <= {DI[6:5],DI[3:0]};
+			4'b0100: AutoOffset <= DI;
+			4'b0101: VAddrStart[12:8] <= DI[4:0];
+			4'b0110: VAddrStart[7:0] <= DI;
+			4'b0111: HSOffset <= DI;
+			4'b1000: VSOffset <= DI;
+			4'b1001: HSize <= DI;
+			4'b1010: VSize <= DI;
 			endcase
 		end
 
@@ -131,8 +134,8 @@ module vpu (
 	wire [8:0] cntVS;
 	reg [2:0] CharLine;
 	
-	wire TVOutEnable = (cntHS >= HSOffset) && (cntHS <= HSOffset + 319) &&
-					   (cntVS >= VSOffset) && (cntVS <= VSOffset + 199);
+	wire TVOutEnable = (cntHS >= HSOffset) && (cntHS <= (HSOffset + (HSize << 3) + 7)) &&
+					   (cntVS >= VSOffset) && (cntVS <= (VSOffset + VSize));
 	
 	always @ (posedge pixel_clk) begin
 		if (vbl) begin
