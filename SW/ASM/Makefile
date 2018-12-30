@@ -14,7 +14,8 @@ all: $(UNIASM)		\
     VPUTXT.CMD		\
     VIRQTEST.CMD	\
     PSGDEMO.CMD		\
-    CHIPTUNE.CMD
+    CHIPTUNE.CMD	\
+    RAMPAGECHK.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
