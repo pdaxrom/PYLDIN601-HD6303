@@ -15,7 +15,8 @@ all: $(UNIASM)		\
     VIRQTEST.CMD	\
     PSGDEMO.CMD		\
     CHIPTUNE.CMD	\
-    RAMPAGECHK.CMD
+    RAMPAGECHK.CMD	\
+    ROMPAGECHK.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
