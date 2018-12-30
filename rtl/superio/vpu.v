@@ -156,6 +156,7 @@ module vpu (
 	wire [8:0] cntVS;
 	reg [2:0] CharLine;
 	reg [12:0] VAddrOutTemp;
+	reg CursorDis;
 	
 	wire TVOutEnable = (cntHS >= HSOffset) && (cntHS <= (HSOffset + (HSize << 3) + 7)) &&
 					   (cntVS >= VSOffset) && (cntVS <= (VSOffset + VSize));
@@ -173,6 +174,8 @@ module vpu (
 				ShiftReg <= ShiftReg << 1;
 			end
 			PixelCount <= PixelCount + 1'b1;
+			CursorDis <= ~(CUR && (cntVS >= VSOffset + CurLineStart) && (cntVS <= VSOffset + CurLineEnd) &&
+						(cntHS > HSOffset + (CurPos << 3)) && (cntHS <= HSOffset + (CurPos << 3) + 7));
 		end else begin
 			if (!GRF && (cntVS >= VSOffset)) begin
 				if (cntHS == 1) begin
@@ -185,9 +188,6 @@ module vpu (
 			PixelCount <= 0;
 		end
 	end
-
-	wire CursorDis = ~(CUR && (cntVS >= VSOffset + CurLineStart) && (cntVS <= VSOffset + CurLineEnd) &&
-						((cntHS >> 3) == (HSOffset >> 3) + CurPos));
 
 	assign tvout[1] = (vbl || ~TVOutEnable) ? 1'b0:
 					  (CursorDis) ? ShiftReg[7]:
