@@ -1,4 +1,4 @@
-UNIASM = ../../generic/src/DEVEL/uniasm
+UNIASM = ../DEVEL/uniasm
 
 all: $(UNIASM) bootloader rom.bin
 
