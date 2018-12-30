@@ -185,6 +185,7 @@ module vpu (
 					else VAddrOut <= VAddrOutTemp;
 				end
 			end
+			ShiftReg <= 0;
 			PixelCount <= 0;
 		end
 	end
