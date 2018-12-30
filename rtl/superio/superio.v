@@ -60,10 +60,12 @@ module superio (
 	assign seg_led_h[8] = led_anode[1];
 	assign seg_led_l[8] = led_anode[0];
 
+	wire audio_clk;
 	wire pixel_clk;
 
 	pll pll1 (
 		.CLKI(pclk),
+		.CLKOP(audio_clk),
 		.CLKOS(pixel_clk)
 	);
 
@@ -131,6 +133,34 @@ module superio (
 		.switches(switches),
 		.keys(keys)
 	);
+	
+	wire psg_cs = DS5 && (ADDR[4] == 1'b1); // $E6B0
+	wire [7:0] psg_dout;
+	wire [7:0] PSGAOut;
+	
+	wire psg_bdir = psg_cs && !RW;
+	wire psg_bc1 = psg_cs && ADDR[0];
+	YM2149 psg1 (
+		.I_DA(DATA),
+		.O_DA(psg_dout),
+		.I_A9_L(1'b0),
+		.I_A8(1'b1),
+		.I_BDIR(psg_bdir),
+		.I_BC2(1'b1),
+		.I_BC1(psg_bc1),
+		.I_SEL_L(1'b1),
+		.O_AUDIO(PSGAOut),
+		.ENA(1'b1),
+		.RESET_L(~sys_res),
+		.CLK(E)
+	);
+	
+	sigma_delta_dac dac1(
+		.DACout(PWM),
+		.DACin(PSGAOut),
+		.CLK(audio_clk),
+		.RESET(sys_res)
+	);
 	wire spiio_cs = DS6 && (ADDR[4] == 1'b0); // $E6C0
 	wire [7:0] spiio_dout;
 	spiio spi_impl(
@@ -151,10 +181,11 @@ module superio (
 		.pout({BLANK, RS})
 	);
 
-	wire [7:0] DOUT = simpleio_cs ? simpleio_dout :
-				spiio_cs ? spiio_dout :
-				vpu_cs ? vpu_dout :
-				8'b10100101;
+	wire [7:0] DOUT = simpleio_cs ? simpleio_dout	:
+					  psg_cs	  ? psg_dout 		:
+					  spiio_cs	  ? spiio_dout		:
+					  vpu_cs	  ? vpu_dout		:
+					  8'b10100101;
 	
 	assign DATA = (RW & !EXTCS) ? DOUT : 8'bZZZZZZZZ;
 	

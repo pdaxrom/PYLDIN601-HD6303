@@ -27,6 +27,15 @@
         <Source name="pll.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
+        <Source name="sigma_delta_dac.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="YM2149/vol_table_array.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="YM2149/YM2149_volmix.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
         <Source name="impl1/impl1.xcf" type="Programming Project File" type_short="Programming">
             <Options/>
         </Source>
