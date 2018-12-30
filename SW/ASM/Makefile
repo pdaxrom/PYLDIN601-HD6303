@@ -12,7 +12,9 @@ all: $(UNIASM)		\
     VPU.CMD		\
     VPUGRF.CMD		\
     VPUTXT.CMD		\
-    VIRQTEST.CMD
+    VIRQTEST.CMD	\
+    PSGDEMO.CMD		\
+    CHIPTUNE.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))

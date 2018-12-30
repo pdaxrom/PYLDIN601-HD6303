@@ -35,11 +35,11 @@ loop	staa	VPU_DATA
 	oraa	#VPU_B_CUR|VPU_B_CURINV
 	staa	VPU_CONFIG
 
-	ldaa	#2
+	ldaa	#3
 	staa	VPU_CURPOS
-	ldaa	#14
+	ldaa	#0
 	staa	VPU_CURLINS
-	ldaa	#15
+	ldaa	#7
 	staa	VPU_CURLINE
 
 	ldaa	VPU_CONFIG
