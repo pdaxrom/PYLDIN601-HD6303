@@ -46,23 +46,21 @@ int main(int argc, char *argv[])
 
 	/* PAGE 0xC000 0xD000 */
 	if ((i & A15) && (i & A14) && !(i & A13)) {
-	    if (i & PAGE_A16) {
+	    if (i & PAGE_A17) {
 		out |= EXTCS; // EXTCS = 1, RAMCS = 0, ROMCS = 0
 		fprintf(stderr, "PROM> ");
 	    } else {
 		out |= (RAMCS | ROMCS | EXTCS); // EXTCS = 1, RAMCS = 1, ROMCS = 1
 		fprintf(stderr, "PRAM> ");
 	    }
-	    out |= (((i & PAGE_A17) ? MEM_A16 : 0) |
+	    out |= (((i & PAGE_A16) ? MEM_A16 : 0) |
 		    ((i & PAGE_A15) ? MEM_A15 : 0) |
 		    ((i & PAGE_A14) ? MEM_A14 : 0) |
 		    ((i & PAGE_A13) ? MEM_A13 : 0));
 	} else {
 	    /* BIOS 0xF000 */
-	    if ((i & A15) && (i & A14) && (i & A13) && (i & A12) &&
-		(( (i & PAGE_FN1) &&  (i & PAGE_FN2) &&  (i & PAGE_FN3)) ||
-		 (!(i & PAGE_FN1) && !(i & PAGE_FN2) && !(i & PAGE_FN3)))) {
-		out |= (EXTCS | MEM_A16); // EXTCS = 1, RAMCS = 0, ROMCS = 0, MEM_A16 = 1
+	    if ((i & A15) && (i & A14) && (i & A13) && (i & A12)) {
+		out |= EXTCS; // EXTCS = 1, RAMCS = 0, ROMCS = 0
 		fprintf(stderr, " ROM> ");
 	    } else 
 	    /* EXT 0xE600 */
