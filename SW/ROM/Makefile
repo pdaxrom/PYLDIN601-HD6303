@@ -12,7 +12,7 @@ rom.bin: $(UNIASM)
 	cpp -P -traditional -DHD6303Y ../../generic/src/ROM/ROM.ASM > ROM.S
 	$(UNIASM) ROM.S ROM.LST ROM.CMD
 	dd if=/dev/zero ibs=1k count=128 | tr "\000" "\377" >rom.bin
-	dd if=ROM.CMD of=rom.bin conv=notrunc bs=1 seek=$$((0xfe00))
+	dd if=ROM.CMD of=rom.bin conv=notrunc bs=1 seek=$$((0x1fe00))
 
 bootloader: ../../generic/src/ROM/bootloader.c
 	$(CC) $^ -o $@ -Wall -O2 -g

@@ -78,8 +78,9 @@
 	jmp	F_RESET
 
 readpages proc
-	ldab	#MEMPAGE_ROM
-loop	stab	MEMPAGE_SEL
+	clrb
+loop	orab	#MEMPAGE_ROM
+	stab	MEMPAGE_SEL
 	ldx	#page
 	jsr	F_PUTSTR
 	tba
