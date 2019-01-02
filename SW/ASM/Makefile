@@ -16,7 +16,8 @@ all: $(UNIASM)		\
     PSGDEMO.CMD		\
     CHIPTUNE.CMD	\
     RAMPAGECHK.CMD	\
-    ROMPAGECHK.CMD
+    ROMPAGECHK.CMD	\
+    PS2TEST.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
