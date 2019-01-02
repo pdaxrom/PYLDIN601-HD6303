@@ -26,7 +26,7 @@ module ps2io (
 	reg			key_irq;
 	wire [7:0]	key_scancode;
 	reg  [7:0]	key_data_in;
-	wire		key_write;
+	reg			key_write;
 	wire		key_write_ready;
 	wire		key_write_error;
 	
@@ -40,10 +40,12 @@ module ps2io (
 			case (AD[2:0])
 			3'b000: begin
 					DO <= key_scancode;
-					key_irq <= 0;
 					key_read <= 1;
 				end
-			3'b001: DO <= {key_irq, key_ien, 1'b0, key_write_error, key_write_ready, key_ready, key_extended, key_released};
+			3'b001: begin
+					DO <= {key_irq, key_ien, key_write, key_write_error, key_write_ready, key_ready, key_extended, key_released};
+					key_irq <= 0;
+				end
 			endcase
 		end else begin
 			if (key_ien && key_ready) key_irq <= 1;
@@ -51,16 +53,20 @@ module ps2io (
 		end
 	end
 
-	assign key_write = (AD == 3'b000) && !clk && cs && !rw;
-
 	always @(negedge clk) begin
 		if (rst) begin
 			key_ien <= 0;
+			key_write <= 0;
 		end else if (cs && !rw) begin
 			case (AD[2:0])
-			3'b000: key_data_in <= DI;
+			3'b000: begin
+					key_data_in <= DI;
+					key_write <= 1;
+				end
 			3'b001: key_ien <= DI[6];
 			endcase
+		end else begin
+			if (key_write_ready) key_write <= 0;
 		end
 	end
 
