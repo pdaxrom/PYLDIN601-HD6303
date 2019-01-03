@@ -24,23 +24,7 @@ loop1	ldaa	PS2_CONFIG
 	bita	#PS2_BIT_RDY
 	beq	loop1
 
-	ldab	PS2_DATA
-
-	bra	show
-
-	cmpa	oldc
-	beq	loop1
-;	bne	show
-	cmpb	oldd
-	bne	show
-	bra	loop1
-
-show
-	staa	oldc
-	stab	oldd
-
-	jsr	F_PUTHEX
-	tba
+	ldaa	PS2_DATA
 	jsr	F_PUTHEX
 
 	ldx	#nl
@@ -51,9 +35,6 @@ show
 	bra	loop
 
 	jmp	F_RESET
-
-oldc	db	0
-oldd	db	0
 
 hello	db	'Hello, PS2'
 nl	db	10, 13, 0
