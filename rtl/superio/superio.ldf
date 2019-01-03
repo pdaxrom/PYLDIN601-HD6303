@@ -36,9 +36,6 @@
         <Source name="YM2149/YM2149_volmix.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="ps2_keyboard.v" type="Verilog" type_short="Verilog" excluded="TRUE">
-            <Options/>
-        </Source>
         <Source name="ps2io.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
