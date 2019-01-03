@@ -1,7 +1,7 @@
 /*
 	PS2 devices:
 	$00 RW - Keyboard data
-	$01 RW - IRQ|IEN|XXX|WRE|WRY|RDY|EXT|RLS  Keyboard config/status
+	$01 RW - IRQ|IEN|RDY|BSY|TOU|XXX|XXX|XXX  Keyboard config/status
 	
  */
  
@@ -18,72 +18,94 @@ module ps2io (
 	inout		ps2clk,
 	inout		ps2dat
 );
-	wire		key_released;
-	wire		key_extended;
-	wire		key_ready;
-	reg			key_read;
-	reg			key_ien;
+	wire		istrobe;
+	wire [7:0]	ibyte;
+	reg			oreq;
+	reg [7:0]	obyte;
+	wire		oack;
+	wire		timeout;
+
 	reg			key_irq;
-	wire [7:0]	key_scancode;
-	reg  [7:0]	key_data_in;
-	reg			key_write;
-	wire		key_write_ready;
-	wire		key_write_error;
-	
+	reg			key_ien;
+	reg			key_ready;
+	reg			key_ready_f;
+	reg [7:0]	key_code;
+	reg			key_busy;
+
 	assign irq = key_irq;
+
+	always @ (posedge clk) begin //posedge istrobe or posedge rst or posedge key_ready_f) begin
+		if (rst) begin
+			key_ready <= 0;
+		end else if (istrobe) begin
+			key_code <= ibyte;
+			key_ready <= 1;
+		end else if (key_ready_f) begin
+			key_ready <= 0;
+		end
+	end
 
 	always @ (posedge clk) begin
 		if (rst) begin
 			key_irq <= 0;
-			key_read <= 0;
+			key_ready_f <= 0;
 		end else if (cs && rw) begin
 			case (AD[2:0])
 			3'b000: begin
-					DO <= key_scancode;
-					key_read <= 1;
+					DO <= key_code;
+					key_ready_f <= 1;
 				end
 			3'b001: begin
-					DO <= {key_irq, key_ien, key_write, key_write_error, key_write_ready, key_ready, key_extended, key_released};
+					DO <= {key_irq, key_ien, key_ready, key_busy, timeout, 1'b0, 1'b0, 1'b0};
 					key_irq <= 0;
 				end
 			endcase
 		end else begin
 			if (key_ien && key_ready) key_irq <= 1;
-			key_read <= 0;
+			if (!key_ready) key_ready_f <= 0;
 		end
+	end
+
+	reg			write_f;
+
+	always @(posedge clk or posedge rst or posedge write_f or posedge oack) begin
+		if (rst) begin
+			oreq <= 0;
+			key_busy <= 0;
+		end else if (write_f) begin
+			oreq <= 1;
+			key_busy <= 1;
+		end else if (oack) key_busy <= 0;
+		else oreq <= 0;
 	end
 
 	always @(negedge clk) begin
 		if (rst) begin
 			key_ien <= 0;
-			key_write <= 0;
+			write_f <= 0;
 		end else if (cs && !rw) begin
 			case (AD[2:0])
 			3'b000: begin
-					key_data_in <= DI;
-					key_write <= 1;
+					obyte <= DI;
+					write_f <= 1;
 				end
 			3'b001: key_ien <= DI[6];
 			endcase
 		end else begin
-			if (key_write_ready) key_write <= 0;
+			write_f <= 0;
 		end
 	end
 
-	ps2_keyboard_interface ps2interface1(
-		.clk(clk),
+	ps2 ps2keyboard(
+		.sysclk(clk),
 		.reset(rst),
-		.ps2_clk(ps2clk),
-		.ps2_data(ps2dat),
-		.rx_extended(key_extended),
-		.rx_released(key_released),
-		.rx_scan_code(key_scancode),
-		.rx_data_ready(key_ready),
-		.rx_read(key_read),
-		.tx_data(key_data_in),
-		.tx_write(key_write),
-		.tx_write_ack_o(key_write_ready),
-		.tx_error_no_keyboard_ack(key_write_error)
+		.ps2dat(ps2dat),
+		.ps2clk(ps2clk),
+		.istrobe(istrobe),
+		.ibyte(ibyte),
+		.oreq(oreq),
+		.obyte(obyte),
+		.oack(oack),
+		.timeout(timeout)
 	);
-
 endmodule
