@@ -163,8 +163,8 @@ DELBOOT DEX
         STAA  REG_DDRP5       ;P5 DDR  = OUTPUT
         STAA  REG_PORT5       ;P5 OUTPUTS ALL HIGH
         STAA	REG_DDRP6       ;P6 DDR  = OUTPUT 
-        LDAA  #$00
-        STAA  REG_PORT6       ;P6 PORT = All LEDs OFF
+;        LDAA  #$00
+;        STAA  REG_PORT6       ;P6 PORT = All LEDs OFF
         
         LDAA  #250
         STAA  BLINK_CT
@@ -185,18 +185,18 @@ MONITOR LDX   #BOOTMSG
 LOOP1   LDX   #175      ; MAIN Program Loop starting point.
         JSR   DELAYX    ;delay approx 1ms
         
-BLINK1  DEC   BLINK_CT  ;Decrement the blink counter (250ms based on delay above)
-        BNE   GETCHR    ; NO = look for input & continue
-        LDAA  #250      ; YES = Reset the blink counter
-        STAA  BLINK_CT
-        LDAA  REG_PORT6
-        CMPA  #$80      ;Was previous output = MSB only set?
-        BEQ   BLINK2    ;Yes = Set $70 output
-        LDAA  #$80      ; No = Set $80 output 
-        STAA  REG_PORT6 ;P6 PORT
-        JMP   GETCHR    ; continue...
-BLINK2  LDAA  #$70      ; Set $70 output
-        STAA  REG_PORT6 ;P6 PORT
+;BLINK1  DEC   BLINK_CT  ;Decrement the blink counter (250ms based on delay above)
+;        BNE   GETCHR    ; NO = look for input & continue
+;        LDAA  #250      ; YES = Reset the blink counter
+;        STAA  BLINK_CT
+;        LDAA  REG_PORT6
+;        CMPA  #$80      ;Was previous output = MSB only set?
+;        BEQ   BLINK2    ;Yes = Set $70 output
+;        LDAA  #$80      ; No = Set $80 output 
+;        STAA  REG_PORT6 ;P6 PORT
+;        JMP   GETCHR    ; continue...
+;BLINK2  LDAA  #$70      ; Set $70 output
+;        STAA  REG_PORT6 ;P6 PORT
 
 GETCHR  JSR   INCHRIF   ;Get input if available
         BCS	  NOCHR     ; No Data Ready then loop again
@@ -327,8 +327,8 @@ IS_F    CMPA  #'F'       ;******** Fill Memory *******
                
 IS_LCF  CMPA  #'f'       ;******** Flash LEDs 10x *******
         BNE   IS_H
-        LDAB  #10
-        JSR   FLASH1
+;        LDAB  #10
+;        JSR   FLASH1
         JMP   MENUXOK   ;Print OK and resume main loop       
 
 IS_H    CMPA  #'H'       ;** Set High Speed 19200 baud ***
@@ -403,19 +403,19 @@ DELAY1  DEX
 ;; Toggle all the bits (LEDs) on P6 ON/OFF 5 times using 1/4sec. delay
 ;;************************************************************************
 FLASHP6 ;subroutine
-        LDAB  #05 
-FLASH1  LDAA  #$00
-        STAA  $17       ;P6 PORT
-        LDX   #21937    ;approx 1/8 sec
-        JSR   DELAYX
-        
-        LDAA  #$FF
-        STAA  $17       ;P6 PORT
-        LDX   #21937    ;approx 1/8 sec
-        JSR   DELAYX
-        DECB 
-        CMPB  #$00 
-        BNE   FLASH1
+;        LDAB  #05 
+;FLASH1  LDAA  #$00
+;        STAA  $17       ;P6 PORT
+;        LDX   #21937    ;approx 1/8 sec
+;        JSR   DELAYX
+
+;        LDAA  #$FF
+;        STAA  $17       ;P6 PORT
+;        LDX   #21937    ;approx 1/8 sec
+;        JSR   DELAYX
+;        DECB 
+;        CMPB  #$00 
+;        BNE   FLASH1
         RTS
 
 ;;************************************************************************
@@ -941,10 +941,10 @@ OUTP5   CMPA  #'5'
         STAA  $15
 OUTP6   CMPA  #'6'
         BNE   OUTPX
-        LDAA  #$FF
-        STAA  $16      ;Port6 DDR
-        LDAA  TEMP_04 
-        STAA  $17
+;        LDAA  #$FF
+;        STAA  $16      ;Port6 DDR
+;        LDAA  TEMP_04 
+;        STAA  $17
 OUTPX   RTS
 ;;************************************************************************
 ;; PORTOUT  
@@ -970,12 +970,12 @@ INP5    CMPB  #'5'
         JSR   OUTHEX
 INP6    CMPB  #'6'
         BNE   INPX                            
-        LDAA  #$00
-        STAA  $16      ;Port6 DDR
-        LDAA  $17
-        JSR   OUTHEX
-        LDAA  #$FF
-        STAA  $16      ;Restore Port6 DDR
+;        LDAA  #$00
+;        STAA  $16      ;Port6 DDR
+;        LDAA  $17
+;        JSR   OUTHEX
+;        LDAA  #$FF
+;        STAA  $16      ;Restore Port6 DDR
 INPX    RTS
 
 ;;******************************************************************
@@ -1822,8 +1822,8 @@ IRQDEFT STAA  IRQFLAG1
 ;;  Trap IRQ Routine 
 ;;************************************************************************        
 TRAP01  ;subroutine           
-        LDAA	#$55
-        STAA	$17   ;P6 PORT
+;        LDAA	#$55
+;        STAA	$17   ;P6 PORT
         NOP
         NOP
         NOP

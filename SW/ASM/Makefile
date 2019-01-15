@@ -18,7 +18,8 @@ all: $(UNIASM)		\
     RAMPAGECHK.CMD	\
     ROMPAGECHK.CMD	\
     PS2TEST.CMD		\
-    PS2LEDS.CMD
+    PS2LEDS.CMD		\
+    LOADBIOS.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
