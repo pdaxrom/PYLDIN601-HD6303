@@ -1,7 +1,9 @@
 UNIASM = ../../DEVEL/uniasm
 
 all: $(UNIASM)		\
-    ZBIOS.CMD
+    ZBIOS.CMD		\
+    UNIBIOS.CMD		\
+    HELLO.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))

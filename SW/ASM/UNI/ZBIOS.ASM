@@ -199,7 +199,8 @@ warm
 		ldab	rompage		; проверка на страничните ROM
 		clrb
 romloop 	ldaa	rompage
-		anda	#MEMPAGE_FMASK|MEMPAGE_HI
+		anda	#MEMPAGE_FMASK
+		oraa	#MEMPAGE_HI	; we use upper memory space for pages
 		aba
 		staa	rompage
 		ldx	#$a55a		; за 2764 и 27128 първа част
@@ -491,6 +492,8 @@ uartcon		proc
 		ldx	#uartlogo
 		bsr	uart_puts
 
+    sei
+
 loop		int	$18
 		cmpa	#'L'
 		beq	cmd_load
@@ -503,10 +506,10 @@ loop		int	$18
 		bra	loop
 
 cmd_load	bsr	get_block_addr
-cmd_lo1		int	$18
+cmd_lo1		bsr	uart_in
 		staa	0,x
 		inx
-		cpx	tmpx
+		cpx	fddparms
 		bne	cmd_lo1
 cmd_oka		ldaa	#'O'
 		int	$19
@@ -516,11 +519,17 @@ cmd_save	bsr	get_block_addr
 cmd_sa1		ldaa	0,x
 		int	$19
 		inx
-		cpx	tmpx
+		cpx	fddparms
 		bne	cmd_sa1
 		bra	cmd_oka
 
 cmd_go		bsr	get_word
+		pshx
+		xgdx
+		bsr	uart_outhex
+		tba
+		bsr	uart_outhex
+		pulx
 		jmp	0,x
 		endp
 
@@ -528,10 +537,35 @@ get_block_addr proc
 		bsr	get_word
 		pshx
 		bsr	get_word
-		stx	tmpx
+		stx	fddparms
 		pulx
 		rts
 		endp
+
+uart_in	proc
+	ldaa	REG_TRCSR
+	anda	#$C0		;FILTER OUT RDRF AND ORFE
+	cmpa	#$00
+	beq	uart_in		;WAIT FOR CHARACTER
+	cmpa	#$40
+	beq	uartin1		;CHECK FOR FRAMING ERROR
+	ldaa	REG_RDR         ;READ RECIEVED CHARACTER
+	rts
+uartin1	ldaa	REG_RDR		;ON ERROR, FLUSH BUFFER AND CLEAR ERROR FLAG
+	bra	uart_in
+	endp
+
+uart_out proc
+	pshb
+uartou1	ldab	REG_TRCSR	;Get Status Reg 
+	aslb			;TDRE->C
+	aslb
+	aslb
+	bcc	uartou1		;READY FOR NEXT CHARACTER
+	staa	REG_TDR
+	pulb
+	rts
+	endp
 
 uart_puts 	proc
 		pshx
@@ -571,9 +605,9 @@ OUTNIBX 	int	$19
 		endp
 
 get_word	proc
-		int	$18
+		bsr	uart_in
 		tab
-		int	$18
+		bsr	uart_in
 		psha
 		pshb
 		pulx
@@ -733,10 +767,100 @@ initscr 	sei
 		rts
 
 modeok		anda	#3		;force 4 --> 0
+		clr	queuelen
+		stx	scrbase
+		stx	scraddr
+		staa	scrmode
+		staa	tmpx+1
+
+		cmpa	#2		;grmidres
+		bne	initscr1
+		stab	palette
+		andb	#3
+		aslb
+		aslb
+		aslb
+		bra	initscr3
+
+initscr1	tsta			; text40 ?
+		bne	initscr2	; no
+		tstb			; b/w ?
+		beq	initscr2
+		stab	attribute
+	    ;	ldab	#4
+	    ;	db	$C1		; CMPB #
+initscr2	clrb
+
+initscr3	
+;		ldaa	#/piatbl
+;		staa	tmpx
+;		ldx	tmpx
+;		orab	piatbl,x
+;		ldaa	piadrb
+;		anda	#$C1
+;		staa	piadrb
+;		orab	piadrb
+;		stab	piadrb
+
+		ldx	#videotbl
+		ldaa	6,x		; rows
+		ldab	scrmode
+		andb	#3
+		bne	grafmode
+textmode
+		staa	scrrows 	; брой редове
+		inca
+		inca
+		bsr	setrows
+		ldaa	1,x
+		staa	scrcols 	; брой символи на ред
+;		inca
+;		inca
+		bsr	setcols
+		ldx	16,x
+		stx	scrsize
+
+		ldab	#/screen
+		stab	scrbase 	; начален адрес на екрана
+		ldaa	#screen
+		staa	scrbase+1
+		tst	swia
+		bpl	textmode1
+		ldab	scraddr
+		ldaa	scraddr+1
+textmode1	stab	scraddr
+		staa	scraddr+1
+		bra	setmode1
+grafmode
+		bsr	setrows
+		ldaa	1,x
+		bsr	setcols
+		ldab	scrbase
+		ldaa	scrbase+1
+		bra	setmode1x	;we use emulation to send graphics screen to vpu
+
+setmode1	stab	VPU_VADDR
+		staa	VPU_VADDR+1
+setmode1x	tst	swia
+		bmi	return
+
+		ldx	#system_line	;clear system line
+		stx	VPU_ADDR
+		ldab	#80
+loop		clr	VPU_DATA
+		decb
+		bne	loop
 
 		ldaa	#12		;cls
 		int	$22
 return		rts
+
+setcols		deca
+		staa	VPU_HSIZE
+		rts
+setrows 	deca
+		staa	VPU_VSIZE
+		rts
 		endp
 
 ;---------------------------------------
@@ -849,6 +973,11 @@ uartou1		ldab	REG_TRCSR	;Get Status Reg
 ; procedure reads keyboard and expands keys
 
 int20		proc
+		int	$18
+		cmpa	#$0D
+		bne	exid
+		ldaa	#$C0
+exid		jmp	rtswia
 
 again		tst	macroflg
 		bne	inmacro
