@@ -43,6 +43,10 @@ LK_NUM		EQU	$10
 	oraa	#BIT_IRQ1E
 	staa	REG_RP5CR
 
+	ldaa	#$FF
+	jsr	ps2write
+	jsr	ps2read
+
 	ldaa	PS2_CONFIG
 	oraa	#PS2_BIT_IEN
 	staa	PS2_CONFIG
@@ -77,7 +81,7 @@ loop
 
 	bra	loop
 
-irqhandler proc
+irqhandler	proc
 		sei
 		ldaa	PS2_CONFIG
 		bita	#PS2_BIT_IEN
@@ -154,32 +158,71 @@ clrshbit	coma
 		bra	return
 
 capslock	ldaa	#LK_CAPS
-		ldab	#$04
 		bra	setlock
 scrollock	ldaa	#LK_SCROLL
-		ldab	#$01
 		bra	setlock
 numlock		ldaa	#LK_NUM
-		ldab	#$02
 		bra	setlock
 cyrlock		ldaa	#LK_CYR
-		ldab	#$01
-setlock
-		ldab	#KEY_F0
+
+setlock		ldab	#KEY_F0
 		bitb	scanbits
 		bne	return
 		
 		eora	lockstatus
 		staa	lockstatus
+		bsr	setleds
 
 return		ldaa	scanbits
 		anda	#$FF^(KEY_F0|KEY_E0)
 		staa	scanbits
-exit
+exit		rti
+		endp
 
+setleds		proc
+		ldaa	PS2_CONFIG
+		anda	#$FF^PS2_BIT_IEN
+		staa	PS2_CONFIG
+		clrb
+		ldaa	lockstatus
+		bita	#LK_SCROLL
+		beq	chknum
+		orab	#$01
+chknum		bita	#LK_NUM
+		beq	chkcaps
+		orab	#$02
+chkcaps		bita	#LK_CAPS
+		beq	chkcyr
+		orab	#$04
+chkcyr		bita	#LK_CYR
+		beq	write
+		orab	#$01
+write		ldaa	#$ED
+		bsr	ps2write
+		bsr	ps2read
+		tba
+		bsr	ps2write
+		bsr	ps2read
+		ldaa	PS2_CONFIG
+		oraa	#PS2_BIT_IEN
+		staa	PS2_CONFIG
+		rts
+		endp
 
-		rti
+ps2read		proc
+		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_RDY
+		beq	ps2read
+		ldaa	PS2_DATA
+		rts
+		endp
 
+ps2write	proc
+		staa	PS2_DATA
+loop0		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_BSY
+		bne	loop0
+		rts
 		endp
 
 ;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
