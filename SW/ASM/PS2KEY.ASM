@@ -10,6 +10,26 @@
 	include ../DEVMAP.INC
 	include ../ROM/BOOTMEM.INC
 	include ../ROM/BOOTROM.INC
+	include UNI/MEMORY.INC
+
+KEY_E0		EQU	$10
+KEY_F0		EQU	$80
+SCANBITS	EQU	old_key
+
+;SH_SCROLL	EQU	$80
+;SH_CAPS		EQU	$40
+;SH_CYR		EQU	$20
+;SH_NUM		EQU	$10
+SH_ALT		EQU	$40
+SH_CTRL		EQU	$10
+SH_CYR		EQU	$04
+SH_RSHIFT	EQU	$02
+SH_SHIFT	EQU	$01
+
+LK_SCROLL	EQU	$80
+LK_CAPS		EQU	$40
+LK_CYR		EQU	$20
+LK_NUM		EQU	$10
 
 	org $100
 
@@ -30,26 +50,174 @@
 	ldx	#irqhandler
 	stx	VIRQ
 
+	clr	scancode
+	clr	shiftstatus
+	clr	lockstatus
+	clr	scanbits
+
 	ldx	#text1
 	jsr	F_UART_PUTS
 
 	cli
 
-loop	bra	loop
+loop	
 
-irqhandler proc
-	ldaa	PS2_CONFIG
-	bita	#PS2_BIT_IEN
-	beq	ret
-	bita	#PS2_BIT_RDY
-	beq	ret
-	ldaa	PS2_DATA
+
+	ldaa	scancode
 	jsr	F_PUTHEX
+	ldaa	shiftstatus
+	jsr	F_PUTHEX
+	ldaa	lockstatus
+	jsr	F_PUTHEX
+	ldaa	scanbits
+	jsr	F_PUTHEX
+
 	ldx	#nl
 	jsr	F_PUTSTR
-ret	rti
-	endp
+
+	bra	loop
+
+irqhandler proc
+		sei
+		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_IEN
+		bne	check_key
+		jmp	exit
+check_key	bita	#PS2_BIT_RDY
+		bne	read_scan
+		jmp	exit
+
+read_scan	ldaa	PS2_DATA
+
+		cmpa	#$E0
+		bne	check_f0
+		ldaa	scanbits
+		oraa	#key_e0
+		staa	scanbits
+		jmp	exit
+check_f0	cmpa	#$F0
+		bne	check_shift
+		ldaa	scanbits
+		oraa	#key_f0
+		staa	scanbits
+		jmp	exit
+check_shift	cmpa	#$12
+		beq	shift
+		cmpa	#$59
+		beq	rshift
+		cmpa	#$14
+		beq	ctrl
+		cmpa	#$11
+		beq	alt
+		cmpa	#$58
+		beq	capslock
+		cmpa	#$7E
+		beq	scrollock
+		cmpa	#$77
+		beq	numlock
+		cmpa	#$1F
+		beq	cyrlock
+
+		ldab	scanbits
+		bitb	#key_f0
+		beq	savescan
+		clra
+savescan	staa	scancode
+		bra	return
+
+shift		ldaa	#SH_SHIFT
+		bra	chkshift
+rshift		ldaa	#SH_RSHIFT
+chkshift	ldab	scanbits
+		andb	#KEY_F0|KEY_E0
+		cmpb	#KEY_F0|KEY_E0
+		bne	chkshift1
+		bra	return
+chkshift1	cmpb	#KEY_E0
+		bne	sereset
+		bra	return
+ctrl		ldaa	#SH_CTRL
+		bra	sereset
+alt		ldaa	#SH_ALT
+sereset		ldab	scanbits
+		bitb	#KEY_E0
+		beq	sereset2
+		lsla
+sereset2	bitb	#KEY_F0
+		bne	clrshbit
+		oraa	shiftstatus
+		staa	shiftstatus
+		bra	return
+clrshbit	coma
+		anda	shiftstatus
+		staa	shiftstatus
+		bra	return
+
+capslock	ldaa	#LK_CAPS
+		ldab	#$04
+		bra	setlock
+scrollock	ldaa	#LK_SCROLL
+		ldab	#$01
+		bra	setlock
+numlock		ldaa	#LK_NUM
+		ldab	#$02
+		bra	setlock
+cyrlock		ldaa	#LK_CYR
+		ldab	#$01
+setlock
+		ldab	#KEY_F0
+		bitb	scanbits
+		bne	return
+		
+		eora	lockstatus
+		staa	lockstatus
+
+return		ldaa	scanbits
+		anda	#$FF^(KEY_F0|KEY_E0)
+		staa	scanbits
+exit
+
+
+		rti
+
+		endp
+
+;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
+kbtbl	
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 00
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 10
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 20
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 30
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 40
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 50
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 60
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 70
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 80
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 90
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; A0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; B0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; C0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; D0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; E0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; F0
 
 hello	db	'Hello, PS2 Keyboard'
 nl	db	10, 13, 0
 text1	db	'Press any keys!!!', 10, 13, 0
+
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 00
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 10
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 20
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 30
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 40
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 50
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 60
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 70
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 80
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 90
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; A0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; B0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; C0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; D0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; E0
+	db	  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; F0
