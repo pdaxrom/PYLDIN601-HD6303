@@ -1378,16 +1378,12 @@ scroll3 	bcc	scroll4
 		staa	altaddr+1
 		stab	altaddr
 		ldx	altaddr
-;		dex
-;		dex			;fix hardware bug
 		clrb
 		jsr	cleol1
 		jsr	clear_sysline
-
 		ldx	scraddr
 		stx	synchro_addr
 		jmp	fixcur
-
 
 ctrl09		cmpa	#$09		; табулация
 		bne	ctrl08
