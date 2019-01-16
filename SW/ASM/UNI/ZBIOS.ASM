@@ -809,16 +809,18 @@ initscr3
 		bne	grafmode
 textmode
 		staa	scrrows 	; брой редове
-		inca
-		inca
+		inca			; service lines
+		inca			;
 		bsr	setrows
 		ldaa	1,x
 		staa	scrcols 	; брой символи на ред
-;		inca
-;		inca
 		bsr	setcols
 		ldx	16,x
 		stx	scrsize
+
+		ldaa	VPU_CONFIG
+		anda	#$FF^VPU_B_GRF
+		staa	VPU_CONFIG
 
 		ldab	#/screen
 		stab	scrbase 	; начален адрес на екрана
@@ -835,6 +837,11 @@ grafmode
 		bsr	setrows
 		ldaa	1,x
 		bsr	setcols
+
+		ldaa	VPU_CONFIG
+		oraa	#VPU_B_GRF
+		staa	VPU_CONFIG
+
 		ldab	scrbase
 		ldaa	scrbase+1
 		bra	setmode1x	;we use emulation to send graphics screen to vpu
@@ -845,9 +852,11 @@ setmode1x	tst	swia
 		bmi	return
 
 		ldx	#system_line	;clear system line
-		stx	VPU_ADDR
 		ldab	#80
-loop		clr	VPU_DATA
+;		ldab	scrcols
+;		aslb
+loop		clr	x
+		inx
 		decb
 		bne	loop
 
@@ -858,7 +867,10 @@ return		rts
 setcols		deca
 		staa	VPU_HSIZE
 		rts
-setrows 	deca
+setrows 	asla
+		asla
+		asla
+		deca
 		staa	VPU_VSIZE
 		rts
 		endp
@@ -1083,7 +1095,7 @@ putc		psha
 
 int22		proc			; писане на символ на екрана
 		int	$19
-		rts
+;		rts
 		sei
 		ldab	scrmode
 		andb	#3
@@ -1933,7 +1945,8 @@ newline		db	10,13,0
 		checksum
 
 title		db	7,30,48,32
-name		db	'Pyldin 601Z',0
+;name		db	'Pyldin 601Z',0
+name		db	' ', $8B, $A8, $AB, $A8, $B2, ' 601 ', 0
 
 		error	*-serial_no
 		dw	%1011010001100001	;90-03-01
