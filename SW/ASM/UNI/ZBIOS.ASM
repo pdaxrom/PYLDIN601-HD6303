@@ -904,7 +904,6 @@ j1		ldab	cv		; вертикална позиция и
 ; SET CURSOR POSITION
 ;---------------------------------------
 int15		proc			; процедурата експортира:
-		global	vpu_cursor
 		sei
 		cmpb	scrrows
 		bcc	sorry
@@ -912,21 +911,7 @@ int15		proc			; процедурата експортира:
 j1		cmpa	scrcols
 		bcc	sorry
 		staa	ch
-sorry		
-; A - Start scan line
-; B - Stop scan line
-vpu_cursor	ldaa	cv
-		asla
-		asla
-		asla
-		tab
-		adda	cursor_start
-		staa	VPU_CURLINS
-		addb	cursor_end
-		stab	VPU_CURLINE
-		ldaa	ch
-		staa	VPU_CURPOS
-		rts
+sorry		jmp	fixcur
 		endp
 
 ;---------------------------------------
@@ -1094,6 +1079,7 @@ putc		psha
 		rts
 
 int22		proc			; писане на символ на екрана
+		global	fixcur
 		int	$19
 ;		rts
 		sei
@@ -1242,7 +1228,18 @@ is_pause	int	$11		;remove from buffer
 checkend
 ;		ldaa	cursor_start
 ;		ldab	cursor_end
-		jsr	vpu_cursor
+;		jsr	vpu_cursor
+		ldaa	cv
+		asla
+		asla
+		asla
+		tab
+		adda	cursor_start
+		staa	VPU_CURLINS
+		addb	cursor_end
+		stab	VPU_CURLINE
+		ldaa	ch
+		staa	VPU_CURPOS
 		rts
 
 ctrlchar				; контролен символ
