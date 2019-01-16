@@ -43,32 +43,6 @@
 ; $F000 ÷ $FFFF   - BIOS | system text screen (write only)
 
 ;------------------------------------------------------------
-; Входно / изходна област:
-
-;crtaddr 	equ	$E600		;СМ607
-;crtdata 	equ	$E601
-
-;piadra		equ	$E628		;СМ602
-;piadrb		equ	$E629
-;piacra		equ	$E62A
-;piacrb		equ	$E62B
-
-;pr_dra		equ	$E630
-;pr_drb		equ	$E631
-;pr_cra		equ	$E632
-;pr_crb		equ	$E633
-
-;acia_baud	equ	$E645
-;acia_control	equ	$E646
-;acia_data	equ	$E647
-
-;fdcslct 	equ	$E6C0
-;fdcstat 	equ	$E6D0		;СМ609
-;fdcdata 	equ	$E6D1
-
-;rompage 	equ	$e6f0; REG_PORT6
-
-;------------------------------------------------------------
 
 lowerram	equ	$0100
 upperram	equ	$BE00
@@ -135,9 +109,9 @@ disk_types	equ	$ED03		; disks 80 tracks
 synchro_addr	equ	$ED04
 macroflg	equ	$ED06		; Macro keyboard
 macroptr	equ	$ED07
-key_timer0	equ	$ED09
-key_timer1	equ	$ED0A
-key_timer2	equ	$ED0B
+scancode	equ	$ED09
+shiftstatus	equ	$ED0A
+lockstatus	equ	$ED0B
 kbd_store	equ	$ED0C
 kbd_load	equ	$ED0E
 ch		equ	$ED10
@@ -267,78 +241,3 @@ resident	ds	2
 lomem		ds	2
 himem		ds	2
 		ends
-
-;---------------------------------------
-
-; MCU BUILTIN IO
-
-REG_RMCR    equ $10     ;RATE AND MODE CONTROL REGISTER
-REG_TRCSR  equ $11     ;TXD/RXD CONTROL AND STATUS REG.
-REG_RDR     equ $12     ;RECEIVE DATA REGISTER
-REG_TDR     equ $13     ;TRANSMIT DATA REGISTER
-REG_RP5CR   equ $14     ; RAM/PORT 5 Control register
-REG_PORT5   equ $15     ; PORT 5 I/O Address
-REG_DDRP6   equ $16     ; PORT 6 DDR       
-REG_PORT6   equ $17     ; PORT 6 I/O Address
-REG_DDRP5   equ $20     ; PORT 5 DDR
-
-BIT_IRQ1E	equ	1
-BIT_IRQ2E	equ	2
-BIT_MRE		equ	4
-BIT_HLTE	equ	8
-BIT_AMRE	equ	16
-BIT_STBYFLAG	equ	32
-BIT_RAME	equ	64
-BIT_STBYPWR	equ	128
-
-; PAGE SELECTOR
-MEMPAGE_SEL	equ	$17
-MEMPAGE_MASK	equ	$17
-MEMPAGE_ROM	equ	$08
-MEMPAGE_FMASK	equ	$E0
-
-MEMPAGE_HI	equ	$10
-
-rompage		equ	$17
-
-; SimpleIO module
-
-IO_L8BIT	equ	$E6A0
-IO_L7HI		equ	$E6A1
-IO_L7LO		equ	$E6A2
-IO_L2RGB	equ	$E6A3
-IO_SWKEYS	equ	$E6A4
-
-IO_TIM_CONFIG	equ	$E6A8
-IO_TIM_STATUS	equ	$E6A8
-IO_TIM_DIV	equ	$E6A9
-
-IO_TIM_RUN	equ	$1
-IO_TIM_IEN	equ	$40
-IO_TIM_IRQ	equ	$80
-
-; VPU
-
-VPU_DATA	EQU	$E600
-VPU_ADDR	EQU	$E601
-VPU_CONFIG	EQU	$E603
-VPU_AUTOOFFS	EQU	$E604
-VPU_VADDR	EQU	$E605
-VPU_HSOFFS	EQU	$E607
-VPU_VSOFFS	EQU	$E608
-VPU_HSIZE	EQU	$E609
-VPU_VSIZE	EQU	$E60A
-VPU_CURPOS	EQU	$E60B
-VPU_CURLINS	EQU	$E60C
-VPU_CURLINE	EQU	$E60D
-
-VPU_B_IRQ	EQU	$80
-VPU_B_IEN	EQU	$40
-VPU_B_VBL	EQU	$20
-VPU_B_GRF	EQU	$10
-VPU_B_CURINV	EQU	$08
-VPU_B_CUR	EQU	$04
-VPU_B_ID	EQU	$02
-VPU_B_AUTO	EQU	$01
-
-;

@@ -31,7 +31,11 @@
 
 ;-----------------------------------------------------------
 
-		include memory.inc
+		include ../../DEVMAP.INC
+		include MEMORY.INC
+
+; Upper half of RAM/ROM used for pages
+MEMPAGE_HI	equ	$10
 
 ;---------------
 ; RAM work area locations:
@@ -154,9 +158,9 @@ ramtest3	clr	0,x		; нулиране на оперативната памет
 		ldx	#1989
 		stx	year
 warm
-		ldaa	rompage 	; изключване на страничния ROM
+		ldaa	MEMPAGE_SEL 	; изключване на страничния ROM
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
-		staa	rompage
+		staa	MEMPAGE_SEL
 
 		clr	indos		; изчистване на флага
 		clr	equipment	; изчистване на флага
@@ -196,13 +200,13 @@ warm
 		ldx	#title		; името на компютъра
 		int	$23
 
-		ldab	rompage		; проверка на страничните ROM
+		ldab	MEMPAGE_SEL		; проверка на страничните ROM
 		clrb
-romloop 	ldaa	rompage
+romloop 	ldaa	MEMPAGE_SEL
 		anda	#MEMPAGE_FMASK
 		oraa	#MEMPAGE_HI	; we use upper memory space for pages
 		aba
-		staa	rompage
+		staa	MEMPAGE_SEL
 		ldx	#$a55a		; за 2764 и 27128 първа част
 		bitb	#%00000100
 		beq	romt0
@@ -224,7 +228,7 @@ romloop1	adda	0,x
 romtl		stx	x1		; от страничните ROM
 		ldaa	0,x
 		beq	romte
-		ldab	rompage
+		ldab	MEMPAGE_SEL
 		ldx	1,x
 		int	$2f
 		ldx	x1
@@ -238,9 +242,9 @@ romte
 nextrom 	incb
 		cmpb	#$10
 		bcs	romloop 	;<
-		ldaa	rompage
+		ldaa	MEMPAGE_SEL
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
-		staa	rompage
+		staa	MEMPAGE_SEL
 
 		ldx	#$F000
 		clra
@@ -350,21 +354,21 @@ irqhndl
 		bpl	irqhndl1	; 50 Hz
 		ldab	swipag+2	;int05
 		ldx	swivec+10	;int05
-irqhndl1	ldaa	rompage 	; обща част на NMI и IRQ драйверите
+irqhndl1	ldaa	MEMPAGE_SEL 	; обща част на NMI и IRQ драйверите
 		psha
 		andb	#$0f
 		beq	irqhndl2
 		psha
-		ldaa	rompage
+		ldaa	MEMPAGE_SEL
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
 		aba
-		staa	rompage
+		staa	MEMPAGE_SEL
 		pula
 irqhndl2	cpx	#0
 		beq	irqhndl3
 		jsr	0,x
 irqhndl3	pula
-		staa	rompage
+		staa	MEMPAGE_SEL
 		rti
 		endp
 
@@ -382,7 +386,7 @@ swihndl 	proc			; драйвер за обработка на SWI
 		psha
 		bsr	exchregs	; размяна на SWI променливите и стека
 		pula			; номер на интеръпта
-		ldab	rompage 	; текуща ROM страница
+		ldab	MEMPAGE_SEL 	; текуща ROM страница
 		pshb			; спасява се в стека
 
 		tab			; извличане на страницата на интеръпта
@@ -400,10 +404,10 @@ swihndl 	proc			; драйвер за обработка на SWI
 swihndl1	andb	#$0f
 		beq	swihndl4
 		psha
-		ldaa	rompage
+		ldaa	MEMPAGE_SEL
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
 		aba
-		staa	rompage
+		staa	MEMPAGE_SEL
 		pula
 swihndl4
 		ldab	#$77		;$ee/2
@@ -419,7 +423,7 @@ swihndl4
 swihndl2
 		sei			; въстановяване след интеръпта
 		pulb
-		stab	rompage 	; предишната страница
+		stab	MEMPAGE_SEL 	; предишната страница
 		tsx
 		bsr	exchregs	; размяна на регистрите и стека
 		dec	indos		; ниво на вложеност
@@ -688,26 +692,7 @@ timer6
 		bne	exit
 
 		inc	year
-exit
-		ldaa	#$FF
-		int	$17
-
-		tst	key_timer0
-		beq	exit0
-		dec	key_timer0
-exit0
-		tst	key_timer1
-		beq	exit1
-		dec	key_timer1
-exit1
-		tst	key_timer2
-		beq	exit2
-		dec	key_timer2
-		bne	exit2
-		ldaa	#$FF
-		staa	old_key
-exit2		rts
-
+exit		rts
 		endp
 
 ;---------------------------------------
@@ -1961,7 +1946,7 @@ name		db	$8B, $A8, $AB, $A8, $B2, ' 601  ', 0
 		rts			; sysrts
 
 		error	*-hard_version
-		db	$F8		; Пълдин 601Z
+		db	$40		; Lilit 601
 
 		dw	irq2hndl
 		dw	cmihndl

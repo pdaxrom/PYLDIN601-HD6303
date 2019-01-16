@@ -31,7 +31,8 @@
 
 ;------------------------------------------------------------
 
-		include memory.inc
+		include ../../DEVMAP.INC
+		include MEMORY.INC
 
 ;------------------------------------------------------------
 		list	on
@@ -359,7 +360,7 @@ bad_version	ldx	#bad_text
 
 version_ok
 		ldaa	#$22
-		ldab	rompage
+		ldab	MEMPAGE_SEL
 		ldx	#int_22
 		int	$2f
 
@@ -372,7 +373,7 @@ version_ok
 		ldaa	#$62
 		int	$2f
 		ldaa	#$12
-		ldab	rompage
+		ldab	MEMPAGE_SEL
 		ldx	#int_12
 		int	$2F
 
@@ -429,11 +430,11 @@ bad_text	db	10,'Bad BIOS version',0
 
 monitor 	proc
 		ldaa	#$a
-		ldab	rompage
+		ldab	MEMPAGE_SEL
 		ldx	#macros
 		int	$2F	;disable kbd macros
 		ldaa	#0
-		ldab	rompage
+		ldab	MEMPAGE_SEL
 		ldx	#breakpoint
 		int	$2F
 		jmp	monitor0
