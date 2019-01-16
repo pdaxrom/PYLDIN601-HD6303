@@ -1300,15 +1300,12 @@ cls					; изчистване на екрана
 		ldx	scrbase
 		stx	VPU_ADDR
 		ldab	scrrows
-		aslb
-cls1		ldaa	scrcols
-;		inca
-;		inca			;fix hardware bug
-cls2		clr	VPU_DATA	; 1,x for 601a
-		inx
-		deca
-		bne	cls2
-		decb
+		ldaa	scrcols
+		mul
+		xgdx
+		clra
+cls1		staa	VPU_DATA	; 1,x for 601a
+		dex
 		bne	cls1
 		bsr	clear_sysline
 
@@ -1330,14 +1327,14 @@ clear_sysline	ldaa	scraddr+1
 		lds	#system_line-1
 		stx	VPU_ADDR
 		ldab	#40
-clear_sysl0	clr	VPU_DATA
+		clra
+clear_sysl0	staa	VPU_DATA
 		decb
 		bne	clear_sysl0
 		ldab	#40
 clear_sysloop	pula
 		pula
 		staa	VPU_DATA
-		inx
 		decb
 		bne	clear_sysloop
 		lds	tmps
@@ -1922,7 +1919,7 @@ contbl					; параметри за клавитурата
 		db	$20,7		;cursor write
 
 videotbl	db	63,40,48,5,38,0,25,31,0,7,$20,7
-		dw	$F000,$F000,42*25
+		dw	$F000,$F000,40*25
 
 piatbl		db	0,$3E,$24,$38,0
 
@@ -1934,9 +1931,9 @@ rstbl					; параметри за серийния вход/изход
 ;---------------------------------------
 
 		db	10
-		db	'(C) Software RDL 1987-2019, Ivo Nenov',10
+		db	'(C) Software RDL 1987-1989, Ivo Nenov',10
 		db	' & Orlin Shopov - Eagle software',10
-		db	' & Alexander Chukov - pdaXrom.org',10,0
+		db	'(C) pdaXrom.org 1997-2019, Alexander Chukov',10,0
 uartlogo	db	10,13,'Serial bootloader mode'
 newline		db	10,13,0
 
@@ -1946,7 +1943,7 @@ newline		db	10,13,0
 
 title		db	7,30,48,32
 ;name		db	'Pyldin 601Z',0
-name		db	' ', $8B, $A8, $AB, $A8, $B2, ' 601 ', 0
+name		db	$8B, $A8, $AB, $A8, $B2, ' 601  ', 0
 
 		error	*-serial_no
 		dw	%1011010001100001	;90-03-01
