@@ -1601,23 +1601,6 @@ putln		ldaa	0,x
 putln1		rts
 		endp
 
-
-;-----------------------------------------
-; PRINT CHAR
-;-----------------------------------------
-; send char to stdprn
-; IMPORT: A - char
-;	  B - mode: 0 - print char
-;		    1 - get status
-;		    2 - init
-; EXPORT: A - status/error
-;-----------------------------------------
-int26		proc
-		ldaa	#1
-		jmp	rtswia
-		endp
-
-
 ;-----------------------------------------
 ; UNISGNED MULTIPLY
 ;-----------------------------------------
@@ -2048,7 +2031,7 @@ restbl					; таблица с начални стойности на
 		dw	int23		;	PUT STRING
 		dw	0		;24
 		dw	0		;25
-		dw	int26		;26	PRINTER CTRL
+		dw	0		;26	PRINTER CTRL
 		dw	0		;27
 		dw	int28		;28	UMUL
 		dw	int29		;29	UDIV
