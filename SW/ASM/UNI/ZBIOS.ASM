@@ -1111,16 +1111,6 @@ int16		proc
 		endp
 
 ;---------------------------------------
-; FLOPPY LOW LEVEL SUPPORT
-;---------------------------------------
-int17		proc
-		sei
-		ldaa	#$80
-		staa	swia
-		rts
-		endp
-
-;---------------------------------------
 ; SERIAL SUPPORT
 ;---------------------------------------
 rs232c		proc			; или серийния вход
@@ -2043,7 +2033,7 @@ restbl					; таблица с начални стойности на
 		dw	int14		;	GET CURSOR
 		dw	int15		;	SET CURSOR
 		dw	int16		;16	SET ATTR
-		dw	int17		;17	FLOPPY CTRL
+		dw	0		;17	FLOPPY CTRL
 		dw	int18		;18	UART_IN
 		dw	int19		;19	UART_OUT
 		dw	0		;1A
