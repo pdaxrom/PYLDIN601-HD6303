@@ -5,6 +5,7 @@ all: $(UNIASM)		\
     UNIBIOS.CMD		\
     HELLO.CMD		\
     INOUT.CMD
+#    UNIKBD.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))

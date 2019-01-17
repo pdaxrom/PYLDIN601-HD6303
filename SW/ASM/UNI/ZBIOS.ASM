@@ -256,6 +256,20 @@ mainrom 	adda	x
 		int	$00
 mainrom_ok
 
+		ldaa	#$FF		; reset keyboard
+		jsr	ps2write
+		jsr	ps2read
+		jsr	ps2read
+		cmpa	#$AA
+		bne	ps2skip
+		ldx	#ps2okay
+		int	$23
+
+		ldaa	PS2_CONFIG	; enable PS/2 interrupt
+		oraa	#PS2_BIT_IEN
+		staa	PS2_CONFIG
+ps2skip
+
 		ldab	#2		; init printer port
 		int	$26
 
@@ -348,6 +362,10 @@ nmihndl 				; драйвр за NMI прекъсване
 
 ;---------------
 irqhndl
+		ldab	swipag+4	;int09
+		ldx	swivec+18
+		tst	PS2_CONFIG	; check keyboard
+		bmi	irqhndl1
 		ldab	swipag+1	;int03
 		ldx	swivec+6	;int03
 		tst	VPU_CONFIG	; драйвер за Video IRQ прекъсване и
@@ -699,8 +717,146 @@ exit		rts
 ; KEYBOARD
 ;---------------------------------------
 int09		proc
+		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_RDY
+		bne	read_scan
+		jmp	exit
 
-return		rts
+read_scan	ldaa	PS2_DATA
+
+		cmpa	#$E0
+		bne	check_f0
+		ldaa	scanbits
+		oraa	#key_e0
+		staa	scanbits
+		jmp	exit
+check_f0	cmpa	#$F0
+		bne	check_shift
+		ldaa	scanbits
+		oraa	#key_f0
+		staa	scanbits
+		jmp	exit
+check_shift	cmpa	#$12
+		beq	shift
+		cmpa	#$59
+		beq	rshift
+		cmpa	#$14
+		beq	ctrl
+		cmpa	#$11
+		beq	alt
+
+		ldab	scanbits
+		bitb	#key_f0
+		beq	savescan
+		ldab	#$FF
+		stab	scancode
+		bra	chklock
+savescan	staa	scancode
+
+chklock		cmpa	#$58
+		beq	capslock
+		cmpa	#$7E
+		beq	scrollock
+		cmpa	#$77
+		beq	numlock
+		cmpa	#$1F
+		beq	cyrlock
+		bra	return
+
+shift		ldaa	#SH_SHIFT
+		bra	chkshift
+rshift		ldaa	#SH_RSHIFT
+chkshift	ldab	scanbits
+		andb	#KEY_F0|KEY_E0
+		cmpb	#KEY_F0|KEY_E0
+		bne	chkshift1
+		bra	return
+chkshift1	cmpb	#KEY_E0
+		bne	sereset
+		bra	return
+ctrl		ldaa	#SH_CTRL
+		bra	sereset
+alt		ldaa	#SH_ALT
+sereset		ldab	scanbits
+		bitb	#KEY_E0
+		beq	sereset2
+		lsla
+sereset2	bitb	#KEY_F0
+		bne	clrshbit
+		oraa	shiftstatus
+		staa	shiftstatus
+		bra	return
+clrshbit	coma
+		anda	shiftstatus
+		staa	shiftstatus
+		bra	return
+
+capslock	ldaa	#LK_CAPS
+		bra	setlock
+scrollock	ldaa	#LK_SCROLL
+		bra	setlock
+numlock		ldaa	#LK_NUM
+		bra	setlock
+cyrlock		ldaa	#LK_CYR
+
+setlock		ldab	#KEY_F0
+		bitb	scanbits
+		bne	return
+		
+		eora	lockstatus
+		staa	lockstatus
+		bsr	setleds
+
+return		ldaa	scanbits
+		anda	#$FF^(KEY_F0|KEY_E0)
+		staa	scanbits
+exit		rts
+		endp
+
+setleds		proc
+		ldaa	PS2_CONFIG
+		anda	#$FF^PS2_BIT_IEN
+		staa	PS2_CONFIG
+		clrb
+		ldaa	lockstatus
+		bita	#LK_SCROLL
+		beq	chknum
+		orab	#$01
+chknum		bita	#LK_NUM
+		beq	chkcaps
+		orab	#$02
+chkcaps		bita	#LK_CAPS
+		beq	chkcyr
+		orab	#$04
+chkcyr		bita	#LK_CYR
+		beq	write
+		orab	#$01
+write		ldaa	#$ED
+		bsr	ps2write
+		bsr	ps2read
+		tba
+		bsr	ps2write
+		bsr	ps2read
+		ldaa	PS2_CONFIG
+		oraa	#PS2_BIT_IEN
+		staa	PS2_CONFIG
+		rts
+		endp
+
+ps2read		proc
+		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_RDY
+		beq	ps2read
+		ldaa	PS2_DATA
+		rts
+		endp
+
+ps2write	proc
+		staa	PS2_DATA
+loop0		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_BSY
+		bne	loop0
+		rts
 		endp
 
 ;---------------------------------------
@@ -719,6 +875,7 @@ return		staa	swia
 ;---------------------------------------
 int11		proc
 loop		cli
+		nop
 		nop
 		sei
 		ldx	kbd_load
@@ -1827,7 +1984,7 @@ restbl					; таблица с начални стойности на
 		dw	0		;06	IRQ 1Hz
 		dw	0		;07	CRITICAL ERROR
 		dw	0		;08	KEYBOARD TABLES (601-M)
-		dw	0		;09	IRQ KEYBOARD
+		dw	int09		;09	IRQ KEYBOARD
 		dw	0		;0a	KEYBOARD MACROS
 		dw	0		;0b
 		dw	0		;0c
@@ -1914,6 +2071,7 @@ rstbl					; параметри за серийния вход/изход
 		db	'(C) pdaXrom.org 1997-2019, Alexander Chukov',10,0
 uartlogo	db	10,13,'Serial bootloader mode'
 newline		db	10,13,0
+ps2okay		db	10,'PS/2 keyboard connected',0
 
 		list	on
 		ds	$FFC9 - *, $FF

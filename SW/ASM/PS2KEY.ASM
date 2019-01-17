@@ -12,27 +12,6 @@
 	include ../ROM/BOOTROM.INC
 	include UNI/MEMORY.INC
 
-KEY_E0		EQU	$10
-KEY_F0		EQU	$80
-SCANBITS	EQU	old_key
-
-;SH_SCROLL	EQU	$80
-;SH_CAPS		EQU	$40
-;SH_CYR		EQU	$20
-;SH_NUM		EQU	$10
-SH_RALT		EQU	$80
-SH_ALT		EQU	$40
-SH_RCTRL	EQU	$20
-SH_CTRL		EQU	$10
-SH_CYR		EQU	$04
-SH_RSHIFT	EQU	$02
-SH_SHIFT	EQU	$01
-
-LK_SCROLL	EQU	$80
-LK_CAPS		EQU	$40
-LK_CYR		EQU	$20
-LK_NUM		EQU	$10
-
 	org $100
 
 	sei
@@ -131,8 +110,8 @@ decode		pulb
 irqhandler	proc
 		sei
 		ldaa	PS2_CONFIG
-		bita	#PS2_BIT_IEN
-		bne	check_key
+		tsta
+		bmi	check_key
 		jmp	exit
 check_key	bita	#PS2_BIT_RDY
 		bne	read_scan
