@@ -127,8 +127,10 @@ module spiio (
 					scale_counter <= 0;
 					msck <= ~msck;
 					if (msck) begin
-						shifted_tx_data <= cfg_16b ? {shifted_tx_data[14:0], 1'b1} : {shifted_tx_data[6:0], 1'b1};
-						rx_data <= cfg_16b ? {rx_data[14:0], miso} : {rx_data[6:0], miso};
+//						shifted_tx_data <= cfg_16b ? {shifted_tx_data[14:0], 1'b1} : {shifted_tx_data[6:0], 1'b1};
+//						rx_data <= cfg_16b ? {rx_data[14:0], miso} : {rx_data[6:0], miso};
+						shifted_tx_data <= {shifted_tx_data[14:0], 1'b1};
+						rx_data <= {rx_data[14:0], miso};
 						bit_counter <= bit_counter - 1'b1;
 					end
 				end else scale_counter <= scale_counter + 1'b1;
