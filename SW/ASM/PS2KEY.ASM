@@ -20,7 +20,9 @@ SCANBITS	EQU	old_key
 ;SH_CAPS		EQU	$40
 ;SH_CYR		EQU	$20
 ;SH_NUM		EQU	$10
+SH_RALT		EQU	$80
 SH_ALT		EQU	$40
+SH_RCTRL	EQU	$20
 SH_CTRL		EQU	$10
 SH_CYR		EQU	$04
 SH_RSHIFT	EQU	$02
@@ -46,6 +48,13 @@ LK_NUM		EQU	$10
 	ldaa	#$FF
 	jsr	ps2write
 	jsr	ps2read
+	jsr	ps2read
+	cmpa	#$AA
+	beq	next
+	jmp	F_RESET
+
+next	ldx	#okay
+	jsr	F_PUTSTR
 
 	ldaa	PS2_CONFIG
 	oraa	#PS2_BIT_IEN
@@ -65,21 +74,46 @@ LK_NUM		EQU	$10
 
 	cli
 
-loop	cli
-	nop
-	nop
-	sei
-	ldab	scancode
-	cmpb	#$FF
-	beq	loop
-	ldaa	#$FF
-	staa	scancode
+loop		cli
+		nop
+		nop
+		sei
+		ldab	scancode
+		cmpb	#$FF
+		beq	loop
+		ldaa	#$FF
+		staa	scancode
 
-	cli
+		pshb
+		clrb
+		ldaa	shiftstatus
+		bita	#SH_CTRL|SH_RCTRL
+		beq	checkshift
+		ldx	#kb_ctrl
+		bra	decode
+checkshift	bita	#SH_SHIFT|SH_RSHIFT
+		beq	checkalt
+		orab	#1
+checkalt	bita	#SH_ALT|SH_RALT
+		beq	checkcaps
+		orab	#4
+checkcaps	ldaa	lockstatus
+		bita	#LK_CAPS
+		beq	checkcyr
+		orab	#2
+checkcyr	bita	#LK_CYR
+		beq	gettab
+		orab	#4
+gettab		ldx	#tablist
+		abx
+		abx
+		ldx	0,x
 
-	ldx	#kb
-	abx
-	ldaa	0,x
+decode		pulb
+		cli
+		abx
+		ldaa	0,x
+
 	jsr	F_PUTCHAR
 	jsr	F_PUTHEX
 	ldaa	shiftstatus
@@ -241,6 +275,9 @@ loop0		ldaa	PS2_CONFIG
 		rts
 		endp
 
+tablist		dw	kb, kb_shift, kbcaps, kbcaps_shift
+		dw	kbcyr, kbcyr_shift, kbcyrcaps, kbcyrcaps_shift
+
 ;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
 kb
 	db	  0, $D1,   0, $CD, $CB, $C9, $CA, $D4,   0, $D2, $D0, $CE, $CC, $ED, '`',   0	; 00
@@ -353,3 +390,5 @@ kbcyrcaps_shift
 hello	db	'Hello, PS2 Keyboard'
 nl	db	10, 13, 0
 text1	db	'Press any keys!!!', 10, 13, 0
+
+okay	db	'PS/2 Keyboard initialized.', 10, 13, 0
