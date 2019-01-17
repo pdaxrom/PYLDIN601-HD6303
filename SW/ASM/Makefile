@@ -21,7 +21,9 @@ all: $(UNIASM)		\
     PS2LEDS.CMD		\
     LOADBIOS.CMD	\
     LOADPAGE.CMD	\
-    PS2KEY.CMD
+    PS2KEY.CMD		\
+    SDTEST.CMD		\
+    MISC.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
