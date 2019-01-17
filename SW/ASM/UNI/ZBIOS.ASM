@@ -256,8 +256,21 @@ mainrom 	adda	x
 		int	$00
 mainrom_ok
 
-		ldaa	#$FF		; reset keyboard
+		ldaa	#$FF
+		staa	scancode
+		clr	shiftstatus
+		clr	lockstatus
+		clr	scanbits
+
+		ldaa	PS2_CONFIG
+		bita	#PS2_BIT_RDY
+		beq	ps2noflush
+		ldaa	PS2_DATA
+
+ps2noflush	ldaa	#$FF		; reset keyboard
 		jsr	ps2write
+		tsta
+		bne	ps2skip
 		jsr	ps2read
 		jsr	ps2read
 		cmpa	#$AA
@@ -897,11 +910,19 @@ ps2read		proc
 		endp
 
 ps2write	proc
+		pshx
+		ldx	#0
 		staa	PS2_DATA
 loop0		ldaa	PS2_CONFIG
-		bita	#PS2_BIT_BSY
+		dex
+		beq	error
+check		bita	#PS2_BIT_BSY
 		bne	loop0
+		clra
+exit		pulx
 		rts
+error		ldaa	#$FF
+		bra	exit
 		endp
 
 ;---------------------------------------
