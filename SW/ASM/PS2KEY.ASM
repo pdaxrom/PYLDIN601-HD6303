@@ -116,7 +116,15 @@ check_shift	cmpa	#$12
 		beq	ctrl
 		cmpa	#$11
 		beq	alt
-		cmpa	#$58
+
+		ldab	scanbits
+		bitb	#key_f0
+		beq	savescan
+		clr	scancode
+		bra	chklock
+savescan	staa	scancode
+
+chklock		cmpa	#$58
 		beq	capslock
 		cmpa	#$7E
 		beq	scrollock
@@ -124,12 +132,6 @@ check_shift	cmpa	#$12
 		beq	numlock
 		cmpa	#$1F
 		beq	cyrlock
-
-		ldab	scanbits
-		bitb	#key_f0
-		beq	savescan
-		clra
-savescan	staa	scancode
 		bra	return
 
 shift		ldaa	#SH_SHIFT
