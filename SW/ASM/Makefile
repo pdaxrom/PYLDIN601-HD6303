@@ -23,7 +23,8 @@ all: $(UNIASM)		\
     LOADPAGE.CMD	\
     PS2KEY.CMD		\
     SDTEST.CMD		\
-    MISC.CMD
+    MISC.CMD		\
+    FLASHROM.CMD
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))

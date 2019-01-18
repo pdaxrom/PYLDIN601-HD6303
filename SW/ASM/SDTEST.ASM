@@ -26,9 +26,14 @@
 
 		ldx	#read_sec
 		jsr	sd_read
-
+		jsr	F_PUTHEX
+		ldx	#read_sec2
+		jsr	sd_read
+		jsr	F_PUTHEX
 
 no_sd_boot	jsr	F_PUTHEX
+		ldx	#nl
+		jsr	F_PUTSTR
 		ldaa	sdmode
 		jsr	F_PUTHEX
 
