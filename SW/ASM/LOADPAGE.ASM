@@ -20,11 +20,17 @@ MEMSPACE_FN1	EQU	%10000000
 	ldx	#hello
 	jsr	F_UART_PUTS
 
+	jsr	F_UART_IN
+	jsr	F_PUTCHAR
+	anda	#$07
+	staa	page
+
 	ldaa	MEMPAGE_SEL
 	anda	#MEMPAGE_FMASK|$10
-	oraa	#$01|$10
+	oraa	#$10
+	oraa	page
 	staa	MEMPAGE_SEL
-	jsr	F_PUTHEX
+;	jsr	F_PUTHEX
 
 	lds	#$0FFF
 	ldx	#$C000
@@ -36,4 +42,5 @@ loop	pula
 
 	jmp	F_RESET
 
-hello	db	'PAGE loader: move 0x1000-0x2FFF to 0xC000 in page 1', 10, 13, 0
+hello	db	'PAGE loader: move 0x1000-0x2FFF to 0xC000 in page ', 10, 13, 0
+page	db	0
