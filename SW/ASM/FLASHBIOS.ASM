@@ -1,9 +1,5 @@
 ;
-; ROM FLASHER
-;
-; 14000 - UniBIOS
-; 18000 - UniDOS
-;
+; BIOS ROM FLASHER
 ;
 ; 1F000 - BIOS
 ;
@@ -17,7 +13,7 @@
 	sei
 
 	ldx	#hello
-	jsr	F_PUTSTR
+	jsr	uart_puts
 
 ; Setup page port (P6)
 	ldaa	#0
@@ -26,19 +22,19 @@
 	staa	REG_DDRP6
 
 	ldx	#code
-	jsr	F_PUTSTR
+	jsr	uart_puts
 
 	jsr	readid
 
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 	tba
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 
 	ldx	#rwquest
-	jsr	F_PUTSTR
+	jsr	uart_puts
 
-	jsr	F_UART_IN
-	jsr	F_PUTCHAR
+	jsr	uart_in
+	jsr	uart_out
 
 	cmpa	#'y'
 	beq	gowrite
@@ -48,7 +44,7 @@
 gowrite
 
 	ldab	#$01		; addr
-	ldx	#$8000		;
+	ldx	#$F000		;
 	jsr	addrtopage
 
 	ldx	#wrdata
@@ -57,7 +53,7 @@ gowrite
 	ldd	#$1000
 	std	2,x
 
-	ldd	#$2000		; length
+	ldd	#$1000		; length
 	lsrd
 	lsrd
 	lsrd
@@ -70,24 +66,24 @@ gowrite
 	jsr	writerom
 
 	ldx	#nl
-	jsr	F_PUTSTR
+	jsr	uart_puts
 
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 
 readonly	ldx	#nl
-		jsr	F_PUTSTR
+		jsr	uart_puts
 
 	ldab	#$01		; addr
-	ldx	#$8000		;
+	ldx	#$E000		;
 	jsr	addrtopage
 
 	psha
 	pshb
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 	tba
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 	ldx	#nl
-	jsr	F_PUTSTR
+	jsr	uart_puts
 	pulb
 	pula
 
@@ -95,18 +91,20 @@ readonly	ldx	#nl
 
 	psha
 	pshb
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 	tba
-	jsr	F_PUTHEX
+	jsr	uart_outhex
 	ldx	#nl
-	jsr	F_PUTSTR
+	jsr	uart_puts
 	pulb
 	pula
 
 	ldx	#$1000
 	jsr	wintoram
 
-	jmp	F_RESET
+	ldx	$FFFE
+
+	jmp	0,x
 
 ; Write command
 ; X - ADDR
@@ -353,10 +351,10 @@ printwrsec	proc
 		psha
 		pshb
 		ldx	#txtwritesec
-		jsr	F_PUTSTR
-		jsr	F_PUTHEX
+		jsr	uart_puts
+		jsr	uart_outhex
 		tba
-		jsr	F_PUTHEX
+		jsr	uart_outhex
 		pulb
 		pula
 		pulx
@@ -366,13 +364,85 @@ printwrsec	proc
 printwrtot	proc
 		pshx
 		ldx	#txtwritetotal
-		jsr	F_PUTSTR
-		jsr	F_PUTHEX
+		jsr	uart_puts
+		jsr	uart_outhex
 		pulx
 		rts
 		endp
 
-hello		db	10, 13, 'FLASHROM Utility', 0
+uart_in		proc
+		ldaa	REG_TRCSR
+		anda	#$C0		;FILTER OUT RDRF AND ORFE
+		cmpa	#$00
+		beq	uart_in		;WAIT FOR CHARACTER
+		cmpa	#$40
+		beq	uartin1		;CHECK FOR FRAMING ERROR
+		ldaa	REG_RDR         ;READ RECIEVED CHARACTER
+		rts
+uartin1		ldaa	REG_RDR		;ON ERROR, FLUSH BUFFER AND CLEAR ERROR FLAG
+		bra	uart_in
+		endp
+
+uart_out	proc
+		pshb
+uartou1		ldab	REG_TRCSR	;Get Status Reg 
+		aslb			;TDRE->C
+		aslb
+		aslb
+		bcc	uartou1		;READY FOR NEXT CHARACTER
+		staa	REG_TDR
+		pulb
+		rts
+		endp
+
+uart_puts 	proc
+		pshx
+		psha
+loop		ldaa	0,x
+		tsta
+		beq	exit
+		bsr	uart_out
+		inx
+		bra	loop
+exit		pula
+		pulx
+		rts
+		endp
+
+uart_outhex	proc
+		psha
+		pshb
+		tab
+		bsr	OUTNIBH
+		tba
+		bsr	OUTNIBL
+		pulb
+		pula
+		rts
+OUTNIBH		lsra
+		lsra
+		lsra
+		lsra
+OUTNIBL		anda	#$0F
+		oraa	#$30
+		cmpa	#$39
+		bls	OUTNIBX
+		adda	#$7
+OUTNIBX 	bsr	uart_out
+		rts
+		endp
+
+get_word	proc
+		bsr	uart_in
+		tab
+		bsr	uart_in
+		psha
+		pshb
+		pulx
+		rts
+		endp
+
+hello		db	10, 13, 'FLASH BIOS Utility', 0
 code		db	10, 13, 'Flash Manufacture/Device code ', 0
 nl		db	10, 13, 0
 txtwritesec	db	10, 13, 'Write sector ', 0
