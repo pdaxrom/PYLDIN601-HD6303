@@ -35,10 +35,13 @@
 maxfiles	=	$20
 handle_size	=	$30 + 2
 
-fdcslct 	equ	$e6c0
-fdcstat 	equ	$e6d0		;СМ609
-fdcdata 	equ	$e6d1
-rom_page	equ	$E6F0
+;fdcslct 	equ	$e6c0
+;fdcstat 	equ	$e6d0		;СМ609
+;fdcdata 	equ	$e6d1
+;rom_page	equ	$E6F0
+
+MEMPAGE_SEL	equ	$17
+
 code		equ	$C000
 
 variables1	equ	$E700
@@ -432,7 +435,7 @@ eol_flag	ds	1
 		ERROR	*/$E600        ;E5E0
 ;
 		ends
-		list	off
+;		list	on
 ;----------------------------------------------------------
 
 		org	code
@@ -605,23 +608,23 @@ cont
 		jsr	mem_set
 
 		ldx	#header_a
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5D
 		ldx	#header_b
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5D
 
 		ldx	#header_nul
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5E
 		ldx	#header_aux
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5E
 		ldx	#header_prn
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5E
 		ldx	#header_con
-		ldab	rom_page
+		ldab	MEMPAGE_SEL
 		int	$5E
 
 		ldx	#file_buf1+$200
@@ -931,12 +934,22 @@ media_chk	proc
 		ldx	drive_type_ptr
 		oraa	x
 		ldx	#int17table
-		jsr	call17
+
+		ldaa	0,x
+		staa	2,x
+		ldd	4,x
+		std	0,x
+		ldd	#0
+		std	3,x
+
+		ldaa	#$41
+		int	$17
+
 		jsr	make_error
 		bcs	return
 
-		ldaa	int17table+5
-		ldab	int17table+4
+		ldaa	int17table+1
+		ldab	int17table+0
 		adda	#$b
 		adcb	#0
 		staa	x2+1
@@ -1022,8 +1035,10 @@ mult_loop	adda	x, spt		;A := heads * spt
 		staa	int17seek_table+1
 		clr	int17seek_table + 2		;head
 		ldx	#int17seek_table
-		ldaa	#3		;seek
+
+		ldaa	#$40		; init
 		int	$17
+
 		ldx	drive_type_ptr
 		tsta
 		bne	seek_error
@@ -1053,48 +1068,67 @@ set_tbl 	proc
 ;x - parameter table pointer from INT $40
 ;----------------------------------------------------------
 read_a		proc
-		ldaa	#0
-		bsr	set_tbl
-		ldx	#drive_a_type
-		stx	drive_type_ptr
-		ldx	#header_a
-		bra	read_log
+		ldaa	#$41
+		int	$17
+		bsr	make_error
+		jmp	chr_return
+
+;		bsr	set_tbl
+;		ldx	#drive_a_type
+;		stx	drive_type_ptr
+;		ldx	#header_a
+;		bra	read_log
 		endp
 
 ;----------------------------------------------------------
 ;x - parameter table pointer from INT $40
 ;----------------------------------------------------------
 read_b		proc
-		ldaa	#1
-		bsr	set_tbl
-		ldx	#drive_b_type
-		stx	drive_type_ptr
-		ldx	#header_b
-		bra	read_log
+		ldaa	#$41
+		int	$17
+		bsr	make_error
+		jmp	chr_return
+
+;		ldaa	#1
+;		bsr	set_tbl
+;		ldx	#drive_b_type
+;		stx	drive_type_ptr
+;		ldx	#header_b
+;		bra	read_log
 		endp
 
 ;----------------------------------------------------------
 ;x - parameter table pointer from INT $40
 ;----------------------------------------------------------
 write_a 	proc
-		ldaa	#0
-		bsr	set_tbl
-		ldx	#drive_a_type
-		stx	drive_type_ptr
-		ldx	#header_a
-		bra	write_log
+		ldaa	#$42
+		int	$17
+		bsr	make_error
+		jmp	chr_return
+
+;		ldaa	#0
+;		bsr	set_tbl
+;		ldx	#drive_a_type
+;		stx	drive_type_ptr
+;		ldx	#header_a
+;		bra	write_log
 		endp
 
 ;----------------------------------------------------------
 ;x - parameter table pointer from INT $40
 ;----------------------------------------------------------
 write_b 	proc
-		ldaa	#1
-		bsr	set_tbl
-		ldx	#drive_b_type
-		stx	drive_type_ptr
-		ldx	#header_b
-		bra	write_log
+		ldaa	#$42
+		int	$17
+		bsr	make_error
+		jmp	chr_return
+
+;		ldaa	#1
+;		bsr	set_tbl
+;		ldx	#drive_b_type
+;		stx	drive_type_ptr
+;		ldx	#header_b
+;		bra	write_log
 		endp
 
 

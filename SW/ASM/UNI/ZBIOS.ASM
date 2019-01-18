@@ -292,12 +292,12 @@ ps2skip
 
 		cli
 
-		ldaa	#$80		; initialize
+		ldaa	#$40		; initialize
 		int	$17		; reset FDC
 
 		ldx	#bootparm	; инициализация на флопи-контролера
-		ldaa	#1		; четене на цилиндър 0, глава 0,
-		int	$17		; сектор 1
+		ldaa	#$41		; read lba sector 0
+		int	$17		;
 		tsta
 		bne	nofloppy
 		ldx	$2fe		; проверка за принадлежност
@@ -529,7 +529,7 @@ uartcon		proc
 
     sei
 
-loop		int	$18
+loop		bsr	uart_in
 		cmpa	#'L'
 		beq	cmd_load
 		cmpa	#'S'
@@ -537,7 +537,7 @@ loop		int	$18
 		cmpa	#'G'
 		beq	cmd_go
 		ldaa	#'E'
-		int	$19
+		bsr	uart_out
 		bra	loop
 
 cmd_load	bsr	get_block_addr
@@ -547,12 +547,12 @@ cmd_lo1		bsr	uart_in
 		cpx	fddparms
 		bne	cmd_lo1
 cmd_oka		ldaa	#'O'
-		int	$19
+		bsr	uart_out
 		bra	loop
 
 cmd_save	bsr	get_block_addr
 cmd_sa1		ldaa	0,x
-		int	$19
+		bsr	uart_out
 		inx
 		cpx	fddparms
 		bne	cmd_sa1
@@ -608,7 +608,7 @@ uart_puts 	proc
 loop		ldaa	0,x
 		tsta
 		beq	exit
-		int	$19
+		bsr	uart_out
 		inx
 		bra	loop
 exit		pula
@@ -635,7 +635,7 @@ OUTNIBL		anda	#$0F
 		cmpa	#$39
 		bls	OUTNIBX
 		adda	#$7
-OUTNIBX 	int	$19
+OUTNIBX 	bsr	uart_out
 		rts
 		endp
 
@@ -2083,7 +2083,9 @@ fddtbl					; параметри за флопи
 		db	$FF		;fill byte
 		db	$80		;motor
 
-bootparm	db	0,0,0,1,1,0	; параметри за INT17 за boot
+bootparm	dw	$0100		; параметри за INT17 за boot
+		db	0
+		dw	$0000
 
 contbl					; параметри за клавитурата
 		db	$13		;pause
