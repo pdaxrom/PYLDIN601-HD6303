@@ -316,7 +316,7 @@ inthandlers	proc
 irq2hndl 				; драйвр за ICF прекъсване
 		ldab	swipag+127	;int $f9
 		andb	#$0f
-		ldx	swivec+255	;intF9
+		ldx	swivec+$FF*2	;intFF
 		bra	irqhndl1
 
 cmihndl 				; драйвр за NMI прекъсване
@@ -325,13 +325,13 @@ cmihndl 				; драйвр за NMI прекъсване
 		lsrb
 		lsrb
 		lsrb
-		ldx	swivec+254	;int02
+		ldx	swivec+$FE*2	;intFE
 		bra	irqhndl1
 
 traphndl 				; драйвр за ICF прекъсване
 		ldab	swipag+126	;int $f9
 		andb	#$0f
-		ldx	swivec+253	;intF9
+		ldx	swivec+$FD*2	;intFD
 		bra	irqhndl1
 
 scihndl 				; драйвр за NMI прекъсване
@@ -340,13 +340,13 @@ scihndl 				; драйвр за NMI прекъсване
 		lsrb
 		lsrb
 		lsrb
-		ldx	swivec+252	;int02
+		ldx	swivec+$FC*2	;intFC
 		bra	irqhndl1
 
 tofhndl 				; драйвр за ICF прекъсване
 		ldab	swipag+125	;int $f9
 		andb	#$0f
-		ldx	swivec+251	;intF9
+		ldx	swivec+$FB*2	;intFB
 		bra	irqhndl1
 
 ocfhndl 				; драйвр за NMI прекъсване
@@ -355,13 +355,13 @@ ocfhndl 				; драйвр за NMI прекъсване
 		lsrb
 		lsrb
 		lsrb
-		ldx	swivec+250	;int02
+		ldx	swivec+$FA*2	;intFA
 		bra	irqhndl1
 
 icfhndl 				; драйвр за ICF прекъсване
 		ldab	swipag+124	;int $f9
 		andb	#$0f
-		ldx	swivec+249	;intF9
+		ldx	swivec+$F9*2	;intF9
 		bra	irqhndl1
 
 nmihndl 				; драйвр за NMI прекъсване
