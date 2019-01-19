@@ -49,19 +49,47 @@ sdmode		ds	1
 		db	0
 
 init		jsr	print_version
+		clr	SDMODE
 		jsr	sd_init
 		staa	drive
+
+		ldaa	SDMODE
+		bita	#SD_CT_MMC
+		beq	nxt1
+		ldx	#t_mmc
+		int	$23
+nxt1		bita	#SD_CT_SD1
+		beq	nxt2
+		ldx	#t_sd1
+		int	$23
+nxt2		bita	#SD_CT_SD2
+		beq	nxt3
+		ldx	#t_sd2
+		int	$23
+nxt3		bita	#SD_CT_BLOCK
+		beq	nxt4
+		ldx	#t_blk
+		int	$23
+nxt4
+
 		rts
 print_version	ldx	#title
 		int	$23
 		rts
 
-title		db	10, 'UniDISK  Version 1.0', 0
+title		db	10, 'UniDISK  Version 1.0 ', 0
 
 nl		db	10, 0
 
+t_mmc		db	'MMC', 0
+t_sd1		db	'SD', 0
+t_sd2		db	'SDHC/XC', 0
+t_blk		db	' LBA', 0
+
 int17		proc
 		sei
+
+;		int	$25
 
 		cmpa	#$40
 		beq	init
@@ -79,12 +107,12 @@ int17		proc
 		std	buffer
 		ldd	3,x
 		std	lbasector+2
-	pshx
-	xgdx
-	int $24
-	ldx #nl
-	int $23
-	pulx
+;	pshx
+;	xgdx
+;	int $24
+;	ldx #nl
+;	int $23
+;	pulx
 		ldd	#0
 		std	lbasector
 		ldx	#lbasector
@@ -96,7 +124,20 @@ next1		cmpa	#$42		; write sector
 		tst	drive
 		bne	error
 
-		ldaa	#$80
+		ldd	0,x
+		std	buffer
+		ldd	3,x
+		std	lbasector+2
+;	pshx
+;	xgdx
+;	int $24
+;	ldx #nl
+;	int $23
+;	pulx
+		ldd	#0
+		std	lbasector
+		ldx	#lbasector
+		jsr	sd_write
 
 		bra	donex
 init		jsr	sd_init
@@ -105,6 +146,14 @@ donex		tsta
 		beq	done
 error		ldaa	#$80
 done		staa	swia
+
+;    ldaa #'-'
+;    int $22
+;    ldaa swia
+;    int $25
+;    ldaa #'-'
+;    int $22
+
 		rts
 		endp
 
@@ -138,7 +187,7 @@ sdspi_read	ldaa	#$FF
 
 sd_delay	proc
 		pshx
-		ldx	#4000
+		ldx	#1000
 loop		dex
 		bne	loop
 		pulx
@@ -177,6 +226,9 @@ sd_init		proc
 loop		jsr	sdspi_read
 		decb
 		bne	loop
+
+		ldaa	#2
+		staa	SPI_PRESCALER
 
 		ldx	#sd_init_cmd0
 		ldab	#10
