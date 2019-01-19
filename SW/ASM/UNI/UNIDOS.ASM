@@ -1984,7 +1984,7 @@ ret_err 	staa	swia
 
 terminate					;Terminate program ( Int $38 )
 		tsx
-		ldaa	#7
+		ldaa	MEMPAGE_SEL
 		staa	x, 2
 		ldaa	#return_address
 		staa	x, 9
