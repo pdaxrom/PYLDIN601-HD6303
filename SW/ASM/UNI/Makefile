@@ -5,8 +5,9 @@ all: $(UNIASM)		\
     UNIBIOS.CMD		\
     UNIDISK.CMD		\
     U.CMD		\
-    UNIDOS.CMD
-#    HELLO.CMD		\
+    UNIDOS.CMD		\
+    HELLO.CMD
+
 #    INOUT.CMD
 #    UNIKBD.CMD
 

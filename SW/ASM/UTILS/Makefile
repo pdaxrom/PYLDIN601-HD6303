@@ -1,7 +1,11 @@
 UNIASM = ../../DEVEL/uniasm
 
 all: $(UNIASM)		\
-    LOADPAGE.CMD
+    LOADPAGE.CMD	\
+    COPYPAGE.CMD	\
+    LOADBIOS.CMD	\
+    TEST.CMD
+
 #    HELLO.CMD		\
 #    INOUT.CMD
 #    UNIKBD.CMD
