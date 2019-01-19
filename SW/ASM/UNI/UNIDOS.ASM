@@ -88,9 +88,9 @@ _NOT_FOUND	=	73		;File not found
 _INV_PARM	=	74		;Invalid parameter
 N_RAM_ERRORS	=	74
 
-fdcslct 	equ	$E6C0
-fdcstat 	equ	$E6D0		;‘Œ609
-rom_page	=	$E6F0
+;fdcslct 	equ	$E6C0
+;fdcstat 	equ	$E6D0		;‘Œ609
+MEMPAGE_SEL	equ	$17
 
 rom_vars1	=	$E700
 rom_vars2	=	$E000
@@ -102,11 +102,11 @@ scrmode 	equ	$ED12
 system_scrbase	equ	$ED20
 fddparms	equ	$ED26
 
-bios_version	equ	$FFEE
-rtswix		equ	$FFF0
-rtswib		equ	$FFF2
-rtswia		equ	$FFF4
-hard_version	equ	$FFF7		;destinct 601A
+bios_version	equ	$FFE0
+rtswix		equ	$FFE2
+rtswib		equ	$FFE4
+rtswia		equ	$FFE6
+hard_version	equ	$FFE9		;destinct 601A
 
 lomem_init	=	$100
 
@@ -488,11 +488,13 @@ return
 		jmp	x
 exit_dos	rts
 
-check_b_tbl	db	1,0,0,1,1,0
+check_b_tbl	dw	$0100
+		db	1
+		dw	$0000
 
 location_ok
-		clr	fdcslct
-		inc	fdcslct
+;		clr	fdcslct
+;		inc	fdcslct
 
 		ldx	#bad_bios_vers
 		ldab	bios_version
@@ -529,15 +531,15 @@ bad_version
 		int	$23
 		int	$00
 ver_ok
-		ldaa	fdcstat
-		anda	#%11000000
-		cmpa	#%10000000
-		bne	nofloppy	;no floppy
+;		ldaa	fdcstat
+;		anda	#%11000000
+;		cmpa	#%10000000
+;		bne	nofloppy	;no floppy
 
 		ldx	#check_b_tbl
-		ldaa	#3		;seek
+		ldaa	#$43		;seek
 		int	$17
-		anda	#%00100000	;only bad_seek
+;		anda	#%00100000	;only bad_seek
 		tab
 		ldaa	configuration
 		oraa	#1		;floppy A
@@ -546,7 +548,7 @@ ver_ok
 		oraa	#2		;floppy B
 no_b		staa	configuration
 		clr	disk_types
-		clra
+		ldaa	#$40
 		int	$17		;reset floppies
 		bra	floppyok
 nofloppy
@@ -561,8 +563,11 @@ floppyok	clr	last_drive
 
 		sei
 		sts	tmps
-		ldaa	#0
-		staa	rom_page
+
+		ldaa	MEMPAGE_SEL
+		anda	#$F0		; //FIXME
+		oraa	#$17		; Upper half of ram, page 7
+		staa	MEMPAGE_SEL
 
 		ldx	#start_move
 		txs
@@ -717,7 +722,7 @@ int1F_loop	pula
 		bne	okclock
 		jmp	sorry			;sleep
 okclock 	sei				;!!!
-		ldab	#7			;!!!
+		ldab	MEMPAGE_SEL		;!!!
 		ldaa	#6			;clock_int
 		int	$2F			;set vector
 		sei
@@ -752,7 +757,7 @@ edit_ok
 		cpx	#0
 		bne	ok25
 		jmp	sorry			;sleep
-ok25		ldab	#7
+ok25		ldab	MEMPAGE_SEL
 		ldaa	#$25
 		int	$2F			;set vector
 		sei
@@ -778,7 +783,7 @@ prhex_ok
 		cpx	#0
 		bne	ok_24
 		jmp	sorry
-ok_24		ldab	#7			;!!!
+ok_24		ldab	MEMPAGE_SEL	;!!!
 		ldaa	#$24
 		int	$2F			;set vector
 		sei
@@ -804,7 +809,7 @@ prdec_ok
 		cpx	#0
 		bne	ok_6D
 		jmp	sorry
-ok_6D		ldab	#7			;!!!
+ok_6D		ldab	MEMPAGE_SEL	;!!!
 		ldaa	#$6D
 		int	$2F			;set vector
 		sei
@@ -908,63 +913,63 @@ p_loop1 	pula
 		cli
 		int	$2C	;set resident
 
-		ldab	#7	; RAM
+		ldab	#7	; RAM ; //FIXME CHECKME
 		ldx	x1
 		int	$5E
 
 only_601
 		ldx	#terminate
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$38
 		int	$2F
 
 		ldx	#system
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$39
 		int	$2F
 
 		ldx	#int_3a
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$3A
 		int	$2F
 
 		ldx	#reset
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$1
 		int	$2F
 
 		ldx	#int_3b
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$3b
 		int	$2F
 
 		ldx	#int_3c
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$3c
 		int	$2F
 
 		ldx	#int_3F 	;create full path
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$3F
 		int	$2F
 
 		ldx	#int_68
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$68
 		int	$2F
 
 		ldx	#int_69
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$69
 		int	$2F
 
 		ldx	#int_6A
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$6A
 		int	$2F
 
 		ldx	#pr_pack
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$78
 		int	$2F
 
@@ -990,30 +995,31 @@ only_601
 
 
 		ldx	#new_open
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$4A
 		int	$2F
 
 		ldx	#new_create
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$4B
 		int	$2F
 
-		ldx	#new_17
-		tst	configuration
-		bne	ok_17
-		ldx	#false_17
-ok_17		ldab	#7
-		ldaa	#$17
-		int	$2F
+;//FIXME
+;		ldx	#new_17
+;		tst	configuration
+;		bne	ok_17
+;		ldx	#false_17
+;ok_17		clrb
+;		ldaa	#$17
+;		int	$2F
 
 		ldx	#new_5B
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$5B
 		int	$2F
 
 		ldx	#get_err_text
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#$3D
 		int	$2F
 
@@ -1028,12 +1034,12 @@ ok_17		ldab	#7
 		jmp	sorry
 set_break
 		ldx	#break1
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#4
 		int	$2F
 
 		ldaa	#7
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldx	#critical
 		int	$2f
 
@@ -1243,7 +1249,7 @@ dtm_error
 int1F_
 
 ;--------------------------------------
-; CLOCK SHOW  interrupt driven !
+; CLOCK SHOW  interrupt driven ! //FIXME
 ;--------------------------------------
 clock		proc
 		sei
@@ -1255,7 +1261,7 @@ clock		proc
 		ldaa	scrmode
 		bne	clock1		;mode text 80
 		ldaa	#$60
-		staa	78,x		;attr. for int17 for text 40
+;;		staa	78,x		;attr. for int17 for text 40
 clock1
 		ldaa	scrmode
 		beq	clock2_ 	;date not displayed in text 40
@@ -1309,14 +1315,14 @@ clock2_ 	bra	clock2
 store
 		tst	scrmode 	;only text modes !
 		bne	store80
-		staa	61,x
+;;		staa	61,x
 		ldaa	#$60		;attribute
-		staa	60,x
+;;		staa	60,x
 		inx
 		inx
 return		rts
 
-store80 	staa	58,x
+store80 	;;staa	58,x
 		inx
 		rts
 
@@ -1369,7 +1375,7 @@ hours		bsr	store
 _601		ldab	#40
 _601_loop	pula			;attr. ignored
 		pula
-		staa	42,x		;on 27-th line
+;;		staa	42,x		;on 27-th line
 		inx
 		decb
 		bne	_601_loop
@@ -1377,7 +1383,7 @@ _601_loop	pula			;attr. ignored
 
 _601a		ldab	#80
 _601a_loop	pula
-		staa	80,x		;on 27-th line
+;;		staa	80,x		;on 27-th line
 		inx
 		decb
 		bne	_601a_loop
@@ -1507,7 +1513,7 @@ read_kbd
 		bra	wait_cmd
 do_cmd
 		ldx	#break
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#4
 		int	$2F
 
@@ -1519,7 +1525,7 @@ do_cmd
 		tst	x, pcb_job_file
 		bmi	popa
 		ldx	#break1 		;RTS
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#4
 		int	$2F
 popa		pula
@@ -2102,7 +2108,7 @@ int_3A		proc
 		bne	ret_err
 
 		ldx	#break1 		;RTS
-		ldab	#7
+		ldab	MEMPAGE_SEL
 		ldaa	#4
 		int	$2F
 
