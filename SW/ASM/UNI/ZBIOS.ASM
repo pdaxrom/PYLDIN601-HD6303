@@ -39,7 +39,7 @@ MEMPAGE_HI	equ	$10
 
 ;---------------
 ; RAM work area locations:
-swihndl_x	equ	$82
+swihndl_x	equ	$2A
 
 		list	on
 		section $ED50
@@ -161,6 +161,9 @@ warm
 		ldaa	MEMPAGE_SEL 	; изключване на страничния ROM
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
 		staa	MEMPAGE_SEL
+
+		ldx	#uartcon
+		stx	swivec+$F8*2
 
 		clr	indos		; изчистване на флага
 		clr	equipment	; изчистване на флага
@@ -529,7 +532,7 @@ uartcon		proc
 
     sei
 
-loop		bsr	uart_in
+loop		jsr	uart_in
 		cmpa	#'L'
 		beq	cmd_load
 		cmpa	#'S'
@@ -537,22 +540,22 @@ loop		bsr	uart_in
 		cmpa	#'G'
 		beq	cmd_go
 		ldaa	#'E'
-		bsr	uart_out
+		jsr	uart_out
 		bra	loop
 
 cmd_load	bsr	get_block_addr
-cmd_lo1		bsr	uart_in
+cmd_lo1		jsr	uart_in
 		staa	0,x
 		inx
 		cpx	fddparms
 		bne	cmd_lo1
 cmd_oka		ldaa	#'O'
-		bsr	uart_out
+		jsr	uart_out
 		bra	loop
 
 cmd_save	bsr	get_block_addr
 cmd_sa1		ldaa	0,x
-		bsr	uart_out
+		jsr	uart_out
 		inx
 		cpx	fddparms
 		bne	cmd_sa1
@@ -577,38 +580,13 @@ get_block_addr proc
 		rts
 		endp
 
-uart_in	proc
-	ldaa	REG_TRCSR
-	anda	#$C0		;FILTER OUT RDRF AND ORFE
-	cmpa	#$00
-	beq	uart_in		;WAIT FOR CHARACTER
-	cmpa	#$40
-	beq	uartin1		;CHECK FOR FRAMING ERROR
-	ldaa	REG_RDR         ;READ RECIEVED CHARACTER
-	rts
-uartin1	ldaa	REG_RDR		;ON ERROR, FLUSH BUFFER AND CLEAR ERROR FLAG
-	bra	uart_in
-	endp
-
-uart_out proc
-	pshb
-uartou1	ldab	REG_TRCSR	;Get Status Reg 
-	aslb			;TDRE->C
-	aslb
-	aslb
-	bcc	uartou1		;READY FOR NEXT CHARACTER
-	staa	REG_TDR
-	pulb
-	rts
-	endp
-
 uart_puts 	proc
 		pshx
 		psha
 loop		ldaa	0,x
 		tsta
 		beq	exit
-		bsr	uart_out
+		jsr	uart_out
 		inx
 		bra	loop
 exit		pula
@@ -635,14 +613,14 @@ OUTNIBL		anda	#$0F
 		cmpa	#$39
 		bls	OUTNIBX
 		adda	#$7
-OUTNIBX 	bsr	uart_out
+OUTNIBX 	jsr	uart_out
 		rts
 		endp
 
 get_word	proc
-		bsr	uart_in
+		jsr	uart_in
 		tab
-		bsr	uart_in
+		jsr	uart_in
 		psha
 		pshb
 		pulx
@@ -1135,23 +1113,26 @@ int16		proc
 ; SERIAL SUPPORT
 ;---------------------------------------
 rs232c		proc			; или серийния вход
-		global	int18, int19
-int18		ldaa	REG_TRCSR
-		anda	#$C0		;FILTER OUT RDRF AND ORFE
-		cmpa	#$00
-		beq	int18		;WAIT FOR CHARACTER
-		cmpa	#$40
-		beq	uartin1		;CHECK FOR FRAMING ERROR
-		ldaa	REG_RDR         ;READ RECIEVED CHARACTER
+		global	int18, int19, uart_in, uart_out
+int18		bsr	uart_in
 		clc
 		staa	swia
 		tpa
 		staa	swic
 		rts
+uart_in		ldaa	REG_TRCSR
+		anda	#$C0		;FILTER OUT RDRF AND ORFE
+		cmpa	#$00
+		beq	uart_in		;WAIT FOR CHARACTER
+		cmpa	#$40
+		beq	uartin1		;CHECK FOR FRAMING ERROR
+		ldaa	REG_RDR         ;READ RECIEVED CHARACTER
+		rts
 uartin1		ldaa	REG_RDR		;ON ERROR, FLUSH BUFFER AND CLEAR ERROR FLAG
-		bra	int18
+		bra	uart_in
 
-int19		pshb
+int19
+uart_out	pshb
 uartou1		ldab	REG_TRCSR	;Get Status Reg 
 		aslb			;TDRE->C
 		aslb
@@ -2110,8 +2091,7 @@ rstbl					; параметри за серийния вход/изход
 		db	'(C) Software RDL 1987-1989, Ivo Nenov',10
 		db	' & Orlin Shopov - Eagle software',10
 		db	'(C) pdaXrom.org 1997-2019, Alexander Chukov',10,0
-uartlogo	db	10,13,'Serial bootloader mode'
-newline		db	10,13,0
+uartlogo	db	10,13,'Serial bootloader',10,13,0
 ps2okay		db	10,'PS/2 keyboard connected',0
 
 kblist		dw	kb, kb_shift, kbcaps, kbcaps_shift

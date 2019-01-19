@@ -121,19 +121,19 @@ max_kernel_vers =	$03FF
 ;--------------------------------------------------------
 ;Zero page variables
 ;--------------------------------------------------------
-indos		=	$80
-swic		=	$84
-swib		=	$85
-swia		=	$86
-swix		=	$87
+indos		=	$28
+swic		=	$2C
+swib		=	$2D
+swia		=	$2E
+swix		=	$2F
 
-hundreds	=	$98
-seconds 	=	$99
-minutes 	=	$9A
-hours		=	$9B
-day		=	$9C
-month		=	$9D
-year		=	$9E		; 2 bytes
+hundreds	=	$40
+seconds 	=	$41
+minutes 	=	$42
+hours		=	$43
+day		=	$44
+month		=	$45
+year		=	$46		; 2 bytes
 
 a1		=	$78
 x1		=	$79
@@ -1266,18 +1266,18 @@ clock1
 		ldaa	scrmode
 		beq	clock2_ 	;date not displayed in text 40
 
-		ldab	$9c		;day
+		ldab	day		;day
 		bsr	conv
 		cmpa	#'0'
-		bne	day
+		bne	lday
 		ldaa	#' '
-day		bsr	store
+lday		bsr	store
 		tba
 		bsr	store
 		ldaa	#' '
 		bsr	store
 		stx	clock_save_sp
-		ldaa	$9D		;month
+		ldaa	month		;month
 		asla
 		asla
 		clrb
@@ -1299,7 +1299,7 @@ day		bsr	store
 		bsr	store
 		ldaa	#' '
 		bsr	store
-		ldab	$9F
+		ldab	year+1
 		subb	#1900
 		bsr	conv
 		bsr	store
@@ -1340,24 +1340,24 @@ conv_done	adda	#'0'
 		rts
 ;---------------
 clock2
-		ldab	$9b		;hours
+		ldab	hours		;hours
 		bsr	conv
 		cmpa	#'0'
-		bne	hours
+		bne	lhours
 		ldaa	#' '
-hours		bsr	store
+lhours		bsr	store
 		tba
 		bsr	store
 		ldaa	#':'
 		bsr	store
-		ldab	$9a		;minutes
+		ldab	minutes		;minutes
 		bsr	conv
 		bsr	store
 		tba
 		bsr	store
 		ldaa	#':'
 		bsr	store
-		ldab	$99		;seconds
+		ldab	seconds		;seconds
 		bsr	conv
 		bsr	store
 		tba

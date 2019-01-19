@@ -91,22 +91,22 @@ _BAD_CLU	=     202
 ;--------------------------------------------------------
 ;Zero page variables
 ;--------------------------------------------------------
-indos		=	$80
-equipment	=	$81
+indos		=	$28
+equipment	=	$29
 
-swic		=	$84
-swib		=	$85
-swia		=	$86
-swix		=	$87
+swic		=	$2C
+swib		=	$2D
+swia		=	$2E
+swix		=	$2F
 
-hundreds	=	$98
-seconds 	=	$99
-minutes 	=	$9A
-hours		=	$9B
-day		=	$9C
-month		=	$9D
-year		=	$9E
-century 	=	$9F
+hundreds	=	$40
+seconds 	=	$41
+minutes 	=	$42
+hours		=	$43
+day		=	$44
+month		=	$45
+year		=	$46
+century 	=	$47
 
 himem		=	$EE00 + $F*2
 lomem		=	$EE00 + $E*2

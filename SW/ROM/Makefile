@@ -13,9 +13,11 @@ rom.bin: $(UNIASM)
 	$(UNIASM) ROM.S ROM.LST ROM.CMD
 	dd if=/dev/zero ibs=1k count=128 | tr "\000" "\377" >rom.bin
 	dd if=ROM.CMD of=rom.bin conv=notrunc bs=1 seek=$$((0x1fe00))
+	dd if=/dev/zero ibs=1k count=4 | tr "\000" "\377" >bios.bin
+	dd if=ROM.CMD of=bios.bin conv=notrunc bs=1 seek=$$((0x0e00))
 
 bootloader: ../../generic/src/ROM/bootloader.c
 	$(CC) $^ -o $@ -Wall -O2 -g
 
 clean:
-	rm -f rom.bin *.LST *.CMD *.o *.mem bootloader *.SYS *.CMD *.ERR *.S BOOTROM.INC BOOTMEM.INC
+	rm -f bios.bin rom.bin *.LST *.CMD *.o *.mem bootloader *.SYS *.CMD *.ERR *.S BOOTROM.INC BOOTMEM.INC

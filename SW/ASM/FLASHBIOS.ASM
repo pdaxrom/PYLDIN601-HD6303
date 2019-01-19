@@ -16,10 +16,10 @@
 	jsr	uart_puts
 
 ; Setup page port (P6)
-	ldaa	#0
-	staa	REG_PORT6
-	ldaa	#$FF
-	staa	REG_DDRP6
+;	ldaa	#0
+;	staa	REG_PORT6
+;	ldaa	#$FF
+;	staa	REG_DDRP6
 
 	ldx	#code
 	jsr	uart_puts

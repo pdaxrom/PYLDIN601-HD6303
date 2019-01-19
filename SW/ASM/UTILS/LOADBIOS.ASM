@@ -11,8 +11,9 @@ MEMSPACE_FN1	EQU	%10000000
 
 	sei
 
-	ldaa	MEMPAGE_SEL
-	anda	#$FF^MEMPAGE_FMASK
+;	ldaa	MEMPAGE_SEL
+;	anda	#$FF^MEMPAGE_FMASK
+	clra
 	oraa	#MEMSPACE_FN1
 	staa	MEMPAGE_SEL
 

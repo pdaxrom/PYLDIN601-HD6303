@@ -26,7 +26,9 @@
 ; lomem ÷ stack   - free memory
 ; stack ÷ himem   - the stack itself
 ; himem ÷ resid.  - allocated memory by INT2A
-; resid.÷ $BDFF   - resident memory
+; resid.÷ $BCFF   - resident memory
+; $BD00.÷ $BDC7   - reserved
+; $BDC8.÷ $BDFF   - UniBIOS workarea
 ; $BE00 ÷ $BEFF   - Pascal workarea
 ; $BF00 ÷ $BF7F   - XBIOS workarea
 ; $BF80 ÷ $BF9F   - reserved
@@ -45,7 +47,7 @@
 ;------------------------------------------------------------
 
 lowerram	equ	$0100
-upperram	equ	$BE00
+upperram	equ	$BD00
 system_line	equ	$BFA0
 kbd_buffer	equ	$BFF0
 kbd_buffer_end	equ	$C000
@@ -67,38 +69,38 @@ hard_version	equ	$FFE9
 ; ПРОМЕНЛИВИ:
 
 ; Zero page locations:
-indos		equ	$80		; флаг показващ нивото на влагане
-equipment	equ	$81
-; swihndl_x	equ	$82		; used only by swihndl !!!
+indos		equ	$28		; флаг показващ нивото на влагане
+equipment	equ	$29
+; swihndl_x	equ	$2A		; used only by swihndl !!!
 
-swic		equ	$84		; променливи използвани от interrupt
-swib		equ	$85		; драйверите за предаване на регистрите
-swia		equ	$86		; A, B, X и флаговете C и V; достъпни
-swix		equ	$87		; за interrupt драйверите само
+swic		equ	$2C		; променливи използвани от interrupt
+swib		equ	$2D		; драйверите за предаване на регистрите
+swia		equ	$2E		; A, B, X и флаговете C и V; достъпни
+swix		equ	$2F		; за interrupt драйверите само
 
-tmpp		equ	$89
-tmpb		equ	$8A
-tmpa		equ	$8B
-tmpx		equ	$8C
-tmps		equ	$8E
+tmpp		equ	$31
+tmpb		equ	$32
+tmpa		equ	$33
+tmpx		equ	$34
+tmps		equ	$36
 
-a1		equ	$90
-a2		equ	$92
-a3		equ	$94
-a4		equ	$96
+a1		equ	$38
+a2		equ	$3A
+a3		equ	$3C
+a4		equ	$3E
 
-hundreds	equ	$98		; системно време и дата
-seconds 	equ	$99		;
-minutes 	equ	$9A		;
-hours		equ	$9B		;
-day		equ	$9C		;
-month		equ	$9D		;
-year		equ	$9E		;
+hundreds	equ	$40		; системно време и дата
+seconds 	equ	$41		;
+minutes 	equ	$42		;
+hours		equ	$43		;
+day		equ	$44		;
+month		equ	$45		;
+year		equ	$46		;
 
-x1		equ	$A0
-x2		equ	$A2
-x3		equ	$A4
-x4		equ	$A6
+x1		equ	$48
+x2		equ	$4A
+x3		equ	$4C
+x4		equ	$4E
 
 ;---------------
 ; RAM locations:

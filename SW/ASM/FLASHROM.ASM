@@ -20,10 +20,10 @@
 	jsr	F_PUTSTR
 
 ; Setup page port (P6)
-	ldaa	#0
-	staa	REG_PORT6
-	ldaa	#$FF
-	staa	REG_DDRP6
+;	ldaa	#0
+;	staa	REG_PORT6
+;	ldaa	#$FF
+;	staa	REG_DDRP6
 
 	ldx	#code
 	jsr	F_PUTSTR
@@ -48,7 +48,7 @@
 gowrite
 
 	ldab	#$01		; addr
-	ldx	#$8000		;
+	ldx	#$4000		;
 	jsr	addrtopage
 
 	ldx	#wrdata
@@ -78,7 +78,7 @@ readonly	ldx	#nl
 		jsr	F_PUTSTR
 
 	ldab	#$01		; addr
-	ldx	#$8000		;
+	ldx	#$4000		;
 	jsr	addrtopage
 
 	psha

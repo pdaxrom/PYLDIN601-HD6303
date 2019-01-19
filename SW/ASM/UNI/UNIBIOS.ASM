@@ -51,7 +51,7 @@ regs		equ	swic
 ;------------------------------------------------------------
 ; èêéåÖçãàÇà:
 
-		section $28
+		section $BDC8
 ;monitor
 pc		ds	2
 mnem		ds	2
@@ -139,7 +139,7 @@ RplOrOrn	ds	1   ;	0	 ff	 00    00	 ff	4
 			    ; P & ~S	 00	 00    ff	 ff	e
 			    ; ~(P&S)	 00	 00    ff	 00	f
 
-		error	(*-1)/$60
+		error	*-$BE00
 		ends
 
 ;---------------------------------------
@@ -247,12 +247,6 @@ editflg 	ds	1
 		db	4
 		dw	monitor
 
-;		db	$1A
-;		dw	int1A
-
-;		db	$1B
-;		dw	int1B
-
 		db	$21
 		dw	int21
 
@@ -288,12 +282,6 @@ editflg 	ds	1
 
 		db	$6D
 		dw	int_6D
-
-		db	$6E
-		dw	int_6E
-
-		db	$6F
-		dw	int_6F
 
 		db	0
 
@@ -338,7 +326,7 @@ colortbl2	db	$00,$55,$aa,$ff
 colortbl3	db	$00,$ff
 ;*......
 
-		list	off
+;		list	off
 ;----------------------------------------------------------
 init		proc
 		ldab	bios_version
@@ -876,40 +864,7 @@ take0		ldx	a2
 takeend 	sec
 		rts
 
-outputl 	int	$19	       ;¢µÆ§≠† ≤Æ∑™† ≠† ™Æ¨†≠§†≤† OUTPUT
-output		bsr	take
-		bcc	outputl
-		rts
-
-input					; INPUT
-		tst	dflg
-		bne	input0
 sy_err		jmp	syntax_error
-input0
-		jsr	cmpa2a1
-		bhi	inputrts
-		int	$18
-		bcs	input_error
-		ldx	a2
-		staa	0,x
-		inx
-		stx	a2
-		bne	input0
-inputrts	rts
-input_error	jmp	prnerror
-
-cassread	int	$1a		;READ
-		tstb
-		bne	cassread_ok
-		tsta
-		beq	input_error
-cassread_ok	stx	pc
-		rts
-
-casswrite	ldx	a2		;WRITE
-		bsr	suba2a1
-		int	$1b
-		rts
 
 suba2a1 	ldaa	a1+1
 		ldab	a1
@@ -1346,28 +1301,20 @@ cmds					; ≤†°´®∂† ± ™Æ¨†≠§®≤• ® †§∞•±®≤•
 		dw	regdump
 		db	'G'
 		dw	go
-		db	'I'
-		dw	input
 		db	'L'
 		dw	load
 		db	'M'
 		dw	move
-		db	'O'
-		dw	output
 		db	'P'
 		dw	prnt
 		db	'Q'
 		dw	quit
-		db	'R'
-		dw	cassread
 		db	'S'
 		dw	save
 		db	'U'
 		dw	disasm
 		db	'V'
 		dw	vfy
-		db	'W'
-		dw	casswrite
 		db	'Z'
 		dw	zoom
 cmde		endp
@@ -1576,10 +1523,10 @@ ctrl1
 pxit		rts
 
 del
-		bsr	bs
+		jsr	bs
 		ldaa	#' '
 		bsr	norm
-		bra	bs
+		jmp	bs
 putcgr4
 		sei
 		sts	pstk
@@ -3191,349 +3138,6 @@ no_draw 	dec	shape_steps
 		jmp	loopb
 
 		endp
-
-;-----------------------------------------------------------
-; MUSIC FUNCTIONS
-;-----------------------------------------------------------
-;-----------------------------------------------------------
-; int 6E - player
-; import X - pointer to music - 3-byte structure : note, duration, pause
-;						   units 7 msec
-;				1-byte structure : FE-F8 tember, FF - end
-;-----------------------------------------------------------
-
-int_6E		proc
-		sei
-		ldaa	#1
-		staa	tmbr
-		stx	np
-pp
-		ldx	np
-		ldaa	x
-		psha
-		ldaa	1,x
-		bsr	bzz
-		pula
-		cpx	#0
-		beq	skip1
-		ldab	tmbr
-		jsr	int_6F
-skip1		ldx	np
-		ldaa	2,x
-		bsr	bzz
-		cpx	#0
-		beq	skip2
-		ldaa	#0
-		ldab	#1
-		jsr	int_6F
-skip2		ldx	np
-		inx
-		inx
-contloop	inx
-		ldaa	0,x
-		cmpa	#$f8
-		bcs	cont
-		coma
-		anda	#7
-		beq	fin
-		staa	tmbr
-		bra	contloop
-
-cont		stx	np
-		jmp	pp
-
-bzz
-		clrb
-		staa	svx+1
-		stab	svx
-		asla
-		rolb
-		asla
-		rolb
-		asla
-		rolb
-		adda	svx+1
-		adcb	svx
-		lsrb
-		rora
-		staa	svx+1
-		stab	svx
-		ldx	svx
-fin		rts
-
-		endp
-
-;-----------------------------------------------------------
-; INT 6F - play subroutine
-; import: A - note: 0 - pause, 1-72
-;	  B - tembre: 1-7
-;	  X - duration in units of 1.536 msec
-;-----------------------------------------------------------
-;
-; Play subroutine.
-; Entry:
-;   a - note (0-pause, 1..72)
-;   b - tembre (1..7)
-;   x - length (1..65536 in 1.536 msec increments)
-;   interrupts msut be disabled !!!
-;
-; Exit: registers garbled, location $10-$15 garbled
-;
-
-int_6F		proc
-		sei
-		stx	tmp
-		psha
-		pshb
-		ldab	tmp
-		ldaa	tmp+1
-		jsr	time_adjust
-		pulb
-		pula
-		psha
-		pshb			;save regs
-		asla
-		staa	mus_ptr+1	;make ptr into period table
-		ldaa	#/PTbl
-		staa	mus_ptr
-		ldx	mus_ptr
-		ldab	PTbl,x		;get period
-		ldaa	PTbl+1,x	;get period correction
-		ldx	tmp
-		stab	Per1
-		staa	Corr
-		adda	#7
-		staa	CorrB
-		pulb			;Tembre
-		ldaa	Per1
-tshift		lsra			;shift B times to calc 0-wave
-		decb
-		bne	tshift
-		tsta
-		bne	*+3
-		inca
-		tab
-		ldaa	per1	       ;calc 1-wave
-		sba
-		staa	per1
-		stab	per2
-;		ldaa	piacrb	      ;make CRB constants
-		staa	Pia1	       ;for 0-wave
-		staa	Pia2	       ;and 1-wave
-		pulb
-		tstb
-		beq	ppp
-		eora	#8
-		staa	Pia2
-ppp		clrb
-
-;do play
-y3
-		ldaa	Pia2		;C 3
-;		staa	piacrb		;C 5-8
-		ldaa	Per1		;C 3-11
-play1
-		jsr	delay		;P 24
-		subb	#8		;P 2
-		bcc	px1		;P 4-6
-		dex			;P 4-10
-		bne	y1		;P 4-14
-		rts
-px1
-		inx			;P 4-10
-		dex			;P 4-14
-y1
-		deca			;P 2-16
-		nop			;P 2-18
-		nop			;P 2-20
-		bne	play1		;P 4-24 + delay = 48
-
-		ldaa	Pia1		;C 3-14
-;		staa	piacrb		;C 5-19
-		ldaa	Per2		;C 3-22
-		nop			;C 2-24
-play2
-		jsr	delay
-		subb	#8
-		bcc	px2
-		dex
-		bne	y2
-		rts
-px2
-		inx
-		dex
-y2
-		deca
-		bne	play2		;P 24
-
-		ldaa	Corr		;C 3-27
-z1		deca			;p 2
-		bne	z1		;p 4-6
-
-		subb	CorrB		;C 3-30
-		bcc	x3		;C 4-34
-		dex			;C 4-38
-		bne	y3		;C 4-42 = 7 * 6
-		rts
-x3
-		nop			;C 2-36
-		nop			;C 2-38
-		bra	y3		;C 4-42
-
-delay		inx	;4
-		dex	;4
-		nop	;2
-		rts	;5 + 9(jsr) = 24
-
-; Time for one period total
-; 24 * (Per1+Per2) + 6 * Corr + 42 = 6 * (4*P + Corr + 7)
-
-
-PTbl
-		db	2,2		; pause
-		db	252,7		;-29
-		db	238,6		;-28
-		db	225,3		;-27
-		db	212,6		;-26
-		db	200,6		;-25
-		db	189,4		;-24
-		db	178,7		;-23
-		db	168,7		;-22
-		db	159,3		;-21
-		db	150,4		;-20
-		db	141,8		;-19
-		db	133,8		;-18
-		db	126,4		;-17
-		db	119,3		;-16
-		db	112,6		;-15
-		db	106,3		;-14
-		db	100,4		;-13
-		db	 94,7		;-12
-		db	 89,4		;-11
-		db	 84,4		;-10
-		db	 79,6		;-9
-		db	 75,2		;-8
-		db	 71,1		;-7
-		db	 67,1		;-6
-		db	 63,3		;-5
-		db	 59,6		;-4
-		db	 56,3		;-3
-		db	 53,2		;-2
-		db	 50,2		;-1
-		db	 47,4		;0
-		db	 44,7		;1
-		db	 42,2		;2
-		db	 39,8		;3
-		db	 37,6		;4
-		db	 35,5		;5
-		db	 33,5		;6
-		db	 31,6		;7
-		db	 29,8		;8
-		db	 28,2		;9
-		db	 26,6		;10
-		db	 25,2		;11
-		db	 23,6		;12
-		db	 22,4		;13
-		db	 21,2		;14
-		db	 19,8		;15
-		db	 18,7		;16
-		db	 17,7		;17
-		db	 16,7		;18
-		db	 15,7		;19
-		db	 14,8		;20
-		db	 14,2		;21
-		db	 13,3		;22
-		db	 12,5		;23
-		db	 11,8		;24
-		db	 11,2		;25
-		db	 10,5		;26
-		db	 10,1		;27
-		db	  9,4		;28
-		db	  8,8		;29
-		db	  8,4		;30
-		db	  7,8		;31
-		db	  7,5		;32
-		db	  7,1		;33
-		db	  6,6		;34
-		db	  6,3		;35
-		db	  5,8		;36
-		db	  5,6		;37
-		db	  5,3		;38
-		db	  5,1		;39
-		db	  4,7		;40
-		db	  4,4		;41
-		db	  4,2		;42
-		db	  4,1		;43
-		db	  3,7		;44
-		db	  3,5		;45
-		db	  3,4		;46
-		db	  3,2		;47
-		db	  3,1		;48
-		db	  2,7		;49
-		db	  2,6		;50
-		db	  2,5		;51
-		db	  2,4		;52
-		db	  2,3		;53
-		db	  2,2		;54
-		db	  2,1		;55
-
-		endp
-
-;---------------
-time_adjust	proc
-					;BA * 1.536 msec; assume 1.5625
-		lsrb			;divide by 32
-		rora			;BA * 50 msec
-		lsrb
-		rora
-		lsrb
-		rora
-		lsrb
-		rora
-		lsrb
-		rora
-		adca	#0
-		adcb	#0
-
-loop1		suba	#20
-		sbcb	#0
-		bcs	break1
-		inc	seconds
-		bra	loop1
-break1		adda	#20
-		ldab	hundreds
-loop2		addb	#5
-		deca
-		bne	loop2
-		stab	hundreds
-		subb	#100
-		bcs	cont2
-		stab	hundreds
-		inc	seconds
-cont2
-		ldaa	seconds
-		suba	#60
-		bcs	exit
-		staa	seconds
-		inc	minutes
-
-		ldaa	minutes
-		cmpa	#60
-		bcs	exit
-		clr	minutes
-		inc	hours
-
-		ldaa	hours
-		cmpa	#24
-		bcs	exit
-		clr	hours
-		inc	day
-
-exit		rts
-
-		endp
-;-----------------------------------------------------------
-
 
 ;---------------------------------------
 ; GETLINE
