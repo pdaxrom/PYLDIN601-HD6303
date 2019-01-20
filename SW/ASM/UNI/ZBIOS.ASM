@@ -118,7 +118,7 @@ reshndl 	proc			; драйвер за обработка на RESET
 		staa	VPU_CONFIG
 		ldaa	#1
 		staa	VPU_AUTOOFFS
-		ldx	#0
+		ldx	#screen
 		stx	VPU_VADDR
 		ldaa	#39
 		staa	VPU_HSIZE
@@ -626,10 +626,8 @@ timer		proc
 		ldx	#0
 		cpx	synchro_addr
 		beq	timer0
-		ldaa	synchro_addr
-		ldab	synchro_addr+1
-		staa	VPU_VADDR
-		stab	VPU_VADDR+1
+		ldd	synchro_addr
+		std	VPU_VADDR
 		stx	synchro_addr
 
 timer0		ldaa	hundreds
@@ -1000,16 +998,12 @@ textmode
 		anda	#$FF^VPU_B_GRF
 		staa	VPU_CONFIG
 
-		ldab	#/screen
-		stab	scrbase 	; начален адрес на екрана
-		ldaa	#screen
-		staa	scrbase+1
+		ldd	#screen
+		std	scrbase		; начален адрес на екрана
 		tst	swia
 		bpl	textmode1
-		ldab	scraddr
-		ldaa	scraddr+1
-textmode1	stab	scraddr
-		staa	scraddr+1
+		ldd	scraddr
+textmode1	std	scraddr
 		bra	setmode1
 grafmode
 		bsr	setrows
@@ -1020,12 +1014,10 @@ grafmode
 		oraa	#VPU_B_GRF
 		staa	VPU_CONFIG
 
-		ldab	scrbase
-		ldaa	scrbase+1
+		ldd	scrbase
 		bra	setmode1x	;we use emulation to send graphics screen to vpu
 
-setmode1	stab	VPU_VADDR
-		staa	VPU_VADDR+1
+setmode1	std	VPU_VADDR
 setmode1x	tst	swia
 		bmi	return
 

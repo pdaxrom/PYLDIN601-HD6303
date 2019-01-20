@@ -54,7 +54,7 @@ kbd_buffer_end	equ	$C000
 romstart	equ	$C000
 swipag		equ	$ED80
 swivec		equ	$EE00
-screen		equ	$1000		; VPU internal screen address
+screen		equ	$2000		; VPU internal screen address
 computer_name	equ	$FFDC
 serial_no	equ	$FFDA
 bios_date	equ	$FFDE
