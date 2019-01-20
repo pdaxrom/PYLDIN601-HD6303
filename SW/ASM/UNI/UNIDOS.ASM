@@ -1261,7 +1261,7 @@ clock		proc
 		ldaa	scrmode
 		bne	clock1		;mode text 80
 		ldaa	#$60
-;;		staa	78,x		;attr. for int17 for text 40
+		staa	78,x		;attr. for int17 for text 40
 clock1
 		ldaa	scrmode
 		beq	clock2_ 	;date not displayed in text 40
@@ -1315,14 +1315,14 @@ clock2_ 	bra	clock2
 store
 		tst	scrmode 	;only text modes !
 		bne	store80
-;;		staa	61,x
+		staa	61,x
 		ldaa	#$60		;attribute
-;;		staa	60,x
+		staa	60,x
 		inx
 		inx
 return		rts
 
-store80 	;;staa	58,x
+store80 	staa	58,x
 		inx
 		rts
 
@@ -1365,28 +1365,27 @@ lhours		bsr	store
 
 		sts	clock_save_sp
 		lds	#system_line-1
-		ldx	system_scrbase
+		ldd	system_scrbase
+		addd	#40
+		xgdx
 		ldaa	hard_version
+		cmpa	#$40
 		beq	_601
-		cmpa	#$80
-		beq	_601a
 		bra	done		;unknown hardware version
 
-_601		ldab	#40
+VPU_DATA	EQU	$E610
+VPU_ADDR	EQU	$E611
+
+_601		stx	VPU_ADDR
+		ldab	#40
 _601_loop	pula			;attr. ignored
 		pula
-;;		staa	42,x		;on 27-th line
+		staa	VPU_DATA	;on 27-th line
 		inx
 		decb
 		bne	_601_loop
 		bra	done
 
-_601a		ldab	#80
-_601a_loop	pula
-;;		staa	80,x		;on 27-th line
-		inx
-		decb
-		bne	_601a_loop
 done
 		lds	clock_save_sp
 		cli
