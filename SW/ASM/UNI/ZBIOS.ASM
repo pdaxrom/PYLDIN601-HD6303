@@ -517,20 +517,12 @@ loop0
 
 uartcon		proc
 		ldx	#title
-
-;		ldx	#uartlogo
-;		int	$23
-;testloop	int	$20
-;		int	$22
-;		ldx	#uartlogo
-;		int	$23
-;		bra	testloop
-
 		bsr	uart_puts
 		ldx	#uartlogo
 		bsr	uart_puts
+		int	$23
 
-    sei
+		sei
 
 loop		jsr	uart_in
 		cmpa	#'L'
@@ -1476,6 +1468,7 @@ cls					; изчистване на екрана
 		ldx	scrbase
 		stx	VPU_ADDR
 		ldab	scrrows
+		aslb
 		ldaa	scrcols
 		mul
 		xgdx
