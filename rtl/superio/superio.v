@@ -96,7 +96,7 @@ module superio (
 	wire DS6 = !EXTCS && (ADDR[7:5] == 3'b110); // $E6C0
 	wire DS7 = !EXTCS && (ADDR[7:5] == 3'b111); // $E6E0
 	
-	wire vpu_cs = DS0;
+	wire vpu_cs = DS0 && (ADDR[4] == 1'b1); // $E610
 	wire [7:0] vpu_dout;
 	wire vpu_irq;
 	vpu vpu1 (
