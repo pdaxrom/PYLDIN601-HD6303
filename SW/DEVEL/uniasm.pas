@@ -395,12 +395,12 @@ program asm6800;
 
   begin
   writeln;
-  writeln('6803 Cross Assembler.             Version 2.10');
+  writeln('HD6303 Cross Assembler.           Version 2.10');
   writeln('Software Research and Development Lab.,  Sofia');
   writeln('Copyright (C) Ivo Nenov 1988-89');
   writeln('          (C) O.Shopov  1988-89 Eagle software');
   writeln('          (C) G.Petrov  1988-89 YGP');
-  writeln('          (C) A.Chukov  2012-16 Madisa Technology');
+  writeln('          (C) A.Chukov  2016-19 pdaXrom.org');
   writeln;
   errfile:= false;
   Assign(StdOut, ''); rewrite(StdOut);
