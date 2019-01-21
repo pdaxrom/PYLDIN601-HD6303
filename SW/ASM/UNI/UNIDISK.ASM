@@ -103,16 +103,13 @@ int17		proc
 		tst	drive
 		bne	error
 
+		ldaa	#'R'
+		bsr	showmode
+
 		ldd	0,x
 		std	buffer
 		ldd	3,x
 		std	lbasector+2
-;	pshx
-;	xgdx
-;	int $24
-;	ldx #nl
-;	int $23
-;	pulx
 		ldd	#0
 		std	lbasector
 		ldx	#lbasector
@@ -120,40 +117,63 @@ int17		proc
 		bra	donex
 
 next1		cmpa	#$42		; write sector
-		bne	init
+		bne	next2
 		tst	drive
 		bne	error
+
+		ldaa	#'W'
+		bsr	showmode
 
 		ldd	0,x
 		std	buffer
 		ldd	3,x
 		std	lbasector+2
-;	pshx
-;	xgdx
-;	int $24
-;	ldx #nl
-;	int $23
-;	pulx
 		ldd	#0
 		std	lbasector
 		ldx	#lbasector
 		jsr	sd_write
-
 		bra	donex
-init		jsr	sd_init
+
+next2		cmpa	#$43
+		bne	next3
+
+		ldaa	#'S'
+		bsr	showmode
+		bra	init2
+
+next3		cmpa	#$44
+		bne	init
+
+		ldaa	#'F'
+		bsr	showmode
+		bra	init2
+
+init		ldaa	#'I'
+		bsr	showmode
+
+init2		jsr	sd_init
 		staa	drive
 donex		tsta
 		beq	done
 error		ldaa	#$80
 done		staa	swia
+		rts
+		endp
 
-;    ldaa #'-'
-;    int $22
-;    ldaa swia
-;    int $25
-;    ldaa #'-'
-;    int $22
-
+showmode	proc
+		pshx
+		pshb
+		ldab	scrmode
+		andb	#$03
+		bne	return
+		xgdx
+		ldd	system_scrbase
+		addd	#40+39
+		std	VPU_ADDR
+		xgdx
+		staa	VPU_DATA
+return		pulb
+		pulx
 		rts
 		endp
 
