@@ -100,11 +100,6 @@ int17		proc
 
 		cmpa	#$41		; read sector
 		bne	next1
-		tst	drive
-		bne	error
-
-		ldaa	#'R'
-		bsr	showmode
 
 		ldd	0,x
 		std	buffer
@@ -113,16 +108,11 @@ int17		proc
 		ldd	#0
 		std	lbasector
 		ldx	#lbasector
-		jsr	sd_read
-		bra	donex
+		jsr	readsec
+		bra	done
 
 next1		cmpa	#$42		; write sector
 		bne	next2
-		tst	drive
-		bne	error
-
-		ldaa	#'W'
-		bsr	showmode
 
 		ldd	0,x
 		std	buffer
@@ -131,8 +121,8 @@ next1		cmpa	#$42		; write sector
 		ldd	#0
 		std	lbasector
 		ldx	#lbasector
-		jsr	sd_write
-		bra	donex
+		jsr	writesec
+		bra	done
 
 next2		cmpa	#$43
 		bne	next3
@@ -153,10 +143,57 @@ init		ldaa	#'I'
 
 init2		jsr	sd_init
 		staa	drive
-donex		tsta
+		tsta
 		beq	done
 error		ldaa	#$80
 done		staa	swia
+		rts
+		endp
+
+readsec		proc
+		ldab	#1
+		tst	drive
+		bne	init
+		incb
+loop		ldaa	#'R'
+		bsr	showmode
+		ldx	#lbasector
+		jsr	sd_read
+		decb
+		beq	return
+		tsta
+		beq	return
+init		bsr	reinit
+		tsta
+		bne	return
+		bra	loop
+return		rts
+		endp
+
+writesec	proc
+		ldab	#1
+		tst	drive
+		bne	init
+		incb
+loop		ldaa	#'W'
+		bsr	showmode
+		ldx	#lbasector
+		jsr	sd_write
+		decb
+		beq	return
+		tsta
+		beq	return
+init		bsr	reinit
+		tsta
+		bne	return
+		bra	loop
+return		rts
+		endp
+
+reinit		proc
+		ldaa	#'I'
+		bsr	showmode
+		jsr	sd_init
 		rts
 		endp
 
