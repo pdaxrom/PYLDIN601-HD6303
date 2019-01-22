@@ -114,7 +114,7 @@ reshndl 	proc			; драйвер за обработка на RESET
 		oraa	#BIT_IRQ1E
 		staa	REG_RP5CR
 
-		ldaa	#VPU_B_CUR|VPU_B_CURINV|VPU_B_AUTO|VPU_B_IEN	; VPU initialization
+		ldaa	#VPU_B_CURINV|VPU_B_AUTO|VPU_B_IEN	; VPU initialization
 		staa	VPU_CONFIG
 		ldaa	#1
 		staa	VPU_AUTOOFFS
@@ -908,6 +908,9 @@ return		staa	swia
 
 ;---------------------------------------
 int11		proc
+		ldaa	VPU_CONFIG
+		oraa	#VPU_B_CUR
+		staa	VPU_CONFIG
 loop		cli
 		nop
 		nop
@@ -923,6 +926,9 @@ loop		cli
 		ldx	#kbd_buffer
 skip		stx	kbd_load
 		staa	swia
+		ldaa	VPU_CONFIG
+		anda	#$FF^VPU_B_CUR
+		staa	VPU_CONFIG
 		rts
 		endp
 
@@ -1318,57 +1324,46 @@ putchar 	stx	scrtmpx 	; поставяне на символа на екрана
 		staa	scrtmp
 		stx	VPU_ADDR
 		staa	VPU_DATA
-;		staa	0,x
-		ldaa	scrtmpx+1
-		ldab	scrtmpx
-		suba	scrsize+1
-		sbcb	scrsize
-		cmpb	scrbase
-		bne	putchar1
-		cmpa	scrbase+1
-putchar1	bcs	putchar2
-		staa	altaddr+1
-		stab	altaddr
-		ldx	altaddr
+
+		ldd	scrtmpx
+		subd	scrsize
+		xgdx
+		cpx	scrbase
+		bcs	putchar2
+		stx	altaddr
 		ldaa	scrtmp
 		stx	VPU_ADDR
 		staa	VPU_DATA
-;		staa	0,x
+
 putchar2	pulb
 		ldx	scrtmpx
 		rts
 
 fixcur					; фиксиране на курсора
 		ldaa	scrcols
-;		inca
-;		inca
 		staa	scrtmp
-		ldaa	cv
-		psha
-		clrb
+		ldab	cv
 		pshb
-		ldaa	ch
-		clrb
-		adda	scraddr+1
-		adcb	scraddr
-		staa	curaddr+1
-		stab	curaddr
-fixcur1 	lsr	scrtmp
+		clra
+		psha
+		ldab	ch
+		clra
+		addd	scraddr
+		std	curaddr
+fixcur1		lsr	scrtmp
 		bcc	fixcur2
-		adda	curaddr+1
-		adcb	curaddr
-		staa	curaddr+1
-		stab	curaddr
-fixcur2 	pulb
-		pula
-		asla
-		rolb
-		psha
+		addd	curaddr
+		std	curaddr
+fixcur2		pula
+		pulb
+		asld
 		pshb
+		psha
 		tst	scrtmp
 		bne	fixcur1
 		ins
 		ins
+
 putcursor				; поставяне на курсора
 		ldx	kbd_load
 		cpx	kbd_store
@@ -1389,9 +1384,6 @@ check_pause	cmpa	#_PAUSE
 is_pause	int	$11		;remove from buffer
 		int	$11
 checkend
-;		ldaa	cursor_start
-;		ldab	cursor_end
-;		jsr	vpu_cursor
 		ldaa	cv
 		asla
 		asla
@@ -1476,13 +1468,11 @@ home		clr	ch		; курсора в горния ляв ъгъл
 		stx	curaddr
 		jmp	putcursor
 
-clear_sysline	ldaa	scraddr+1
-		ldab	scraddr
-		adda	scrsize+1
-		adcb	scrsize
-		staa	system_scrbase+1
-		stab	system_scrbase
-		ldx	system_scrbase
+clear_sysline	ldd	scraddr
+		addd	scrsize
+		xgdx
+		stx	system_scrbase
+
 		sei
 		sts	tmps
 		lds	#system_line-1
@@ -1512,36 +1502,23 @@ lf					; ред надолу
 		staa	cv
 		jmp	fixcur		; for lf = cr+lf
 
-;		ldaa	curaddr+1
-;		ldab	curaddr
-;		adda	scrcols
-;		adcb	#0
-;		staa	curaddr+1
-;		stab	curaddr
-;		jmp	putcursor
 scroll					; скрол нагоре
-		ldaa	scrcols
-		clrb
-		adda	scraddr+1
-		adcb	scraddr
-scroll4 	staa	scraddr+1
-		stab	scraddr
-		suba	scrsize+1
-		sbcb	scrsize
-		cmpb	scrbase
-		bne	scroll3
-		cmpa	scrbase+1
-scroll3 	bcc	scroll4
+		ldab	scrcols
+		clra
+		addd	scraddr
+scroll4		std	scraddr
+		subd	scrsize
+		xgdx
+		cpx	scrbase
+		xgdx
+		bcc	scroll4
+		ldd	scraddr
+		addd	scrsize
+		subb	scrcols
+		sbca	#0
+		xgdx
+		stx	altaddr
 
-		ldaa	scraddr+1
-		ldab	scraddr
-		adda	scrsize+1
-		adcb	scrsize
-		suba	scrcols
-		sbcb	#0
-		staa	altaddr+1
-		stab	altaddr
-		ldx	altaddr
 		clrb
 		jsr	cleol1
 		jsr	clear_sysline
@@ -1593,16 +1570,8 @@ putln1		rts
 ;-----------------------------------------
 ; BA = A * B
 int28		proc
-		ldx	#8
-		clrb
-loop		lsr	swia
-		bcc	skip
-		addb	swib
-skip		rorb
-		rora
-		dex
-		bne	loop
-		jmp	rtswib
+		mul
+		bra	alt_rtswib
 		endp
 
 ;-----------------------------------------
@@ -1615,6 +1584,7 @@ skip		rorb
 ;ba = $FFFF - error: division by zero
 ;-----------------------------------------
 int29		proc
+		global	alt_rtswix, alt_rtswib, alt_rtswia
 		stx	x1		;delimo
 		stab	x2		;delitel
 		staa	x2+1		;delitel
@@ -1628,13 +1598,13 @@ ok
 		clra
 		clrb
 		ldx	#17
-loop		rola
-		rolb
-		suba	x2+1
-		sbcb	x2
-		bcc	skip		;>=
-		adda	x2+1
-		adcb	x2
+loop		rolb
+		rola
+
+		subd	x2
+		bcc	skip
+		addd	x2
+
 skip		rol	x1+1
 		rol	x1
 		dex
@@ -1642,7 +1612,12 @@ skip		rol	x1+1
 		com	x1+1
 		com	x1
 		ldx	x1
-error		jmp	rtswix
+error
+alt_rtswix	stx	swix
+alt_rtswib	staa	swib
+alt_rtswia	stab	swia
+		rts
+;error		jmp	rtswix
 		endp
 
 ;-----------------------------------------
@@ -1663,36 +1638,31 @@ int2A		proc
 		beq	exit		; 2.12 / 1-Nov-89
 		tsx
 		stx	x2
-		ldaa	himem+1
-		ldab	himem
-		suba	x1+1
-		sbcb	x1
-		bcs	error
-		staa	x1+1
-		stab	x1
 
-		ldab	swib
-		ldaa	#$ff
-loop1		tstb
+		ldd	himem
+		subd	x1
+		bcs	error
+		std	x1
+
+		ldaa	swib
+		ldab	#$ff
+loop1		tsta
 		beq	exit_loop1
-		asla
-		decb
+		aslb
+		deca
 		bra	loop1
-exit_loop1	anda	x1+1
-		staa	x1+1
-		ldab	x1
-		suba	himem+1
-		sbcb	himem
-		adda	x2+1
-		adcb	x2
-		bcc	error		;!
-		staa	x2+1
-		stab	x2
-		decb
-		cmpb	lomem
-		bne	differ1
-		cmpa	lomem+1
-differ1 	bcs	error
+exit_loop1	andb	x1+1
+		stab	x1+1
+		ldaa	x1
+		subd	himem
+		addd	x2
+		bcc	error
+		std	x2
+		deca
+		xgdx
+		cpx	lomem
+		bcs	error
+
 		ldx	x2
 loop2		pula
 		staa	x
@@ -1721,16 +1691,13 @@ error		ldx	#0
 int2B		proc
 		sei
 		stx	x1
-		ldaa	x1+1
-		ldab	x1
-		cmpb	himem
-		bne	differ1
-		cmpa	himem+1
-differ1 	bls	error
-		cmpb	resident
-		bne	differ2
-		cmpa	resident+1
-differ2 	bhi	error
+
+		ldx	x1
+		cpx	himem
+		bls	error
+		cpx	resident
+		bhi	error
+
 		sts	x2
 		txs
 		ldx	himem
@@ -1740,12 +1707,11 @@ loop1		ldaa	x
 entry1		dex
 		cpx	x2
 		bne	loop1
-		ldaa	x1+1
-		ldab	x1
-		suba	himem+1
-		sbcb	himem
-		staa	swix+1
-		stab	swix
+
+		ldd	x1
+		subd	himem
+		std	swix
+
 		ldx	x1
 		stx	himem
 		rts
@@ -1786,32 +1752,23 @@ int2D		proc
 
 		staa	swix+1
 		stab	swix
-		tsta
-		bne	ok
-		tstb
+
+		ldx	swix
 		beq	rts2
-ok
-		adda	x1+1
-		adcb	x1
-		staa	x1+1
-		stab	x1
+		xgdx
+		addd	x1
+		std	x1
 
 		sts	tmps
-		ldaa	x1+1		;src end - извличане на параметрите
-		ldab	x1		;	   на командата MOVE
-		suba	x2+1		;src beg
-		sbcb	x2
-		adda	x4+1		;dst beg
-		adcb	x4
-		staa	x3+1		;dst end
-		stab	x3
 
-		ldaa	x4		; определяне на посоката на местене
-		cmpa	x2		; на памет
-		bne	move1
-		ldaa	x4+1
-		cmpa	x2+1
-move1		bls	mvleft
+		subd	x2
+		addd	x4
+		std	x3
+
+		ldx	x4
+		cpx	x2
+		bls	mvleft
+
 mvright 				; местене надясно
 		lds	x3
 		ldx	x1
@@ -1917,14 +1874,15 @@ int_35		proc
 		stx	swix
 		sts	tmps
 		dec	tmps
-		adda	lomem+1
-		adcb	lomem
-		cmpb	tmps
-		bne	check
-		cmpa	tmps+1
-check		bcc	check_bad	;>=
-		stab	lomem
-		staa	lomem+1
+
+		tab
+		ldaa	swib
+		addd	lomem
+		xgdx
+		cpx	tmps
+		bcc	check_bad
+		std	lomem
+
 		rts
 check_bad	clr	swib
 		clr	swia
@@ -1938,15 +1896,14 @@ int_36		proc
 		sei
 		ldx	lomem
 		sts	tmps
-		ldaa	tmps+1
-		ldab	tmps
-		decb
-		suba	lomem+1
-		sbcb	lomem
+
+		ldd	tmps
+		deca
+		subd	lomem
 		bcc	ok
 		clrb
 		clra
-ok		jmp	rtswix
+ok		jmp	alt_rtswix
 		endp
 
 ;---------------------------------------
@@ -1962,10 +1919,9 @@ int_37		proc
 ok
 		tsx
 		stab	2,x		;corresponding page
-		ldab	swix		;go to it via rts exit from this int
-		ldaa	swix+1
-		stab	8,x		;pc
-		staa	9,x
+
+		ldd	swix		;go to it via rts exit from this int
+		std	8,x		;pc
 
 		ldaa	3,x		;pass original ZP parms
 		staa	swic

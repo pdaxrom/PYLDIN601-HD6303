@@ -69,6 +69,17 @@ hard_version	equ	$FFE9
 ; ПРОМЕНЛИВИ:
 
 ; Zero page locations:
+
+; HD6303Y start
+;		equ	$00
+;		equ	$02
+;		equ	$04
+;		equ	$05
+;		equ	$06
+;		equ	$07
+;		equ	$18
+; HD6303Y end
+
 indos		equ	$28		; флаг показващ нивото на влагане
 equipment	equ	$29
 ; swihndl_x	equ	$2A		; used only by swihndl !!!
