@@ -1,12 +1,18 @@
 ;
 ; ROM FLASHER
 ;
+; 10000 - ???
+; 12000 - ???
 ; 14000 - UniBIOS
+; 16000 - YGPASCAL 0
 ; 18000 - UniDOS
-;
-;
+; 1A000 - YGPASCAL 1
+; 1C000 - ???
 ; 1F000 - BIOS
 ;
+
+HIADDR	EQU	$01
+LOADDR	EQU	$6000
 
 	include ../DEVMAP.INC
 	include ../ROM/BOOTMEM.INC
@@ -47,8 +53,8 @@
 
 gowrite
 
-	ldab	#$01		; addr
-	ldx	#$4000		;
+	ldab	#HIADDR		; addr
+	ldx	#LOADDR		;
 	jsr	addrtopage
 
 	ldx	#wrdata
@@ -77,8 +83,8 @@ gowrite
 readonly	ldx	#nl
 		jsr	F_PUTSTR
 
-	ldab	#$01		; addr
-	ldx	#$4000		;
+	ldab	#HIADDR		; addr
+	ldx	#LOADDR		;
 	jsr	addrtopage
 
 	psha
