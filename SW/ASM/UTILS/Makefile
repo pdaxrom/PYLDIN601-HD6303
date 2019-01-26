@@ -4,6 +4,7 @@ all: $(UNIASM)		\
     LOADPAGE.CMD	\
     COPYPAGE.CMD	\
     LOADBIOS.CMD	\
+    TRAP.CMD		\
     XONIX.CMD		\
     TEST.CMD
 
