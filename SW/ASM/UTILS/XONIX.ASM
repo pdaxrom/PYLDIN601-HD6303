@@ -1,7 +1,7 @@
 ;
 ; XONIX GAME
 ;
-; (c) Alexander Chukov <sash@pdaXrom.org>, 1994-2004
+; (c) Alexander Chukov <sash@pdaXrom.org>, 1994-2019
 ;
 
 		INCLUDE ../../DEVMAP.INC
