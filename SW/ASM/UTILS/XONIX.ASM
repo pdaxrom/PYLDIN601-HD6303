@@ -9,7 +9,7 @@
 L_ED0E		EQU	$ED0E
 L_E628		EQU	$E628
 L_80  		EQU	$80
-L_06  		EQU	$06
+SWIA  		EQU	$2E
 L_E62B		EQU	$E62B
 L_E601		EQU	$E601
 L_E600		EQU	$E600
@@ -56,6 +56,8 @@ SCRHEIGHT	EQU	24	; $18
 		stx	VPU_VADDR
 		ldaa	#SCRWIDTH-1
 		staa	VPU_HSIZE
+
+		jsr	vpu_incoff
 
 		jmp	init
 
@@ -106,7 +108,7 @@ PLAYER_X	db	$00	; '.'
 PLAYER_Y	db	$00	; '.'
 PLAYER_CURX	db	$00	; '.'
 PLAYER_CURY	db	$00	; '.'
-L_0170		db	$00	; '.'
+PLAYER_BG		db	$00	; '.'
 gamespeed	dw	$0000
 
 init		ldaa	#$01
@@ -120,22 +122,20 @@ init		ldaa	#$01
 		ldx	#2300	; initial speed
 		stx	gamespeed
 
-		bsr	vpu_incon
 		ldx	#SCRADDR
-		stx	VPU_ADDR
 		ldaa	#$20
-L_01A1		staa	VPU_DATA
+L_01A1		stx	VPU_ADDR
+		staa	VPU_DATA
 		inx
 		cpx	#SCRADDR+SCRWIDTH*SCRHEIGHT+128
 		bne	L_01A1
 
 		jsr	showtitles
 
-		bsr	vpu_incon
 		ldx	#SCRADDR+SCRWIDTH*SCRHEIGHT
-		stx	VPU_ADDR
 		ldaa	#$20
-L_01B1		staa	VPU_DATA
+L_01B1		stx	VPU_ADDR
+		staa	VPU_DATA
 		inx
 		cpx	#SCRADDR+SCRWIDTH*SCRHEIGHT+128
 		bne	L_01B1
@@ -148,12 +148,11 @@ L_01B1		staa	VPU_DATA
 		staa	PLAYER_CURY
 
 		ldaa	#$D1
-		staa	L_0170
+		staa	PLAYER_BG
 		clr	L_0434
 		jsr	clearscr
 		jsr	showinfo
 		clr	L_0236
-		jsr	vpu_incoff
 		jmp	GAMEPLAY
 
 		db	$8F	; 'è'
@@ -192,7 +191,7 @@ putstr1		rts
 
 int22		ldx	charaddr
 		stx	VPU_ADDR
-		ldaa	L_06
+		ldaa	SWIA
 		staa	VPU_DATA
 		inx
 		stx	charaddr
@@ -237,13 +236,16 @@ getchadrtmp	db	$00	; '.'
 		db	$00	; '.'
 
 readkey		clrb
-readkey1	ldaa	L_E628
+readkey1	int	$10
+;		ldaa	L_E628
 		cmpa	#$FF
 		bne	readkey2
 		decb
 		bne	readkey1
-		sei
-readkey2	rts
+		rts
+;		sei
+readkey2	int	$11
+		rts
 
 ;		ldx	#L_015C	; constant?
 ;		ldaa	#$00
@@ -258,7 +260,6 @@ readkey2	rts
 ;		rts
 
 showenemy	ldaa	level+1
-		jsr	vpu_incoff
 		ldx	#tblenemy
 L_027B		psha
 		ldaa	$00,x
@@ -361,8 +362,7 @@ L_0329		psha
 		addb	#$02
 		jsr	getcharaddr
 		stx	VPU_ADDR
-		clrb
-		stab	VPU_DATA
+		clr	VPU_DATA
 		jsr	L_059A
 		pulb
 		pula
@@ -375,7 +375,7 @@ L_0329		psha
 cursoraddr	dw	$0000
 setcursor	psha
 		pshb
-		sei
+;		sei
 		ldx	#cursoraddr
 		ldaa	$01,x
 		ldab	$00,x
@@ -395,7 +395,7 @@ GAMEPLAY	ldaa	PLAYER_CURX
 		ldab	PLAYER_CURY
 		jsr	getcharaddr
 		stx	VPU_ADDR
-		ldaa	L_0170
+		ldaa	PLAYER_BG
 		staa	VPU_DATA
 		ldaa	PLAYER_X
 		ldab	PLAYER_Y
@@ -403,8 +403,8 @@ GAMEPLAY	ldaa	PLAYER_CURX
 		stab	PLAYER_CURY
 		jsr	getcharaddr
 		stx	VPU_ADDR
-		jsr	L_0410
-		staa	L_0170
+		jsr	chkplayerpos
+		staa	PLAYER_BG
 		ldaa	#$EA
 		stx	VPU_ADDR
 		staa	VPU_DATA
@@ -469,7 +469,7 @@ CHK_MAXY	cmpa	#$18
 		dec	PLAYER_Y
 CHK_ENDXY	jmp	GAMEPLAY
 
-L_0410		ldaa	VPU_DATA
+chkplayerpos	ldaa	VPU_DATA
 		tsta
 		bne	L_042D
 		ldaa	#$EA
@@ -495,21 +495,19 @@ L_0437		tst	L_0434
 		stx	L_030D
 		psha
 		pshb
-		jsr	vpu_incoff
 		ldx	#SCRADDR
-		clrb
 L_0444		stx	VPU_ADDR
 		ldaa	VPU_DATA
 		cmpa	#$EA
 		bne	L_044C
-		stab	VPU_DATA
+		clr	VPU_DATA
 L_044C		cmpa	#$4F
 		bne	L_0452
-		stab	VPU_DATA
+		clr	VPU_DATA
 L_0452		inx
 		cpx	#SCRADDR+SCRWIDTH*SCRHEIGHT+128
 		bne	L_0444
-		clr	L_0170
+		clr	PLAYER_BG
 		ldaa	#$14
 		staa	PLAYER_X
 		ldab	#$00
@@ -528,12 +526,12 @@ L_0472		psha
 		pula
 		rts
 
-L_047D		ldaa	L_0170
+; check if cutted
+L_047D		ldaa	PLAYER_BG
 		cmpa	#$D1
 		bne	L_04B4
 		tst	L_0434
 		beq	L_04B4
-		jsr	vpu_incoff
 		ldx	#SCRADDR
 L_048C		stx	VPU_ADDR
 		ldaa	VPU_DATA
@@ -555,8 +553,7 @@ L_04A3		inx
 		jsr	L_04B5
 L_04B4		rts
 
-L_04B5		jsr	vpu_incoff
-		clra
+L_04B5		clra
 		clrb
 L_04B7		clra
 L_04B8		jsr	getcharaddr
@@ -566,7 +563,7 @@ L_04B8		jsr	getcharaddr
 		cmpa	#$4F
 		pula
 		bne	L_04C6
-		jsr	L_04D4
+		jsr	fillarea
 L_04C6		inca
 		cmpa	#$27
 		bne	L_04B8
@@ -576,7 +573,7 @@ L_04C6		inca
 		jsr	L_056D
 		rts
 
-L_04D4		staa	L_05B5
+fillarea	staa	L_05B5
 		stab	L_05B6
 		inca
 		jsr	getcharaddr
@@ -604,10 +601,9 @@ L_04D4		staa	L_05B5
 		rts
 
 L_0504		inc	VPU_DATA
-L_0506		jsr	vpu_incon
-		ldx	#SCRADDR
-		stx	VPU_ADDR
-L_0509		ldaa	VPU_DATA
+L_0506		ldx	#SCRADDR
+L_0509		stx	VPU_ADDR
+		ldaa	VPU_DATA
 		cmpa	#$01
 		beq	L_051C
 		inx
@@ -619,14 +615,19 @@ L_0509		ldaa	VPU_DATA
 
 L_051C		stx	L_0569
 		stx	L_056B
-		inc	$00,x
+		stx	VPU_ADDR
+		inc	VPU_DATA
 		dex
-		tst	$00,x
+		stx	VPU_ADDR
+		tst	VPU_DATA
 		bne	L_052B
-		inc	$00,x
-L_052B		tst	$02,x
+		inc	VPU_DATA
+L_052B		inx
+		inx
+		stx	VPU_ADDR
+		tst	VPU_DATA
 		bne	L_0531
-		inc	$02,x
+		inc	VPU_DATA
 L_0531		ldaa	L_0569+1
 		ldab	L_0569
 		adda	#$2A
@@ -634,9 +635,10 @@ L_0531		ldaa	L_0569+1
 		staa	L_0569+1
 		stab	L_0569
 		ldx	L_0569
-		tst	$00,x
+		stx	VPU_ADDR
+		tst	VPU_DATA
 		bne	L_054A
-		inc	$00,x
+		inc	VPU_DATA
 L_054A		ldaa	L_056B+1
 		ldab	L_056B
 		suba	#$2A
@@ -644,17 +646,16 @@ L_054A		ldaa	L_056B+1
 		staa	L_0569+1
 		stab	L_0569
 		ldx	L_0569
-		tst	$00,x
+		stx	VPU_ADDR
+		tst	VPU_DATA
 		bne	L_0563
-		inc	$00,x
+		inc	VPU_DATA
 L_0563		ldx	L_056B
 		jmp	L_0506
 L_0569		dw	$0000
 L_056B		dw	$0000
 
-L_056D		jsr	vpu_incoff
-		ldx	#SCRADDR
-		clrb
+L_056D		ldx	#SCRADDR
 L_0570		stx	VPU_ADDR
 		ldaa	VPU_DATA
 		tsta
@@ -669,7 +670,7 @@ L_0570		stx	VPU_ADDR
 		bra	L_058F
 L_0589		cmpa	#$02
 		bne	L_058F
-		stab	VPU_DATA
+		clr	VPU_DATA
 L_058F		bsr	L_059A
 		inx
 		cpx	#SCRADDR+SCRWIDTH*SCRHEIGHT
@@ -766,12 +767,11 @@ showinfo	ldaa	#$00
 		int	$24
 		ldx	charaddr
 		stx	VPU_ADDR
-		clra
-		staa	VPU_DATA
+		clr	VPU_DATA
 		rts
 
 winordie	ldx	scores
-		cpx	#710
+		cpx	#680
 		bge	newlevel
 		tst	lives+1
 		beq	L_0646
@@ -799,7 +799,7 @@ L_064F		stx	L_030D
 		staa	PLAYER_CURX
 		stab	PLAYER_CURY
 		ldaa	#$D1
-		staa	L_0170
+		staa	PLAYER_BG
 		ldaa	lives+1
 		adda	level+1
 		ldab	level+1
@@ -808,7 +808,6 @@ L_064F		stx	L_030D
 		sba
 		staa	lives+1
 		jsr	showinfo
-		jsr	vpu_incoff
 		jmp	GAMEPLAY
 
 showtitles	jsr	clearscr
@@ -1577,13 +1576,13 @@ L_09EA		ldx	L_030D
 		stx	charaddr
 		ldx	gamespeed
 		int	$24
-		jsr	vpu_incon
 		ldx	charaddr
 		stx	VPU_ADDR
-		clra
-		staa	VPU_DATA
-		staa	VPU_DATA
-		jsr	vpu_incoff
+		clr	VPU_DATA
+		inx
+		stx	VPU_ADDR
+		clr	VPU_DATA
+		dex
 L_09FC		jsr	readkey
 		cmpa	#$FF
 		beq	L_09FC
@@ -1615,8 +1614,7 @@ txtspeed	db	$53	; 'S'
 		db	$20	; ' '
 		db	$00	; '.'
 
-lightshow	jsr	vpu_incoff
-		ldx	#SCRADDR
+lightshow	ldx	#SCRADDR
 L_0A33		stx	VPU_ADDR
 		ldaa	VPU_DATA
 		cmpa	#$FA
