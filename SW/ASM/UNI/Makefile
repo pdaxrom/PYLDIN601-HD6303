@@ -3,7 +3,7 @@ UNIASM = ../../DEVEL/uniasm
 all: $(UNIASM)		\
     ZBIOS.CMD		\
     UNIBIOS.CMD		\
-    UNIDISK.CMD		\
+    SIMPLEIO.CMD	\
     U.CMD		\
     UNIDOS.CMD		\
     HELLO.CMD

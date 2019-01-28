@@ -1,5 +1,8 @@
 ;
-; Lilith 601 SD/MMC driver
+; Lilith 601 SimpleIO support
+; SD/MMC driver
+; HCMS char driver
+; YM2149 driver
 ; (c) sashz <sashz@pdaXrom.org>, 2019
 ;
 
@@ -33,7 +36,7 @@ sdmode		ds	1
 
 		org	$C000
 		dw	$A55A
-		db	'UniDISK '
+		db	'SimpleIO'
 		jmp	init
 		jmp	print_version
 
@@ -77,7 +80,7 @@ print_version	ldx	#title
 		int	$23
 		rts
 
-title		db	10, 'UniDISK  Version 1.0 ', 0
+title		db	10, 'SimpleIO Version 1.0 ', 0
 
 nl		db	10, 0
 
