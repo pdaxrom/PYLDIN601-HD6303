@@ -740,7 +740,7 @@ savescan	staa	scancode
 		ldaa	shiftstatus
 		bita	#SH_CTRL|SH_RCTRL
 		beq	checkshift
-		ldx	10,x
+		ldx	8,x
 		bra	decode
 checkshift	bita	#SH_SHIFT|SH_RSHIFT
 		beq	checkcyr
