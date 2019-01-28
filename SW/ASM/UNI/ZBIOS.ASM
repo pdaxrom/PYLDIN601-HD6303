@@ -740,28 +740,26 @@ savescan	staa	scancode
 		ldaa	shiftstatus
 		bita	#SH_CTRL|SH_RCTRL
 		beq	checkshift
-		ldx	16,x
+		ldx	10,x
 		bra	decode
 checkshift	bita	#SH_SHIFT|SH_RSHIFT
-		beq	checkalt
-		orab	#1
-checkalt	bita	#SH_ALT|SH_RALT
-		beq	checkcaps
-		orab	#4
-checkcaps	ldaa	lockstatus
-		bita	#LK_CAPS
 		beq	checkcyr
+		orab	#1
+checkcyr	psha
+		ldaa	lockstatus
+		bita	#LK_CYR
+		beq	checkalt
 		orab	#2
-checkcyr	bita	#LK_CYR
+checkalt	pula
+		bita	#SH_ALT|SH_RALT
 		beq	gettab
-		orab	#4
+		eorb	#2
 gettab		abx
 		abx
 		ldx	0,x
 decode		pulb
 		abx
 		ldaa	0,x
-
 		bsr	key2buf
 
 chklock		ldaa	scancode
@@ -824,7 +822,34 @@ return		ldaa	scanbits
 		staa	scanbits
 exit		rts
 
-key2buf		ldx	kbd_store
+key2buf		pshb
+		ldab	lockstatus
+		bitb	#LK_CAPS
+		beq	checkcapsend
+		cmpa	#'A'
+		blo	checkcapsend
+		cmpa	#'Z'
+		bhi	checkcaps2
+capshiftup	adda	#$20
+		bra	checkcapsend
+checkcaps2	cmpa	#'a'
+		blo	checkcapsend
+		cmpa	#'z'
+		bhi	checkcaps3
+capshiftdn	suba	#$20
+		bra	checkcapsend
+checkcaps3	cmpa	#$80
+		blo	checkcapsend
+		cmpa	#$9F
+		bhi	checkcaps4
+		bra	capshiftup
+checkcaps4	cmpa	#$A0
+		blo	checkcapsend
+		cmpa	#$BF
+		bls	capshiftdn
+checkcapsend	pulb
+
+		ldx	kbd_store
 		inx
 		cpx	#kbd_buffer_end
 		bne	decode1
@@ -2035,8 +2060,7 @@ rstbl					; –ø–∞—Ä–∞–º–µ—Ç—Ä–∏ –∑–∞ —Å–µ—Ä–∏–π–Ω–∏—è –≤—Ö–æ–¥/–∏–∑—Ö–æ–¥
 uartlogo	db	10,13,'Serial bootloader',10,13,0
 ps2okay		db	10,'PS/2 keyboard connected',0
 
-kblist		dw	kb, kb_shift, kbcaps, kbcaps_shift
-		dw	kb, kb_shift, kbcaps, kbcaps_shift
+kblist		dw	kb, kb_shift, kbcyr, kbcyr_shift
 		dw	kb_ctrl
 
 ;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
@@ -2064,25 +2088,25 @@ kb_shift
 	db	  0,   0,   0, $DB,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 80
 
 ;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
-kbcaps
-	db	  0, $D1,   0, $CD, $CB, $C9, $CA, $D4,   0, $D2, $D0, $CE, $CC, $ED, '`',   0	; 00
-	db	  0,   0,   0,   0,   0, 'Q', '1',   0,   0,   0, 'Z', 'S', 'A', 'W', '2', $FB	; 10
-	db	  0, 'C', 'X', 'D', 'E', '4', '3',   0,   0, ' ', 'V', 'F', 'T', 'R', '5',   0	; 20
-	db	  0, 'N', 'B', 'H', 'G', 'Y', '6',   0,   0,   0, 'M', 'J', 'U', '7', '8',   0	; 30
-	db	  0, ',', 'K', 'I', 'O', '0', '9',   0,   0, '.', '/', 'L', ';', 'P', '-',   0	; 40
-	db	  0,   0, "'",   0, '[', '=',   0,   0, $FC,   0, $C0, ']',   0, '\',   0,   0	; 50
+kbcyr
+	db	  0, $D1,   0, $CD, $CB, $C9, $CA, $D4,   0, $D2, $D0, $CE, $CC, $ED, $F1,   0	; 00
+	db	  0,   0,   0,   0,   0, '©', '1',   0,   0,   0, 'ø', 'ª', '¥', '∂', '2', $FB	; 10
+	db	  0, '±', '∑', '¢', '≥', '4', '3',   0,   0, ' ', '¨', '†', '•', '™', '5',   0	; 20
+	db	  0, '≤', '®', '∞', 'Ø', '≠', '6',   0,   0,   0, 'º', 'Æ', '£', '7', '8',   0	; 30
+	db	  0, '°', '´', '∏', 'π', '0', '9',   0,   0, 'æ', '.', '§', '¶', 'ß', '-',   0	; 40
+	db	  0,   0, 'Ω',   0, 'µ', '=',   0,   0, $FC,   0, $C0, '∫',   0, '\',   0,   0	; 50
 	db	  0,   0,   0,   0,   0,   0, $7F,   0,   0, $C6,   0, $C1, $C5,   0,   0,   0	; 60
 	db	$FA, $F9, $C3,   0, $C2, $C4, $1B,   0, $D3,   0, $C7,   0,   0, $C8,   0,   0	; 70
 	db	  0,   0,   0, $CF,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 80
 
 ;		 00   01   02   03   04   05   06   07   08   09   0A   0B   0C   0D   0E   0F
-kbcaps_shift
-	db	  0, $DD,   0, $D9, $D7, $D5, $D6, $E0,   0, $DE, $DC, $DA, $D8, $EE, '~',   0	; 00
-	db	  0,   0,   0,   0,   0, 'q', '!',   0,   0,   0, 'z', 's', 'a', 'w', '@', $FB	; 10
-	db	  0, 'c', 'x', 'd', 'e', '$', '#',   0,   0, ' ', 'v', 'f', 't', 'r', '%',   0	; 20
-	db	  0, 'n', 'b', 'h', 'g', 'y', '^',   0,   0,   0, 'm', 'j', 'u', '&', '*',   0	; 30
-	db	  0, '<', 'k', 'i', 'o', ')', '(',   0,   0, '>', '?', 'l', ':', 'p', '_',   0	; 40
-	db	  0,   0, '"',   0, '{', '+',   0,   0, $FC,   0, $C0, '}',   0, '|',   0,   0	; 50
+kbcyr_shift
+	db	  0, $DD,   0, $D9, $D7, $D5, $D6, $E0,   0, $DE, $DC, $DA, $D8, $EE, $F0,   0	; 00
+	db	  0,   0,   0,   0,   0, 'â', '!',   0,   0,   0, 'ü', 'õ', 'î', 'ñ', '"', $FB	; 10
+	db	  0, 'ë', 'ó', 'Ç', 'ì', ';', '’',   0,   0, ' ', 'å', 'Ä', 'Ö', 'ä', '%',   0	; 20
+	db	  0, 'í', 'à', 'ê', 'è', 'ç', ':',   0,   0,   0, 'ú', 'é', 'É', '&', '*',   0	; 30
+	db	  0, 'Å', 'ã', 'ò', 'ô', ')', '(',   0,   0, 'û', ',', 'Ñ', 'Ü', 'á', '_',   0	; 40
+	db	  0,   0, 'ù',   0, 'ï', '+',   0,   0, $FC,   0, $C0, 'ö',   0, '/',   0,   0	; 50
 	db	  0,   0,   0,   0,   0,   0, $7F,   0,   0, $C6,   0, $C5, $C5,   0,   0,   0	; 60
 	db	$FA, $F9, $C7,   0, $C6, $C8, $1B,   0, $DF,   0, $C7,   0,   0, $C8,   0,   0	; 70
 	db	  0,   0,   0, $DB,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0	; 80
