@@ -31,17 +31,43 @@ module ps2io (
 	reg			key_ready_f;
 	reg [7:0]	key_code;
 	reg			key_busy;
+	reg			key_release;
+	reg			key_e0;
+	reg			key_e1;
 
 	assign irq = key_irq;
 
 	always @ (posedge clk) begin //posedge istrobe or posedge rst or posedge key_ready_f) begin
 		if (rst) begin
 			key_ready <= 0;
+			key_release <= 0;
+			key_e0 <= 0;
+			key_e1 <= 0;
 		end else if (istrobe) begin
 			key_code <= ibyte;
 			key_ready <= 1;
+			
+			if (ibyte == 8'hF0) begin				key_release <= 1;
+			end
+			
+			if (ibyte == 8'hE0) begin
+				key_e0 <= 1;
+			end
+			
+			if (ibyte == 8'hE1) begin
+				key_e1 <= 1;
+			end
 		end else if (key_ready_f) begin
 			key_ready <= 0;
+			if (key_code != 8'hF0) begin
+				key_release <= 0;
+				if (key_code != 8'hE0) begin
+					key_e0 <= 0;
+				end
+				if (key_code != 8'hE1) begin
+					key_e1 <= 0;
+				end
+			end
 		end
 	end
 
@@ -56,12 +82,15 @@ module ps2io (
 					key_ready_f <= 1;
 				end
 			3'b001: begin
-					DO <= {key_irq, key_ien, key_ready, key_busy, timeout, 1'b0, 1'b0, 1'b0};
+					DO <= {key_irq, key_ien, key_ready, key_busy, timeout, key_e1, key_e0, key_release};
 					key_irq <= 0;
 				end
 			endcase
 		end else begin
-			if (key_ien && key_ready) key_irq <= 1;
+			if (key_ien && key_ready &&
+				(key_code != 8'b11110000) &&
+				(key_code[7:1] != 7'b1110000)
+				) key_irq <= 1;
 			if (!key_ready) key_ready_f <= 0;
 		end
 	end
