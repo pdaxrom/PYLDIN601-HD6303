@@ -703,24 +703,20 @@ int09		proc
 		bne	read_scan
 		jmp	exit
 
-read_scan	bita	#PS2_BIT_REL
+read_scan	ldab	scanbits
+		bita	#PS2_BIT_REL
+		beq	read_scan1
+		orab	#KEY_F0
+read_scan1	bita	#PS2_BIT_E0
 		beq	read_scan2
-		ldaa	scanbits
-		oraa	#key_f0
-		staa	scanbits
+		orab	#KEY_E0
+read_scan2	bita	#PS2_BIT_E1
+		beq	read_scan3
+		orab	#KEY_E1
+read_scan3	stab	scanbits
+		ldaa	PS2_DATA
 
-read_scan2	ldaa	PS2_DATA
-
-		cmpa	#$E0
-		bne	check_f0
-		ldaa	scanbits
-		oraa	#key_e0
-		staa	scanbits
-		jmp	exit
-check_f0	cmpa	#$F0
-		bne	check_shift
-		jmp	exit
-check_shift	cmpa	#$12
+		cmpa	#$12
 		beq	shift
 		cmpa	#$59
 		beq	rshift
@@ -730,7 +726,7 @@ check_shift	cmpa	#$12
 		beq	alt
 
 		ldab	scanbits
-		bitb	#key_f0
+		bitb	#KEY_F0
 		beq	savescan
 		ldab	#$FF
 		stab	scancode
@@ -821,7 +817,7 @@ setlock		ldab	#KEY_F0
 		bsr	setleds
 
 return		ldaa	scanbits
-		anda	#$FF^(KEY_F0|KEY_E0)
+		anda	#$FF^(KEY_F0|KEY_E0|KEY_E1)
 		staa	scanbits
 exit		rts
 

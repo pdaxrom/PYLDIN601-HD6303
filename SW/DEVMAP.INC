@@ -83,6 +83,9 @@ PS2_BIT_IEN	equ	$40
 PS2_BIT_RDY	equ	$20
 PS2_BIT_BSY	equ	$10
 PS2_BIT_TIM	equ	$08
+PS2_BIT_E1	equ	$04
+PS2_BIT_E0	equ	$02
+PS2_BIT_REL	equ	$01
 
 ; VPU
 

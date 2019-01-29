@@ -256,6 +256,7 @@ himem		ds	2
 		ends
 
 KEY_E0		EQU	$10
+KEY_E1		EQU	$20
 KEY_F0		EQU	$80
 SCANBITS	EQU	old_key
 
