@@ -703,7 +703,13 @@ int09		proc
 		bne	read_scan
 		jmp	exit
 
-read_scan	ldaa	PS2_DATA
+read_scan	bita	#PS2_BIT_REL
+		beq	read_scan2
+		ldaa	scanbits
+		oraa	#key_f0
+		staa	scanbits
+
+read_scan2	ldaa	PS2_DATA
 
 		cmpa	#$E0
 		bne	check_f0
@@ -713,9 +719,6 @@ read_scan	ldaa	PS2_DATA
 		jmp	exit
 check_f0	cmpa	#$F0
 		bne	check_shift
-		ldaa	scanbits
-		oraa	#key_f0
-		staa	scanbits
 		jmp	exit
 check_shift	cmpa	#$12
 		beq	shift
