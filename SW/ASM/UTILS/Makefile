@@ -6,6 +6,8 @@ all: $(UNIASM)		\
     LOADBIOS.CMD	\
     TRAP.CMD		\
     XONIX.CMD		\
+    HCMSSPI.CMD		\
+    CHIPTUNE.CMD	\
     TEST.CMD
 
 #    HELLO.CMD		\
