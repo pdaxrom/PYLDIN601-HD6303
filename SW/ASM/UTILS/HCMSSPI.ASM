@@ -42,6 +42,8 @@ framebuf	ds	2
 		bsr	putstring
 		ldaa	#10
 		bsr	putchar
+		ldaa	#3
+		bsr	putchar
 
 readkey		int	$20
 		int	$25
@@ -165,158 +167,131 @@ clrscr1		staa	0,x
 		bra	exit
 		endp
 
-send_byte proc
-busy	ldab	SPI_STATUS
-	bitb	#SPI_READY
-	beq	busy
-	staa	SPI_DATA+1
-	rts
-	endp
+send_byte	proc
+busy		ldab	SPI_STATUS
+		bitb	#SPI_READY
+		beq	busy
+		staa	SPI_DATA+1
+		rts
+		endp
 
-send_cmd proc
-	pshb
+send_cmd	proc
+		pshb
 
-	ldab	SPI_POUT
-	orab	#PIN_RS
-	stab	SPI_POUT
+		ldab	SPI_POUT
+		orab	#PIN_RS
+		stab	SPI_POUT
 
-	ldab	SPI_CONFIG
-	andb	#$FF^SPI_SS0
-	stab	SPI_CONFIG
+		ldab	SPI_CONFIG
+		andb	#$FF^SPI_SS0
+		stab	SPI_CONFIG
 
-	ldab	#8
-loop	pshb
-	bsr	send_byte
-	pulb
-	decb
-	bne	loop
+		ldab	#8
+loop		pshb
+		bsr	send_byte
+		pulb
+		decb
+		bne	loop
 
-busy	ldab	SPI_STATUS
-	bitb	#SPI_READY
-	beq	busy
+busy		ldab	SPI_STATUS
+		bitb	#SPI_READY
+		beq	busy
 
-	ldab	SPI_CONFIG
-	orab	#SPI_SS0
-	stab	SPI_CONFIG
+		ldab	SPI_CONFIG
+		orab	#SPI_SS0
+		stab	SPI_CONFIG
 
-	pulb
-	rts
-	endp
+		pulb
+		rts
+		endp
 
-send_data proc
-	psha
-	pshb
-	pshx
+send_data	proc
+		psha
+		pshb
+		pshx
 
-	ldab	SPI_POUT
-	andb	#$FF^PIN_RS
-	stab	SPI_POUT
+		ldab	SPI_POUT
+		andb	#$FF^PIN_RS
+		stab	SPI_POUT
 
-	ldab	SPI_CONFIG
-	andb	#$FF^SPI_SS0
-	stab	SPI_CONFIG
+		ldab	SPI_CONFIG
+		andb	#$FF^SPI_SS0
+		stab	SPI_CONFIG
 
-	pshx
-	ldab	#40
-loop1	pshb
-	ldaa	120,x
-	bsr	send_byte
-	inx
-	pulb
-	decb
-	bne	loop1
-	pulx
+		ldab	#4
+loop		pshb
+		ldab	#40
+loop1		pshb
+		ldaa	120,x
+		bsr	send_byte
+		inx
+		pulb
+		decb
+		bne	loop1
+		pulb
+		xgdx
+		subd	#80
+		xgdx
+		decb
+		bne	loop
 
-	pshx
-	ldab	#40
-loop2	pshb
-	ldaa	80,x
-	bsr	send_byte
-	inx
-	pulb
-	decb
-	bne	loop2
-	pulx
+busy		ldab	SPI_STATUS
+		bitb	#SPI_READY
+		beq	busy
 
-	pshx
-	ldab	#40
-loop3	pshb
-	ldaa	40,x
-	bsr	send_byte
-	inx
-	pulb
-	decb
-	bne	loop3
-	pulx
+		ldab	SPI_CONFIG
+		orab	#SPI_SS0
+		stab	SPI_CONFIG
 
-	pshx
-	ldab	#40
-loop4	pshb
-	ldaa	0,x
-	jsr	send_byte
-	inx
-	pulb
-	decb
-	bne	loop4
-	pulx
+		pulx
+		pulb
+		pula
+		rts
+		endp
 
-busy	ldab	SPI_STATUS
-	bitb	#SPI_READY
-	beq	busy
+delay		proc
+		pshb
+		psha
+loop		ldab	#110
+loop1		decb
+		bne	loop1
+		deca
+		bne	loop
+		pula
+		pulb
+		rts
+		endp
 
-	ldab	SPI_CONFIG
-	orab	#SPI_SS0
-	stab	SPI_CONFIG
+disp_init	proc
+		ldaa	SPI_POUT
+		anda	#$FF^PIN_BLN
+		staa	SPI_POUT
 
-	pulx
-	pulb
-	pula
-	rts
-	endp
+		ldaa	#2
+		staa	SPI_PRESCALER
+		ldaa	SPI_CONFIG
+		oraa	#(SPI_SSM | SPI_SS0)
+		staa	SPI_CONFIG
 
-delay	proc
-	pshb
-	psha
-loop	ldab	#110
-loop1	decb
-	bne	loop1
-	deca
-	bne	loop
-	pula
-	pulb
-	rts
-	endp
+		ldaa	#$68	; 01001100
+		jsr	send_cmd
 
-disp_init proc
-	ldaa	SPI_POUT
-	anda	#$FF^PIN_BLN
-	staa	SPI_POUT
+		rts
+		endp
 
-	ldaa	#2
-	staa	SPI_PRESCALER
-	ldaa	SPI_CONFIG
-	oraa	#(SPI_SSM | SPI_SS0)
-	staa	SPI_CONFIG
+hello		db	'HCMS test', 10, 0
 
-	ldaa	#$68	; 01001100
-	jsr	send_cmd
+disptbl		db	0, 0	; W, W
+		db	0, 0	; X, Y
+		dw	font5x7
+		dw	grfbuff
 
-	rts
-	endp
-
-hello	db	'HCMS test', 10, 0
-
-disptbl	db	0, 0	; W, W
-	db	0, 0	; X, Y
-	dw	font5x7
-	dw	grfbuff
-
-grfbuff	ds	32*5	; framebuffer
+grfbuff		ds	32*5	; framebuffer
 
 font5x7
 	db	 $FF, $FF, $FF, $FF, $FF	; 00
 	db	 $FF, $FF, $FF, $FF, $FF	; 01
-	db	 $FF, $FF, $FF, $FF, $FF	; 02
+	db	 $1C, $3E, $7C, $3E, $1C	; 02
 	db	 $FF, $FF, $FF, $FF, $FF	; 03
 	db	 $FF, $FF, $FF, $FF, $FF	; 04
 	db	 $FF, $FF, $FF, $FF, $FF	; 05
