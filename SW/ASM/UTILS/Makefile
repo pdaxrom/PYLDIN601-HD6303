@@ -8,6 +8,7 @@ all: $(UNIASM)		\
     XONIX.CMD		\
     HCMSSPI.CMD		\
     CHIPTUNE.CMD	\
+    RAMCHK.CMD		\
     TEST.CMD
 
 #    HELLO.CMD		\
