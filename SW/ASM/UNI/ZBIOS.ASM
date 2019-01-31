@@ -111,7 +111,8 @@ reshndl 	proc			; драйвер за обработка на RESET
 		staa	REG_DDRP6
 
 		ldaa	REG_RP5CR	; HD6303Y Enable IRQ1 input
-		oraa	#BIT_IRQ1E
+		anda	#$FF^(BIT_AMRE|BIT_HLTE|BIT_MRE)
+		oraa	#BIT_RAME|BIT_IRQ1E|BIT_IRQ2E
 		staa	REG_RP5CR
 
 		ldaa	#VPU_B_CURINV|VPU_B_AUTO|VPU_B_IEN	; VPU initialization
@@ -265,10 +266,14 @@ mainrom_ok
 		clr	lockstatus
 		clr	scanbits
 
-		ldaa	PS2_CONFIG
+		ldx	#10000
+ps2wait		ldaa	PS2_CONFIG
 		bita	#PS2_BIT_RDY
-		beq	ps2noflush
-		ldaa	PS2_DATA
+		bne	ps2flush
+		dex
+		bne	ps2wait
+
+ps2flush	ldaa	PS2_DATA
 
 ps2noflush	ldaa	#$FF		; reset keyboard
 		jsr	ps2write
