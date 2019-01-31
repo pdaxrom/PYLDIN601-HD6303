@@ -41,7 +41,9 @@ module superio (
 	parameter LED_DIV_PERIOD = (PCLK_CLOCK / LED_REFRESH_CLOCK) / 2;
 
 	reg			sys_res;
-	reg	[3:0]	sys_res_delay = 4'b1000;
+	reg	[19:0]	sys_res_delay;
+	
+	wire		resreq;
 
 	reg		[1:0]	led_anode;
 	reg		[24:0]	led_cnt;
@@ -69,19 +71,23 @@ module superio (
 		.CLKOS(pixel_clk)
 	);
 
-	always @ (posedge E or negedge keys[3])
+	reg	[2:0]	clkdiv;
+	always @ (posedge pixel_clk) clkdiv <= clkdiv + 1;
+	wire clk2m = clkdiv[1];
+
+	always @ (posedge E or posedge resreq)
 	begin
-		if (!keys[3]) begin
+		if (resreq) begin
 			sys_res <= 1;
-			sys_res_delay <= 4'b1000;
+			sys_res_delay <= 0;
 		end else begin
-			if (sys_res_delay == 4'b0000) begin
+			if (sys_res_delay[17]) begin
 				sys_res <= 0;
-			end else sys_res_delay <= sys_res_delay - 4'b0001;
+			end else sys_res_delay <= sys_res_delay + 1;
 		end
 	end
 
-	assign RESET = ~sys_res;
+	assign RESET = !sys_res;
 
 	/*
 		Mapping IO
@@ -152,7 +158,7 @@ module superio (
 		.O_AUDIO(PSGAOut),
 		.ENA(1'b1),
 		.RESET_L(~sys_res),
-		.CLK(E)
+		.CLK(clk2m)
 	);
 	
 	sigma_delta_dac dac1(
@@ -193,6 +199,7 @@ module superio (
 		.rw(RW),
 		.cs(ps2io_cs),
 		.irq(ps2io_irq),
+		.resreq(resreq),
 		.ps2clk(PS2CLK),
 		.ps2dat(PS2DAT)
 	);
