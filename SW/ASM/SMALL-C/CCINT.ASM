@@ -119,66 +119,66 @@ BUMP2A	INX			; INCR BY 2
 	BRA NEXT1		; FETCH NEXT INSTRUCTION
 
 NEXT	LDX PC
-NEXT1	STAA R1A		; SAVE THE WORK
-	STAB R1B		; --REGISTER
+NEXT1	STD R1A			; SAVE THE WORK REGISTER
 NEXT2	LDAB 0,X		; GET THE PSEUDO-INSTRUCTION
 
- staa $88
- stab $89
- stx  $8a
- xgdx
-; int $25
- jsr  $f317
- tba
-; int $25
- jsr  $f317
-
- ldx $8a
- ldaa #' '
-; int $22
- jsr $f676
- ldaa 0,x
-; int $25
- jsr  $f317
-
- ldaa #' '
-; int $22
- jsr  $f676
-
- tsx
- xgdx
-; int $25
- jsr  $f317
- tba
-; int $25
- jsr  $f317
-
- ldaa #' '
-; int $22
- jsr  $f676
-
- ldaa R1A
-; int $25
- jsr  $f317
- ldaa R1B
-; int $25
- jsr  $f317
-
- ldaa #10
-; int $22
- jsr  $f676
- ldaa #13
-; int $22
- jsr  $f676
- ldx  $8a
- ldab $89
- ldaa $88
+; staa $88
+; stab $89
+; stx  $8a
+; xgdx
+;; int $25
+; jsr  $f317
+; tba
+;; int $25
+; jsr  $f317
+;
+; ldx $8a
+; ldaa #' '
+;; int $22
+; jsr $f676
+; ldaa 0,x
+;; int $25
+; jsr  $f317
+;
+; ldaa #' '
+;; int $22
+; jsr  $f676
+;
+; tsx
+; xgdx
+;; int $25
+; jsr  $f317
+; tba
+;; int $25
+; jsr  $f317
+;
+; ldaa #' '
+;; int $22
+; jsr  $f676
+;
+; ldaa R1A
+;; int $25
+; jsr  $f317
+; ldaa R1B
+;; int $25
+; jsr  $f317
+;
+; ldaa #10
+;; int $22
+; jsr  $f676
+; ldaa #13
+;; int $22
+; jsr  $f676
+; ldx  $8a
+; ldab $89
+; ldaa $88
 
 	INX			;  (B CONTAINS A TABLE OFFSET)
 	STX PC			; SAVE NEW PC
-	STAB JJJ+2		; SAVE AS PAGE OFFSET
-	LDAB R1B		; RESTORE
-JJJ	LDX JTABLE		; POINT TO ROUTINE (SELF MODIFYING CODE)
+	LDX	#JTABLE
+	ABX
+	LDX	0,X
+	LDD R1A			; RESTORE
 	JMP 0,X			; GO EXECUTE THE PSEUDO-INSTR.
 
 ;*************************************************************
@@ -236,28 +236,23 @@ JTABLE DW LD1IM		; #0
 ;-------------------------
 ; #0 LOAD REG WITH IMMED. VALUE
 LD1IM LDX PC
- LDAA 0,X		; HIGH BYTE
- LDAB 1,X		; LOW BYTE
+ LDD 0,X
  JMP BUMP2A
 
 ;-------------------------
 ; #1 LOAD STACK ADDRESS + OFFSET INTO REG
 LD1SOFF STS R1A		; SAVE STACK VALUE
  LDX PC
- LDAA 0,X		; GET OFFSET 
- LDAB 1,X		; -- VALUE
- SEC
- ADCB R1B		; ADD OFFSET + 1
-; ADDB R1B
- ADCA R1A
+ LDD 0,X		; GET OFFSET VALUE
+ ADDD R1A
+ ADDD #1		; ADD OFFSET + 1
  JMP BUMP2A
 
 ;-------------------------
 ; #2  LOAD WORD @ ADDRESS
 LD1 LDX PC
  LDX 0,X		; GET ADDRESS
-LD1A LDAA 0,X		; GET WORD
- LDAB 1,X
+ LDD 0,X		; GET WORD
  JMP BUMP2
 
 ;-------------------------
@@ -273,8 +268,7 @@ LDB1A JMP BUMP2
 ;-------------------------
 ; #4  LOAD WORD INDIRECT (ADDR IN REG)
 LD1R LDX R1A		; GET ADDRESS
- LDAA 0,X		;GET WORD
- LDAB 1,X
+ LDD 0,X		; GET WORD
  JMP NEXT
 
 ;-------------------------
@@ -290,8 +284,7 @@ LDB1RA JMP NEXT
 ; #6  STORE WORD @ ADDRESS
 ST1 LDX PC
  LDX 0,X		; GET ADDRESS
- STAA 0,X		; STORE WORD
- STAB 1,X
+ STD 0,X		; STORE WORD
  JMP BUMP2
 
 ;-------------------------
@@ -305,8 +298,7 @@ STB1 LDX PC
 ; #8  STORE WORD @ ADDRESS ON STACK
 ST1SP TSX		; STACK TO INDEX
  LDX 0,X		; GET ADDRESS
- STAA 0,X		; STORE WORD
- STAB 1,X
+ STD 0,X		; STORE WORD
  INS
  INS			; POP STACK
  JMP NEXT
@@ -336,8 +328,7 @@ EXG1 TSX
  INS
  PSHB
  PSHA			; REG ON STACK
- LDAA R1A		; NEW REG
- LDAB R1B
+ LDD R1A		; NEW REG
  LDX PC
  JMP NEXT2
 
@@ -370,10 +361,9 @@ JSRSP TSX		; POINT TO STACK
  LDX 0,X		; GET ADDRESS (NEW PC)
  INS			; POP
  INS
- LDAB PC+1		; GET RETURN ADDRESS
- PSHB			;
- LDAB PC		;
- PSHB			; SAVE RETURN ADDRESS
+ LDD PC
+ PSHB
+ PSHA
  JMP NEXT2
 
 ;-------------------------
@@ -387,16 +377,12 @@ RTSC TSX
 ;-------------------------
 ; #17  MODIFY THE STACK POINTER
 MODSP LDX PC
- LDAA 0,X		; GET VALUE
- LDAB 1,X
+ LDD 0,X		; GET VALUE
  STS STEMP
- ADDB STEMP+1		; ADD STACK POINTER
- ADCA STEMP
- STAA STEMP
- STAB STEMP+1
+ ADDD STEMP		; ADD STACK POINTER
+ STD STEMP
  LDS STEMP		; NEW STACK POINTER
- LDAA R1A		; RESTORE REGISTER
- LDAB R1B
+ LDD R1A		; RESTORE REGISTER
  JMP BUMP2A
 
 ;---------------------------
@@ -408,16 +394,14 @@ DBL1 ASLB
 ;---------------------------
 ; #19  ADD REG AND TOP OF STACK (THEN POP)
 ADDS TSX
- ADDB 1,X		; DO THE ADD
- ADCA 0,X
+ ADDD 0,X		; DO THE ADD
  JMP POPS		; POP & RETURN
 
 ;---------------------------
 ; #20  SUBTRACT REG FROM TOP OF STACK
 SUBFST PULA		; GET VALUE OFF STACK
  PULB
- SUBB R1B		; SUBTRACT REGISTER
- SBCA R1A
+ SUBD R1A		; SUBTRACK REGISTER
  JMP NEXT
 
 ;---------------------------
@@ -426,7 +410,7 @@ MUL1 PSHB
  PSHA			; REG ON STACK
  LDAA #16
  PSHA			; SET COUNTER
- CLRA 
+ CLRA
  CLRB
  TSX			; POINT TO DATA
 
@@ -435,8 +419,7 @@ M2 ROR 3,X		; SHIFT MULTIPLIER
  DEC 0,X		; DONE ?
  BMI M4
  BCC M3
- ADDB 2,X
- ADCA 1,X
+ ADDD 1,X
 
 M3 RORA
  RORB			; SHIFT RESULT
@@ -504,8 +487,7 @@ BDIV1 PSHB		; FORCE ON STACK
  COM DFLAG		; ADJUST FLAG
  LDAB 6,X
  BSR NEGATE
- STAA 5,X
- STAB 6,X
+ STD  5,X
 
 BDIV2 CLRA
  CLRB
@@ -521,8 +503,7 @@ UDIV1 CMPA 1,X
 UDIV2 CLC
  BRA UDIV4
 
-UDIV3 SUBB 2,X
- SBCA 1,X
+UDIV3 SUBD 1,X
  SEC
 
 UDIV4 ROL 6,X
@@ -544,8 +525,7 @@ UDIV5 INS
 ; NEGATE THE VALUE IN A,B
 NEGATE COMA
  COMB
- ADDB #1
- ADCA #0
+ ADDD #1
  RTS
 
 ;----------------------------------
@@ -612,14 +592,12 @@ NOTR COMA
 
 ;--------------------------------
 ; #31  ADD 1 TO REG
-INCR ADDB #1
- ADCA #0
+INCR ADDD #1
  JMP NEXT
 
 ;--------------------------------
 ; #32 SUBTRACT 1 FROM REG
-DECR SUBB #1
- SBCA #0
+DECR SUBD #1
  JMP NEXT
 
 ;****************************************************
@@ -631,10 +609,8 @@ DECR SUBB #1
 ;         (set means: top of stack < A,B )
 ;
 SCMP TSX
- LDAA 2,X		; GET TOP OF STACK
- LDAB 3,X
- SUBB R1B		; SET CONDITION
- SBCA R1A		; ... FLAGS
+ LDD 2,X		; GET TOP OF STACK
+ SUBD R1A		; SET CONDITION FLAGS
  BPL STCMP1		; SKIP IF PLUS
 
  STAB R1B		; TEMP SAVE
@@ -650,13 +626,11 @@ STCMP1 STAB R1B
 ;  Unsigned compare, Carry set if top of stack < A,B
 ;
 BCMP TSX
- LDAA 2,X		; GET TOP OF STACK
- LDAB 3,X
+ LDD 2,X		; GET TOP OF STACK
  CMPA R1A		; CHECK TOP BYTE
  BNE BCMP1
  CMPB R1B
 BCMP1 RTS
-
 
 ;-------------------------------
 ; #33  TEST FOR EQUALITY
@@ -1063,8 +1037,7 @@ isspace DB 86
 ;
 toupper DB 86
  TSX
- LDAB 3,X
- LDAA 2,X
+ LDD 2,X
  BNE TOUPP1		;  SKIP IF MSB'S NOT ZERO
  CMPB #'a'
  BLT TOUPP1
@@ -1079,8 +1052,7 @@ TOUPP1 JMP RTSC
 ;
 tolower DB 86
  TSX
- LDAB 3,X
- LDAA 2,X
+ LDD 2,X
  BNE TOLOW1
  CMPB #'A'
  BLT TOLOW1
@@ -1095,21 +1067,12 @@ TOLOW1 JMP RTSC
 ;
 strclr DB 86
  TSX
- LDAA 2,X		; GET LENGTH OF STRING
- LDAB 3,X
+ LDD  2,X		; GET LENGTH OF STRING
  LDX  4,X		; POINT TO STRING
- TSTB
- BEQ SCLR2
-
 SCLR1 CLR 0,X
  INX
- DECB
+ SUBD #1
  BNE SCLR1
-SCLR2 TSTA
- BEQ SCLR3
- DECA
- BRA SCLR1
-
 SCLR3 JMP RTSC
 ;
 ;-----------------------------------------------
@@ -1132,8 +1095,7 @@ strlen  DB     86
 strlLP  TST     0,X     ; look for NULL
         BEQ     strlRT  ; found !!
         INX
-        ADDB   #1      ; bump counter
-        ADCA   #0
+        ADDD   #1	; bump counter
         BRA     strlLP
 ;
 strlRT  JMP     RTSC
