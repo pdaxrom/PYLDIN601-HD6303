@@ -999,7 +999,7 @@ inline_()
                 if((unit=input2)==0)unit=input;
                 kill();
                 while((k=getc(unit))>0)
-                        {if((k==EOL)|(lptr>=LINEMAX))break;
+                        {if((k==EOL)|(k==13)|(lptr>=LINEMAX))break;
                         line[lptr++]=k;
                         }
                 line[lptr]=0;   /* append null */

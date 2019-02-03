@@ -4,71 +4,72 @@
 ;
 ;   LAST UPDATE   9-SEP-82
 ;
- JMP BEGIN ;START THE INTERPRETER
+	JMP	BEGIN ;START THE INTERPRETER
 
 ;  AN INDIRECT CALL TABLE
- NOP ;PUT ON A BOUNDARY OF 4
- DB 86
- JMP fclose+1
- DB 86
- JMP fopen+1
- DB 86
- JMP getc+1
- DB 86
- JMP getchar+1
- DB 86
- JMP gets+1
- DB 86
- JMP putc+1
- DB 86
- JMP putchar+1
- DB 86
- JMP puts+1
- NOP
- JMP RTSC
- DB 86
- JMP isalpha+1
- DB 86
- JMP isdigit+1
- DB 86 
- JMP isalnum+1
- DB 86
- JMP islower+1
- DB 86
- JMP isupper+1
- DB 86
- JMP isspace+1
- DB 86
- JMP toupper+1
- DB 86
- JMP tolower+1
- DB 86
- JMP strclr+1
- DB 86
- JMP strlen+1
- DB 86
- JMP strcpy+1
- DB 86
- JMP strcat+1
- DB 86
- JMP strcmp+1
- DS 4*4 ;ROOM FOR 4 MORE
+	NOP		;PUT ON A BOUNDARY OF 4
+
+	DB	86
+	JMP	fclose+1
+	DB	86
+	JMP	fopen+1
+	DB	86
+	JMP	getc+1
+	DB	86
+	JMP	getchar+1
+	DB	86
+	JMP	gets+1
+	DB	86
+	JMP	putc+1
+	DB	86
+	JMP	putchar+1
+	DB	86
+	JMP	puts+1
+	NOP
+	JMP	RTSC
+	DB	86
+	JMP	isalpha+1
+	DB	86
+	JMP	isdigit+1
+	DB	86
+	JMP	isalnum+1
+	DB	86
+	JMP	islower+1
+	DB	86
+	JMP	isupper+1
+	DB	86
+	JMP	isspace+1
+	DB	86
+	JMP	toupper+1
+	DB	86
+	JMP	tolower+1
+	DB	86
+	JMP	strclr+1
+	DB	86
+	JMP	strlen+1
+	DB	86
+	JMP	strcpy+1
+	DB	86
+	JMP	strcat+1
+	DB	86
+	JMP	strcmp+1
+	DS	4*4	;ROOM FOR 4 MORE
 
 ; LIB FLEXPTRS
 
-NFILES EQU 4	; MAX NO OF DISK FILES OPEN AT ONCE
-PC DS 2		; PSEUDO PROGRAM COUNTER
-R1A DS 1	; WORKING 16 BIT
-R1B DS 1	; --REGISTER
-DFLAG DB NFILES-1 ; DIVIDE ROUTINE FLAG
-STEMP DS 2	; TEMP STORAGE FOR STACK POINTER
-X1TMP DS 2	; TEMP STORAGE FOR X REG
-X2TMP DS 2	; ... DITTO ...
-FCBPTR DS 2	; POINTER INTO FCB TABLE
-FCBTBL DW $F000	; TABLE OF FCB POINTERS FIXME
- DS NFILES*2	; ROOM FOR THE REST
+PC		DS	2	; PSEUDO PROGRAM COUNTER
+R1A		DS	1	; WORKING 16 BIT
+R1B		DS	1	; --REGISTER
+STEMP		DS	2	; TEMP STORAGE FOR STACK POINTER
+X1TMP		DS	2	; TEMP STORAGE FOR X REG
+X2TMP		DS	2	; ... DITTO ...
+DFLAG		DS	1	; DIVIDE ROUTINE FLAG
 
-
+ERRNO		DS	1
+FTABLE		DS	4
+FCHARIO		DW	FCHARBUF
+		DW	1
+FCHARBUF	DB	1
 
 ;**************************************************
 
@@ -712,185 +713,137 @@ ASMC LDX PC		; POINT TO CODE
 
 ;   fopen(file-name, "type")
 ;   Open a File..........
-fopen DB 86		; SWITCH TO INLINE CODE
- LDX #FCBTBL-2		; POINT TO FCB ADDRESSES TABLE
+fopen	DB	86		; SWITCH TO INLINE CODE
+	LDAA	#$EB		; WRONG FILE OPEN MODE
+	STAA	ERRNO
+	TSX
+	LDX	4,X		; POINTER TO FILE NAME
+	STX	FTABLE
+	LDX	#0
+	STX	FTABLE+2
+	TSX
+	LDX	2,X		; POINTER TO MODE
+	LDAB	0,X
+	CMPB	#'w'
+	BNE	FOPEN1
+	LDAA	#2
+	LDX	#FTABLE
+	INT	$4A
+	TSTA
+	BEQ	FEXIT
+	CLRA
+	LDX	#FTABLE
+	INT	$4B
+	BRA	FEXIT
+FOPEN1	CMPB	#'r'
+	BNE	FOPERR
+	LDAA	#1
+	LDAB	1,X
+	BEQ	FOPENRW
+	CMPB	#'+'
+	BNE	FOPERR
+	LDAA	#3
+FOPENRW	LDX	#FTABLE
+	INT	$4A
+FEXIT	STAA	ERRNO
+	TSTA
+	BEQ	FOPEXIT
+FOPERR	LDD	#0	; FIXME STDIN
+FOPEXIT JMP	RTSC
 
-NXTFIL INX
- INX
- STX FCBPTR		; SAVE POINTER
- LDX 0,X		; GET FCB ADDRESS
- BEQ NOFILE
- TST 2,X		; BUSY ?
- BEQ GODOIT		; NO,
- LDX FCBPTR		; ELSE, NEXT IN LINE
- BRA NXTFIL
-
-NOFILE LDX #FMSG	; POINT TO MESSAGE
-; JSR PSTRNG		; PRINT IT
-; JMP WARMS		; --AND BACK TO FLEX
-
-GODOIT STX R1A		; SAVE FCB ADDRESS
- TSX
- LDX 4,X		; POINT TO FILE NAME
- STX $AC14		; SAVE IN LINE BUFFER POINTER
- LDX R1A		; GET FCB POINTER
-; JSR GETFIL		; GET FILE SPEC
- BCS FERROR		; REPORT IF ERROR
- TSX
- LDX 2,X		; POINT TO MODE
- LDAA #1
- LDAB #'w'		; OPEN FOR WRITE
- CMPB 0,X		;  -- ????
- BEQ OWRITE		; YES,
-
-;  DEFAULT TO OPEN FOR READ
-
- LDX R1A		; POINT TO FCB
- STAA 0,X		; STORE IN FCB
-; JSR FMS		; DO THE OPEN
- BEQ FEXIT
-
-FERROR; JSR RPTERR	; REPORT THE TYPE OF ERROR
-; JSR FMSCLS		; CLOSE ALL OPEN FILES
-; JMP WARMS		; RETURN TO FLEX
-
-; OK, OPEN FOR WRITE
-
-OWRITE LDAA #2		; CODE FOR WRITE
- LDX R1A		; GET FCB ADDRESS
- STAA 0,X
-; JSR FMS		; TRY AN OPEN
- BEQ FEXIT		; IF SUCCESSFULL--DONE
-
- LDAA 1,X		; GET ERROR STATUS
- CMPA #3		; ALREADY EXISTS ?
- BNE FERROR		; NO--SOME OTHER ERROR
-
- LDAA #12		; DELETE THE EXISTING FILE
- STAA 0,X
-; JSR FMS
- BNE FERROR
- LDAA 36,X		; FIX NAME
- STAA 4,X
- BRA OWRITE
-
-FEXIT TSX
- LDX 2,X		; POINT TO MODE AGAIN
- LDAB 1,X		; GET OPTIONAL CHAR
- CMPB #'u'		; UNCOMPRESSED (BINARY) ???
- BNE FEXIT1		; NO, SO SKIP
-
- LDAB #$FF
- LDX R1A
- STAB 59,X		; SET FLAG IN FCB
-
-FEXIT1 LDAA R1A	; RETURN THE FCB POINTER
- LDAB R1B
-
- JMP RTSC		; RETURN TO INTERPRETER
 
 ;-------------------------------------------------
 
 ;  fclose(unit)
 ;  CLOSE A FILE
-fclose DB 86		; SWITCH TO IN-LINE
- TSX
- LDX 2,X		; POINT TO FCB
- LDAA #4		; CLOSE CODE
- STAA 0,X
-; JSR FMS		; DO THE CLOSE
- BNE FERROR
- CLRA
- LDAB #1		; OK CODE
- JMP RTSC		; RETURN TO INTERPRETER....
+fclose	DB 86		; SWITCH TO IN-LINE
+	TSX
+	LDD	2,X		; FILE HANDLE
+	TBA
+	INT	$4E
+	BRA	FEXIT
 
 ;--------------------------------------------------
 
 ;  getc(unit)  read a byte from file
 ;        return a char, else a -1 if EOF
 
-getc DB 86
- TSX
- LDX 2,X		; POINT TO FCB
-; JSR FMS		; GET BYTE
- BEQ CHOK
-
- LDAA 1,X		; GET ERROR
- CMPA #8		; EOF ?
- BNE FERROR
-
- LDAA #$FF		; LOAD EOF INDICATOR
-
-CHOK TAB		;  COPY CHAR IN A
-CHOK1 CLRA
- TSTB
- BPL GETC1
-
- COMA			;  SIGN EXTEND
-
-GETC1 JMP RTSC
+getc	DB	86
+	TSX
+	LDD	2,X
+	TBA
+	LDX	#FCHARIO
+	INT	$4C
+FRWERR	STAA	ERRNO
+	TSTA
+	BNE	GETCER
+	CPX	#1
+	BNE	GETCER
+	LDAB	FCHARBUF
+	CLRA
+	BRA	GETCOK
+GETCER	LDD	#-1
+GETCOK	JMP	RTSC
 
 ;----------------------------------------------
 
 ;  putc(c,unit)   write to file
 
-putc DB 86
- TSX
- LDAA 5,X		; GET CHAR
- LDX 2,X		; GET FCB ADDR
- PSHA			; SAVE CHAR
-; JSR FMS
- BNE FERROR
- PULB			; GET CHAR
- BRA CHOK1
-
-;-----------------------------------------------
-FMSG DB 'NO MORE FILES MAY BE OPENED.', 10, 0
-;-----------------------------------------------
+putc	DB	86
+	TSX
+	LDAA	5,X
+	STAA	FCHARBUF
+	LDAA	3,X
+	LDX	#FCHARIO
+	INT	$4D
+	BRA	FRWERR
 
 ;   getchar()    get a char from standard input
 
-getchar DB 86
- int $20
-
- CMPA #$1A		; COMPARE TO CNTRL-Z (EOF)
- BNE CHOK		; NO
- LDAB #$FF		; YES...
- BRA CHOK1		; RETURN -1
+getchar	DB	86
+	INT	$20
+	CMPA	#$1A		; COMPARE TO CNTRL-Z (EOF)
+	BNE	GETCHOK		; NO
+	LDD	#-1		; YES...
+	BRA	GETCH1
+GETCHOK	TAB			;  COPY CHAR IN A
+	CLRA
+GETCH1	JMP	RTSC
 
 ;-----------------------------------------------
 
 ;   putchar(c)   write a char to standard output
 
-putchar DB 86
- TSX
- LDAA 3,X		; GET THE CHAR
- PSHA			; SAVE CHAR
- int $22
- PULB			; RESTORE CHAR
- BRA CHOK1
+putchar	DB	86
+	TSX
+	LDAA	3,X		; GET THE CHAR
+	INT	$22
+	TAB
+	CLRA
+	JMP	RTSC
 
 ;----------------------------------------------
 
 ;   gets(buffer)  get a char string into buffer
 
-gets DB 86
- TSX
- LDX 2,X GET START OF BUFFER
- LDAB #40		; max buffer size
- int $21
- CLRA
- TSX
- STD 2,X
- JMP RTSC
+gets	DB	86
+	TSX
+	LDX	2,X GET START OF BUFFER
+	LDAB	#80		; max buffer size
+	INT	$21
+	CLRA
+	TSX
+	LDD	2,X
+	JMP	RTSC
 
 ;----------------------------------------------
 ;  puts(string)  print a string on the terminal
-puts DB 86
- TSX
- LDX 2,X		; GET STRING ADDRESS
- int $23
- JMP RTSC
+puts	DB	86
+	TSX
+	LDX	2,X		; GET STRING ADDRESS
+	INT	$23
+	LDD	#1
+	JMP	RTSC
 
 ;----------------------------------------------
 ;
@@ -1191,6 +1144,7 @@ SCMP4 LDAA #$FF		; SIGN EXTEND
 ;
 ;****************************************************
 ;
+	DS	$800-*,$FF
 HERE EQU *		;   END OF INTERPRETER
 ; 
 ; END
