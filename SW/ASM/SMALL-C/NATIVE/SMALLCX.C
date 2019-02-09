@@ -21,7 +21,7 @@
 
 /*      UNIX definitions (if not stand-alone)   */
 
-#include <stdio.h>
+/* #include <stdio.h>  */
 /* #define EOL 10       */
 
 /*      Define the symbol table parameters      */
@@ -212,7 +212,7 @@ abort()
         closeout();
         toconsole();
         pl("Compilation aborted.");  nl();
-        exit(1);
+        exit();
 /* end abort */}
 
 /*                                      */
@@ -831,7 +831,7 @@ callfunction(ptr)
                 if (match(",")==0) break;
                 }
         needbrack(")");
-	immed(); outdec(nargs); nl();
+        immed(); outdec(nargs); nl();
         if(ptr)zcall(ptr);
         else callstk();
         Zsp=modstk(Zsp+nargs);  /* clean up arguments */
@@ -1254,7 +1254,6 @@ blanks()
                 else return;
                 }
         }
-
 outdec(numb)
         int numb;
  {
@@ -1803,7 +1802,7 @@ int	val[];
 	}
 	if (numeric (c = ch ()) == 0)
 		return (0);
-	if (match ("0x") || match ("0X"))
+	if (match ("0x") | match ("0X"))
 		while ((numeric (c = ch ()) != 0) |
 		       ((c >= 'a') & (c <= 'f'))  |
 		       ((c >= 'A') & (c <= 'F'))) {
@@ -1929,10 +1928,7 @@ getmem(sym)
 getloc(sym)
         char *sym;
 {       pseudoins(1); defword();
-/* LSB */
-	outdec((((sym[OFFSET] & 255) << 8) | (sym[OFFSET+1] & 255)) - Zsp & 65535);
-/* MSB */
-/*        outdec((sym[OFFSET]&255)*256+(sym[OFFSET+1]&255)-Zsp); */
+        outdec((sym[OFFSET]&255)*256+(sym[OFFSET+1]&255)-Zsp);
         nl();
         }
 /* Store the primary register into the specified */
@@ -2225,3 +2221,5 @@ astreq(str1,str2,len)
   if (an(str2[k]))return 0;
   return k;
 }
+
+/*     <<<<< End of Small-C compiler >>>>>      */

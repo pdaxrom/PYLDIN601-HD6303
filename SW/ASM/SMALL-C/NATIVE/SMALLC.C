@@ -831,6 +831,7 @@ callfunction(ptr)
                 if (match(",")==0) break;
                 }
         needbrack(")");
+        immed(); outdec(nargs); nl();
         if(ptr)zcall(ptr);
         else callstk();
         Zsp=modstk(Zsp+nargs);  /* clean up arguments */

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+#include <ctype.h>
 
 #define byte unsigned char
 #define word unsigned short
@@ -104,6 +106,40 @@ void chkfunc(word *sp, word *pc, word *reg)
 		break;
 	case f_putchar: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; printf("%c", tmp); *reg = tmp; break;
 	case f_puts: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; printf("%s", &mem[tmp]); *reg = 0; break;
+
+	case f_isalpha: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isalpha(tmp); break;
+	case f_isdigit: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isdigit(tmp); break;
+	case f_isalnum: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isalnum(tmp); break;
+	case f_islower: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = islower(tmp); break;
+	case f_isupper: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isupper(tmp); break;
+	case f_isspace: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isspace(tmp); break;
+	case f_toupper: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = toupper(tmp); break;
+	case f_tolower: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = tolower(tmp); break;
+	case f_strclr:
+		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
+		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		memset(&mem[tmp], 0, tmp1);
+		*reg = tmp;
+		break;
+	case f_strlen: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = strlen((char *)&mem[tmp]); break;
+	case f_strcpy:
+		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
+		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		strcpy((char *)&mem[tmp], (char *)&mem[tmp1]);
+		*reg = tmp;
+		break;
+	case f_strcat:
+		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
+		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		strcat((char *)&mem[tmp], (char *)&mem[tmp1]);
+		*reg = tmp;
+		break;
+	case f_strcmp:
+		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
+		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		*reg = strcmp((char *)&mem[tmp], (char *)&mem[tmp1]);
+		break;
+
 	case f_exit: exit(0); break;
 	default: fprintf(stderr, "Unimplemented function %X\n", *pc); exit(1); break;
 	}
