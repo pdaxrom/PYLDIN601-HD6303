@@ -349,7 +349,12 @@ putlab()
 			install(sbuf, exp_());
 			return(TRUE);
 		}
-		else {
+		if (ip[0] == 'E' & ip[1] == 'Q' & ip[2] == 'U' &
+		    (ip[3] == ' ' | ip[3] == 9)) {
+			ip = ip + 3;
+			install(sbuf, exp_());
+			return(TRUE);
+		} else {
 			install(sbuf, loc);
 			return(FALSE);
 		}
@@ -379,7 +384,12 @@ getlab()
 			mputw(tag + VALUE, exp_());
 			return(TRUE);
 		}
-		else {
+		if (ip[0] == 'E' & ip[1] == 'Q' & ip[2] == 'U' &
+		    (ip[3] == ' ' | ip[3] == 9)) {
+			ip = ip + 3;
+			mputw(tag + VALUE, exp_());
+			return(TRUE);
+		} else {
 			mputw(tag + VALUE, loc);
 			return(FALSE);
 		}

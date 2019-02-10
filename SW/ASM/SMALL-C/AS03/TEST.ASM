@@ -1,5 +1,9 @@
-;    *=$1000
-    *=$100
+    org 	$100
+
+    include test.inc
+
+max	= $FFFF
+
 ;
 ;
 ;
@@ -27,17 +31,22 @@ start
     ABX
     int		$20
     int		$22
+    ldd		#max
+    daa
     PULX
     PULB
     PULA
+    staa	VPU_DATA
     jsr		$e0
     jsr		$F006
     jmp		$F000
-~exit
-    RTS
+~exit	RTS
 
-dat
-    .byte	$33
-hello
-    .text	"HELLO, WORLD!"
-    .byte	0
+	ds	16
+
+dat	db	$33
+hello	text	"HELLO, WORLD!"
+	db	0
+	db	$00,$01,$02,$03
+	dw	$F800 ,$F802,$F804,$F806,$E600,$0
+	ds	$200-*,$FF
