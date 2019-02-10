@@ -158,8 +158,10 @@ int     *iptr;          /* work ptr to any int buffer */
 /*                                      */
 /*      Compiler begins execution here  */
 /*                                      */
-main()
-        {
+main(argc, argv)
+int argc;
+int *argv[];
+{
         glbptr=STARTGLB;        /* clear global symbols */
         locptr=STARTLOC;        /* clear local symbols */
         wqptr=wq;               /* clear while queue */
@@ -187,9 +189,80 @@ main()
         /*                              */
         /*      compiler body           */
         /*                              */
-        ask();                  /* get user options */
-        openout();              /* get an output file */
-        openin();               /* and initial input file */
+
+
+	/*
+	 *
+	 */
+        kill();                 /* clear input line */
+        outbyte(12);            /* clear the screen */
+        nl();nl();              /* print banner */
+        pl(BANNER);
+        nl();nl();
+        pl(VERSION);
+        nl();
+        pl(AUTHOR);
+        nl();
+        nl();
+
+	output = 0;
+
+	ctext = 0;
+
+	glbflag=1;      /* define globals */
+	mainflg=1;      /* first file to assembler */
+	nxtlab =0;      /* start numbers at lowest possible */
+
+        errstop=0;
+
+	if (argc < 2)
+	    usage();
+
+	--argc;
+	argv++;
+	while (argc > 0) {
+	    if (strcmp(argv[0], "-ctext") == 0)
+		ctext = 1;
+	    else if (strcmp(argv[0], "-errstop") == 0)
+		errstop = 1;
+	    else if (strcmp(argv[0], "-o") == 0) {
+		if (argc < 2)
+		    usage();
+		if((output = fopen(argv[1], "w")) == NULL) {
+		    error("Can't open output file!");
+		    exit();
+		}
+		--argc;
+		argv++;
+	    } else break;
+	    --argc;
+	    argv++;
+	}
+
+	if (argc == 0)
+	    usage();
+
+	if (output == 0) {
+		if((output = fopen("out.asm", "w")) == NULL) {
+		    error("Can't open output file!");
+		    exit();
+		}
+	}
+
+        if((input=fopen(argv[0], "r")) == NULL) {
+	    error("Can't open input file!");
+	    exit();
+	}
+
+        newfile();
+
+        litlab=getlabel();      /* first label=literal pool */ 
+        kill();                 /* erase line */
+
+	/*
+	 *
+	 */
+
         header();               /* intro code */
         parse();                /* process ALL input */
         dumplits();             /* then dump literal pool */
@@ -198,7 +271,13 @@ main()
         closeout();             /* close the output (if any) */
         errorsummary();         /* summarize errors (on console!) */
         return;                 /* then exit to system */
-        }
+}
+
+usage()
+{
+	error("smallc [-ctext] [-errstop] [-o outputfile] inputfile");
+	exit();
+}
 
 /*                                      */
 /*      Abort compilation               */
@@ -298,113 +377,6 @@ errorsummary()
         outstr("symtab: "); outdec(glbptr-STARTGLB); nl();
         outstr("litq: "); outdec(litptr); nl();
         outstr("macq: "); outdec(macptr); nl();
-        }
-/*                                      */
-/*      Get options from user           */
-/*                                      */
-ask()
-        {
-        int k,num[1];
-        kill();                 /* clear input line */
-        outbyte(12);            /* clear the screen */
-        nl();nl();              /* print banner */
-        pl(BANNER);
-        nl();nl();
-        pl(VERSION);
-        nl();
-        pl(AUTHOR);
-        nl();
-        nl();
-        /* see if user wants to interleave the c-text */
-        /*      in form of comments (for clarity) */
-        pl("Do you want the c-text to appear (y,N) ? ");
-        gets(line);             /* get answer */
-        ctext=0;                /* assume no */
-        if((ch()=='Y')|(ch()=='y'))
-                ctext=1;        /* user said yes */
-        /* see if the user is compiling everything at once */
-        /*      (as is usually the case)                   */
-        pl("Are you compiling the whole program at once (Y,n) ? ");
-        gets(line);
-        if((ch()!='N')&(ch()!='n')){    /* single file - assume... */
-                glbflag=1;      /* define globals */
-                mainflg=1;      /* first file to assembler */
-                nxtlab =0;      /* start numbers at lowest possible */
-                }
-        else {          /* one of many - ask everything */
-                /* see if user wants us to allocate static */
-                /*  variables by name in this module    */
-                /*      (pseudo external capability)    */
-                pl("Do you want the globals to be defined (y,N) ? ");
-                gets(line);
-                glbflag=0;
-                if((ch()=='Y')|(ch()=='y'))
-                        glbflag=1;      /* user said yes */
-                /* see if we should put out the stuff   */
-                /*      needed for the first assembler  */
-                /*      file.                           */
-                pl("Is the output file the first one the assembler ");
-                pl("will see (y,N) ? ");
-                gets(line);
-                mainflg=0;
-                if((ch()=='Y')|(ch()=='y'))
-                        mainflg=1;      /* indeed it is */
-                /* get first allowable number for compiler-generated */
-                /*      labels (in case user will append modules) */
-                while(1){
-                        pl("Starting number for labels (0) ? ");
-                        gets(line);
-                        if(ch()==0){num[0]=0;break;}
-                        if(k=number(num))break;
-                        }
-                nxtlab=num[0];
-                }
-        /* see if user wants to be sure to see all errors */
-        pl("Should I pause after an error (y,N) ? ");
-        gets(line);
-        errstop=0;
-        if((ch()=='Y')|(ch()=='y'))
-                errstop=1;
-
-        litlab=getlabel();      /* first label=literal pool */ 
-        kill();                 /* erase line */
-        }
-/*                                      */
-/*      Get output filename             */
-/*                                      */
-openout()
-        {
-        kill();                 /* erase line */
-        output=0;               /* start with none */
-        pl("Output filename? "); /* ask...*/
-        gets(line);     /* get a filename */
-        if(ch()==0)return;      /* none given... */
-        if((output=fopen(line,"w"))==NULL) /* if given, open */
-                {output=0;      /* can't open */
-                error("Open failure!");
-                }
-        kill();                 /* erase line */
-}
-/*                                      */
-/*      Get (next) input file           */
-/*                                      */
-openin()
-{
-        input=0;                /* none to start with */
-        while(input==0){        /* any above 1 allowed */
-                kill();         /* clear line */
-                if(eof_)break;   /* if user said none */
-                pl("Input filename? ");
-                gets(line);     /* get a name */
-                if(ch()==0)
-                        {eof_=1;break;} /* none given... */
-                if((input=fopen(line,"r"))!=NULL)
-                        newfile();
-                else {  input=0;        /* can't open it */
-                        pl("Open failure");
-                        }
-                }
-        kill();         /* erase line */
         }
 
 /*                                      */
@@ -995,7 +967,7 @@ inline_()
 {
         int k,unit;
         while(1)
-                {if (input==0)openin();
+                {if (input==0) eof_=1;
                 if(eof_)return;
                 if((unit=input2)==0)unit=input;
                 kill();
