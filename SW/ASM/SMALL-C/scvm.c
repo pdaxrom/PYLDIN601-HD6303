@@ -167,8 +167,32 @@ int main(int argc, char *argv[])
     len = fread(&mem[start], 1, sizeof(mem) - start, inf);
     fclose(inf);
 
+    sp = 0xFF00;
+    pc = 0xFF20;
+    for (int i = 1; i < argc; i++) {
+	strcpy(&mem[pc], argv[i]);
+	mem[sp++] = pc >> 8;
+	mem[sp++] = pc & 0xFF;
+	pc += strlen(argv[i]) + 1;
+    }
+
+/*
+    pc = 0xFF00;
+    for (int i = 0; i < argc - 1; i++) {
+	printf("arg%d [%s]\n", i, &mem[(mem[pc] << 8) | mem[pc + 1]]);
+	pc += 2;
+    }
+ */
+
+    argc--;
+    sp = 0xFEFF;
+    mem[sp--] = argc & 0xFF;
+    mem[sp--] = argc >> 8;
+    mem[sp--] = 0x00;
+    mem[sp--] = 0xFF;
+
     pc = start;
-    sp = 0xFFFF;	// maximum memory
+//    sp = 0xFEFF;	// maximum memory
     word reg = 0;
     word tmp = 0;
 
