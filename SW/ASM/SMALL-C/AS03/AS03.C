@@ -104,41 +104,42 @@ int nset;				/* number of setloc pseudo-ops */
 
 main(argc, argv)
 int argc;
-char *argv[];
+int *argv[];
 {
 	int file;			/* source file no. */
 	char *ifile;
 
 	in = NULL;
 	out = NULL;
-	ifile = "test.asm";
-	ofile = "test.o";		/* default output file name */
+	ifile = NULL;
+	ofile = "a.out";		/* default output file name */
 	list = FALSE;			/* default no listing */
 
-/*
-	while ((*argv[1] & 0xFF) == '-') {
-//	 BUG in compiler 
-		if (strcmp(argv[1], "-l") == SAME)
-			list++;
-		else if (strcmp(argv[1], "-o") == SAME) {
-			if (argc < 3)
-				usage();
-			else {
-				ofile = argv[2];
-				--argc;
-				argv++;
-			}
-		}
-		else
-			usage();
-		--argc;
-		argv++;
-	}
 	if (argc < 2)
-		usage();
- */
-	list++;
+	    usage();
 
+	--argc;
+	argv++;
+	while (argc > 0) {
+	    if (strcmp(argv[0], "-l") == SAME)
+		list++;
+	    else if (strcmp(argv[0], "-o") == SAME) {
+		if (argc < 2)
+		    usage();
+		else {
+		    ofile = argv[1];
+		    --argc;
+		    argv++;
+		}
+	    } else break;
+	    --argc;
+	    argv++;
+	}
+
+	if (argc == 0)
+	    usage();
+
+	ifile = argv[0];
 
 	if ((out = fopen(ofile, IO_W)) == NULL) {
 		printf("as03: can't open %s\n", ofile);
@@ -190,7 +191,7 @@ char *argv[];
  */
 usage()
 {
-	printf("usage: as03 [-l] [-o outfile] file1 ... [filen]\n");
+	printf("usage: as03 [-l] [-o outfile] file\n");
 	fatal(-1);
 }
 
