@@ -6,11 +6,11 @@
 /*                                              */
 /************************************************/
 
-#define BANNER  "** Ron Cain's Small-C V1.1 **"
+#define BANNER  "*** Ron Cain's Small-C V1.1 ***"
 
-#define VERSION "FLEX Version 2.1, 13 Aug 1982"
+#define VERSION "UniDOS Version 2.1, 10 Feb 2019"
 
-#define AUTHOR "       By S. Stepanoff"
+#define AUTHOR "by sashz <sashz@pdaXrom.org"
 
 /*      Define system dependent parameters      */
 
@@ -195,14 +195,9 @@ int *argv[];
 	 *
 	 */
         kill();                 /* clear input line */
-        outbyte(12);            /* clear the screen */
-        nl();nl();              /* print banner */
         pl(BANNER);
-        nl();nl();
         pl(VERSION);
-        nl();
         pl(AUTHOR);
-        nl();
         nl();
 
 	output = 0;

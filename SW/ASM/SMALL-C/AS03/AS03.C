@@ -94,6 +94,7 @@ char * textsz;			/* size of text segment */
 char * datasz;			/* size of data segment */
 int hashtab[HASHSIZE];			/* hash table */
 FILE *in;				/* input stream */
+FILE *in2;				/* second input stream */
 FILE *out;				/* output stream */
 int endflag;				/* .end pseudo-op flag */
 int list;				/* produce assembler listing */
@@ -110,6 +111,7 @@ int *argv[];
 	char *ifile;
 
 	in = NULL;
+	in2 = NULL;
 	out = NULL;
 	ifile = NULL;
 	ofile = "a.out";		/* default output file name */
@@ -142,7 +144,7 @@ int *argv[];
 	ifile = argv[0];
 
 	if ((out = fopen(ofile, IO_W)) == NULL) {
-		printf("as03: can't open %s\n", ofile);
+		printf("as03: Cannot open %s\n", ofile);
 		fatal(-1);
 	}
 
@@ -159,7 +161,7 @@ int *argv[];
 	    endflag = FALSE;
 
 	    if ((in = fopen(ifile, "r")) == NULL) {
-		printf("can't open %s\n", ifile);
+		printf("as03: Cannot open %s\n", ifile);
 		exit();
 	    }
 	    doasm();
@@ -203,7 +205,16 @@ doasm()
 	int mem;
 
 	*ibuf = 0;
-	while (inline_() != NULL) {
+	while (1) {
+		if (inline_() == NULL) {
+		    if (in2) {
+			fclose(in);
+			in = in2;
+			in2 = NULL;
+			continue;
+		    } else
+			break;
+		}
 		mem = loc;
 		nbytes = 0;
 		assem();
@@ -270,10 +281,6 @@ assem()
 
 	if (*ip == 10)
 		return;
-	else if (match('.'))
-		pseudo();
-	else if (match('*'))
-		setloc();
 	else if (match(';'))
 		return;
 	else
@@ -300,6 +307,14 @@ prehash()
 		install(ps, opcodes + n++ * NMODES);
 		ps = p + 1;
 	}
+
+	install("ORG",	org   | 0x8000);
+	install("DS",	fillb | 0x8000);
+	install("DB",	byte  | 0x8000);
+	install("DW",	dbyte | 0x8000);
+	install("END",	psend | 0x8000);
+	install("TEXT",	text  | 0x8000);
+	install("INCLUDE",file| 0x8000);
 
 	start = freeptr;
 }
@@ -408,6 +423,17 @@ char *tag;
 	int mode;
 
 	p = mgetw(tag + VALUE);
+
+	if (p & 0x8000) {
+		nbytes = 0;
+		p = p & 0x7FFF;
+		#asm
+		DB	20 ; PUSHR1
+		DB	30 ; JSRSP
+		#endasm
+		return;
+	}
+
 	if ((obj[0] = p[INHERIT]) != ILLEGAL) {
 		nbytes = 1;
 		return;
@@ -547,61 +573,28 @@ relative()
 }
 
 /*
- * set location counter pseudo-op
+ * set location counter
  */
-setloc()
+org()
 {
-	if (match('=') == FALSE)
-		error("'=' expected");
-	else {
-		skip();
-		if (*ip == '*')
-			reserve();
-		else {
-			loc = exp_();
-			if (nset++ == 0)
-				origin = loc;
-		}
-	}
-}
-
-/*
- * memory reserve pseudo-op
- */
-reserve()
-{
-	int oldloc;
-
-	oldloc = loc;
 	loc = exp_();
-	if (pass == 2) {
-		while (oldloc++ < loc)
-			putc(0, out); /* '\0' */
-	}
+	if (nset++ == 0)
+		origin = loc;
 }
 
 /*
- * explicit pseudo-ops
+ * fill (reserve) bytes
  */
-pseudo()
+fillb()
 {
+	int count,fill;
 	nbytes = 0;
-	if (sym(sbuf) == FALSE)
-		error("pseudo-op expected");
-	else if (strcmp(sbuf, "BYTE") == SAME)
-		byte();
-	else if (strcmp(sbuf, "DBYTE") == SAME)
-		dbyte();
-	else if (strcmp(sbuf, "END") == SAME)
-		endflag = TRUE;
-	else if (strcmp(sbuf, "WORD") == SAME)
-		word();
-	else if (strcmp(sbuf, "TEXT") == SAME)
-		text();
-	else if (strcmp(sbuf, "FILE") == SAME)
-		file();
-	else
-		error("illegal pseudo-op");
+	fill = 0;
+	count = exp_();
+	if (match(','))
+	    fill = exp_() & 0xFF;
+	while(count--)
+	    obj[nbytes++] = fill;
 }
 
 /*
@@ -625,27 +618,10 @@ dbyte()
 	int word;
 
 	nbytes = 0;
-	word = exp_();
 	while(nbytes < LINESIZE) {
+		word = exp_();
 		obj[nbytes++] = word >> 8;
 		obj[nbytes++] = word & 0xFF;
-		if (match(',') == 0)
-			break;
-	}
-}
-
-/*
- * initialise memory word, low byte first
- */
-word()
-{
-	int word;
-
-	nbytes = 0;
-	word = exp_();
-	while(nbytes < LINESIZE) {
-		obj[nbytes++] = word & 0xFF;
-		obj[nbytes++] = word >> 8;
 		if (match(',') == 0)
 			break;
 	}
@@ -673,16 +649,27 @@ file()
 {
 	char *bp;
 
-	fclose(in);
+	if (in2) {
+	    printf("as03: Cannot nest include files\n");
+	    fatal(-1);
+	}
+
+	in2 = in;
+
 	skip();
 	bp = sbuf;
 	while (*ip != ' ' & *ip != 10) /* '\n' */
 		*bp++ = *ip++;
 	*bp = 0; /* '\0' */
 	if ((in = fopen(sbuf, "r")) == NULL) {
-		printf("as03: can't open %s\n", sbuf);
+		printf("as03: Cannot open %s\n", sbuf);
 		fatal(-1);
 	}
+}
+
+psend()
+{
+	endflag = TRUE;
 }
 
 /*
@@ -1087,7 +1074,7 @@ dumpsym()
 	if (freeptr == start)
 		return;
 	if ((out = fopen("out.sym", "w")) == NULL) {
-		printf("as03: can't open g/out\n");
+		printf("as03: Cannot open g/out\n");
 		fatal(-1);
 	}
 	p = start;
