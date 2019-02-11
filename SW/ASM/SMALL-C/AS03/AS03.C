@@ -55,25 +55,6 @@
 #define NMODES	7
 
 /*
- * 6502 addressing modes
- */
-#define IMPLIED     0
-#define ACCUM       1
-/*#define IMMED       2 */
-/*#define DIRECT      3 */
-#define DIRECT_X    4
-#define DIRECT_Y    5
-#define ABS         6
-#define ABS_X       7
-#define ABS_Y       8
-/*#define IND_X       9 */
-#define IND_Y      10
-/*#define REL        11 */
-#define INDIRECT   12
-/*#define NMODES     13 */
-/*#define NCODES     56 */
-
-/*
  * global variables
  */
 char obj[LINESIZE];			/* object code output buffer */
@@ -152,9 +133,9 @@ int *argv[];
 	inithash();
 	prehash();
 
+	errcnt = 0;
 	pass = 1;
 	while(pass < 3) {
-	    errcnt = 0;
 	    nset = 0;
 	    loc = 0;
 	    origin = 0;
@@ -174,7 +155,7 @@ int *argv[];
 	dumpsym();
 
 	/* print size of text and data areas if C 'segment' symbols present */
-	if ((hashfind("~eot") != NULL) & (hashfind("~eod") != NULL)) {
+	if ((hashfind("~eot", start) != NULL) & (hashfind("~eod", start) != NULL)) {
 		_text = origin;
 		_data = lookup("~eot");
 		_end = lookup("~eod");
@@ -272,10 +253,19 @@ inline_()
  */
 assem()
 {
+	int ismnem;
+
+	ismnem = isspace(*ip);
+
 	if (sym(sbuf)) {
-		if (qlabel())
-			return;
-		else if (qmnem())
+		if (ismnem == 0) {
+			qlabel();
+			if (sym(sbuf)) {
+				if (qmnem())
+					return;
+			} else
+				return;
+		} else if (qmnem())
 			return;
 	}
 
@@ -344,7 +334,7 @@ putlab()
 {
 	char *tag;
 
-	if ((tag = hashfind(sbuf)) == NULL) {
+	if ((tag = hashfind(sbuf, start)) == NULL) {
 		if (match('=')) {
 			install(sbuf, exp_());
 			return(TRUE);
@@ -358,12 +348,7 @@ putlab()
 			install(sbuf, loc);
 			return(FALSE);
 		}
-	}
-	else if (tag < start) {
-		mnem(tag);
-		return(TRUE);
-	}
-	else {
+	} else {
 		error("label redefined");
 		return(FALSE);
 	}
@@ -379,7 +364,7 @@ getlab()
 {
 	char *tag;
 
-	if ((tag = hashfind(sbuf)) >= start) {
+	if ((tag = hashfind(sbuf, start)) >= start) {
 		if (match('='))	{	
 			mputw(tag + VALUE, exp_());
 			return(TRUE);
@@ -393,10 +378,13 @@ getlab()
 			mputw(tag + VALUE, loc);
 			return(FALSE);
 		}
-	}
-	else {
+	} else {
+/*
 		mnem(tag);
 		return(TRUE);
+ */
+		printf("Internal error (missed label)");
+		fatal(-1);
 	}
 }
 
@@ -408,17 +396,12 @@ getlab()
  */
 qmnem()
 {
-	char *tag, *savp;
-
-	savp = ip;
-	if (sym(sbuf) == 0)
-		return(FALSE);
-	else if ((tag = hashfind(sbuf)) < start) {
+	char *tag;
+	if ((tag = hashfind(sbuf, symtab)) < start) {
 		mnem(tag);
 		return(TRUE);
 	}
 	else {
-		ip = savp;
 		return(FALSE);
 	}
 }
@@ -534,7 +517,7 @@ int oper;
 	if (oper >= 0 & oper < BYTE) {
 		nbytes = 2;
 		obj[1] = oper & 0xFF;
-		return(DIRECT);
+		return(IND_X);
 	}
 	else
 		error("offset must be 0..255");
@@ -597,14 +580,21 @@ org()
  */
 fillb()
 {
+	char *oldloc;
 	int count,fill;
 	nbytes = 0;
 	fill = 0;
 	count = exp_();
 	if (match(','))
 	    fill = exp_() & 0xFF;
-	while(count--)
-	    obj[nbytes++] = fill;
+
+	oldloc = loc;
+	loc = loc + count;
+
+	if (pass == 2) {
+		while (oldloc++ < loc)
+			putc(fill, out);
+	}
 }
 
 /*
@@ -691,11 +681,11 @@ psend()
 exp_()
 {
 	if (match('<'))
-		return(expression() & 0xFF);
+		return(exp2() & 0xFF);
 	else if (match('>'))
-		return(expression() >> 8);
+		return(exp2() >> 8);
 	else
-		return(expression());
+		return(exp2());
 }
 
 /*
@@ -703,24 +693,100 @@ exp_()
  * -------------------------
  * operator precedence is left to right
  */
-expression()
-{
-	int n;
 
-	n = operand();
-	while (*ip) {
-		if (match('+'))
-			n = n + operand();
-		else if (match('-'))
-			n = n - operand();
-		else if (match('*'))
-			n = n * operand();
-		else if (match('/'))
-			n = n / operand();
-		else
-			break;
+exp2()
+{
+    int n;
+    n = exp3();
+    while (*ip) {
+	if (match('|'))
+	    n = n | exp3();
+	else
+	    break;
+    }
+    return n;
+}
+
+exp3()
+{
+    int n;
+    n = exp4();
+    while (*ip) {
+	if (match('^'))
+	    n = n ^ exp4();
+	else
+	    break;
+    }
+    return n;
+}
+
+exp4()
+{
+    int n;
+    n = exp5();
+    while (*ip) {
+	if (match('&'))
+	    n = n & exp5();
+	else
+	    break;
+    }
+    return n;
+}
+
+exp5()
+{
+    int n;
+    n = exp6();
+    while (*ip) {
+	if (match('+'))
+	    n = n + exp6();
+	else if (match('-'))
+	    n = n - exp6();
+	else
+	    break;
+    }
+    return n;
+}
+
+exp6()
+{
+    int n;
+    n = exp7();
+    while (*ip) {
+	if (match('*'))
+	    n = n * exp7();
+	else if (match('/'))
+	    n = n / exp7();
+	else if (match('%'))
+	    n = n % exp7();
+	else
+	    break;
+    }
+    return n;
+}
+
+exp7()
+{
+    if (match('~'))
+	return 0xFFFF ^ exp8();
+    if (match('-'))
+	return -exp8();
+    return exp8();
+}
+
+exp8()
+{
+    int n;
+    if (match('(')) {
+	n = exp2();
+	if (match(')'))
+	    return n;
+	else {
+	    error("missing bracket");
+	    return ILLEGAL;
 	}
-	return(n);
+    }
+    return operand();
 }
 
 /*
@@ -758,7 +824,7 @@ char *name;
 {
 	char *tag;
 
-	tag = hashfind(name);
+	tag = hashfind(name, start);
 	if (pass == 2) {
 		if (tag == 0)
 			error("symbol undefined");
@@ -885,7 +951,7 @@ char *p;
 	skip();
 	bp = p;
 
-	if (isalpha(*ip) | *ip == '_' | *ip == '~') {
+	if (isalpha(*ip) | *ip == '_' | *ip == ':') {
 		*bp++ = *ip++;
 		while (isalnum(*ip) | *ip == '_')
 			*bp++ = *ip++;
@@ -1036,14 +1102,15 @@ int val;
 /*
  * find symbol using hash + chain
  */
-hashfind(name)
+hashfind(name, start)
 char *name;
+char *start;
 {
 	char *tag;
 
 	tag = hashtab[hash(name)];
 	while (tag) {
-		if (strcmp(tag + NAME, name) == SAME)
+		if ((tag >= start) & (strcmp(tag + NAME, name) == SAME))
 			break;
 		else
 			tag = mgetw(tag + NEXTPTR);
@@ -1089,7 +1156,7 @@ dumpsym()
 	}
 	p = start;
 	while (p < freeptr) {
-/*		if (*(p + NAME) != '~')
+/*		if (*(p + NAME) != ':')
 			fprintf(out, "%s =$%04x\n", p + NAME, mgetw(p + VALUE));
  */
 		if (list)
