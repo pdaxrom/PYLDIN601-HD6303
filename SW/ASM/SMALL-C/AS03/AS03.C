@@ -67,12 +67,12 @@ char *start;				/* start of symbol table */
 char *freeptr;				/* next free location in hash chain */
 char *ip;				/* input buffer pointer */
 char * loc;				/* location counter */
-char * origin;			/* assembly origin */
-char * _text;			/* start of text segment */
-char * _data;			/* start of data segment */
+char * origin;				/* assembly origin */
+char * _text;				/* start of text segment */
+char * _data;				/* start of data segment */
 char * _end;				/* end of program */
-char * textsz;			/* size of text segment */
-char * datasz;			/* size of data segment */
+char * textsz;				/* size of text segment */
+char * datasz;				/* size of data segment */
 int hashtab[HASHSIZE];			/* hash table */
 FILE *in;				/* input stream */
 FILE *in2;				/* second input stream */
@@ -83,6 +83,9 @@ int pass;				/* pass 1/2 */
 int nbytes;				/* number of bytes in obj[] */
 int errcnt;				/* error count */
 int nset;				/* number of setloc pseudo-ops */
+
+int nsect;				/* section pseudo-op*/
+char *locsave;				/* save old location */
 
 main(argc, argv)
 int argc;
@@ -309,8 +312,9 @@ prehash()
 	installop("DB",		byte  | 0x8000);
 	installop("DW",		dbyte | 0x8000);
 	installop("END",	psend | 0x8000);
-	installop("TEXT",	text  | 0x8000);
 	installop("INCLUDE",	file  | 0x8000);
+	installop("SECTION",	sect  | 0x8000);
+	installop("ENDS",	ends  | 0x8000);
 
 	start = freeptr;
 }
@@ -598,7 +602,7 @@ fillb()
 	oldloc = loc;
 	loc = loc + count;
 
-	if (pass == 2) {
+	if (pass == 2 & nsect == 0) {
 		while (oldloc++ < loc)
 			putc(fill, out);
 	}
@@ -656,21 +660,6 @@ dbyte()
 }
 
 /*
- * enter ASCII text
- */
-text()
-{
-	char delim;			/* string delimeter */
-
-	skip();
-	delim = *ip++;			/* first non-blank is delimeter */
-	nbytes = 0;
-	while(nbytes < LINESIZE & *ip != delim & *ip != 10) /* '\n' */
-		obj[nbytes++] = *ip++;
-	ip++;				/* skip trailing delimeter */
-}
-
-/*
  * switch input to new source file
  */
 file()
@@ -698,6 +687,22 @@ file()
 psend()
 {
 	endflag = TRUE;
+}
+
+sect()
+{
+	locsave = loc;
+	loc = exp_();
+	nsect++;
+}
+
+ends()
+{
+	if (nsect) {
+	    loc = locsave;
+	    nsect = 0;
+	} else
+	    error("ENDS without SECTION.");
 }
 
 /*
@@ -1018,11 +1023,15 @@ output(mem)
 int mem;
 {
 	int n, byte;
+	char incl;
+
+	if (in2) incl = '>';
+	else incl = ' ';
 
 	if (list) {
 		n = 0;
 		while (n < nbytes) {
-			printf("%04x  ", mem + n);
+			printf("%c %04x  ", incl, mem + n);
 			byte = 0;
 			while (byte < 3) {
 				if (n < nbytes)
@@ -1037,10 +1046,15 @@ int mem;
 				printf("\n");
 			/* if (n >= nbytes) break; */
 		}
+		if (nbytes == 0) {
+			printf("%c %04x            %s", incl, mem, ibuf);
+		}
 	}
-	n = 0;
-	while (n < nbytes) {
-		putc(obj[n++], out);
+	if (nsect == 0) {
+		n = 0;
+		while (n < nbytes) {
+			putc(obj[n++], out);
+		}
 	}
 }
 
