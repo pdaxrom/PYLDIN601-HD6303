@@ -226,7 +226,7 @@ inline_()
 			else
 				printf("                %s", p);
 		}
-		else if (*p == 10) /* '\n' */
+		else if (*p == 10 | *p == 13) /* '\n' */
 			continue;
 		else
 			break;
@@ -238,13 +238,17 @@ inline_()
 	while (c = toupper(*p)) {
 		if (c == ';')
 			break;
-		else if (c == '"' | c == 0x27) {
+		else if (c == 13) {
+		    *p++ = 10;
+		    *p++ = 0;
+		    break;
+		} else if (c == '"' | c == 0x27) {
 			while (*++p)
 				if (*p == c)
 					break;
 		}
 		else
-			*p++ = c;	
+			*p++ = c;
 	}
 
 	return(ip);
