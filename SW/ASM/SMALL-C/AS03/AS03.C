@@ -84,8 +84,12 @@ int nbytes;				/* number of bytes in obj[] */
 int errcnt;				/* error count */
 int nset;				/* number of setloc pseudo-ops */
 
-int nsect;				/* section pseudo-op*/
+int nsect;				/* section pseudo-op */
 char *locsave;				/* save old location */
+
+int nproc;				/* proc pseudo-op */
+int nloc;				/* proc counter */
+char *procsym;				/* proc symbols */
 
 main(argc, argv)
 int argc;
@@ -139,6 +143,9 @@ int *argv[];
 	errcnt = 0;
 	pass = 1;
 	while(pass < 3) {
+	    nsect = 0;
+	    nproc = 0;
+	    nloc = 0;
 	    nset = 0;
 	    loc = 0;
 	    origin = 0;
@@ -315,6 +322,9 @@ prehash()
 	installop("INCLUDE",	file  | 0x8000);
 	installop("SECTION",	sect  | 0x8000);
 	installop("ENDS",	ends  | 0x8000);
+	installop("PROC",	proc  | 0x8000);
+	installop("ENDP",	endp  | 0x8000);
+	installop("GLOBAL",	global| 0x8000);
 
 	start = freeptr;
 }
@@ -327,8 +337,19 @@ prehash()
  */
 qlabel()
 {
+	char *tag;
+
+	tag = 0;
+
+	if (nproc) {
+		if (pass == 1) {
+			if ((tag = hashfind(sbuf)) < procsym)
+				tag = 0;
+		}
+		locsuffix(sbuf);
+	}
 	if (pass == 1)
-		return(putlab());
+		return(putlab(tag));
 	else
 		return(getlab());
 }
@@ -340,24 +361,30 @@ qlabel()
  * Exit status indicates whether
  * processing of line is complete
  */
-putlab()
+putlab(gtag)
+char *gtag;
 {
 	char *tag;
+	int ret;
 
 	if ((tag = hashfind(sbuf)) == NULL) {
 		if (match('=')) {
-			install(sbuf, exp_());
-			return(TRUE);
-		}
-		if (ip[0] == 'E' & ip[1] == 'Q' & ip[2] == 'U' &
+			tag = install(sbuf, exp_());
+			ret = TRUE;
+		} else if (ip[0] == 'E' & ip[1] == 'Q' & ip[2] == 'U' &
 		    (ip[3] == ' ' | ip[3] == 9)) {
 			ip = ip + 3;
-			install(sbuf, exp_());
-			return(TRUE);
+			tag = install(sbuf, exp_());
+			ret = TRUE;
 		} else {
-			install(sbuf, loc);
-			return(FALSE);
+			tag = install(sbuf, loc);
+			ret = FALSE;
 		}
+		if (gtag) {
+			mputw(gtag + VALUE, tag);
+			*(gtag + NAME) = *(gtag + NAME) | 0x80;
+		}
+		return ret;
 	} else {
 		error("label redefined");
 		return(FALSE);
@@ -407,7 +434,7 @@ getlab()
 qmnem()
 {
 	char *tag;
-	*sbuf = 0xFF ^ *sbuf;
+	*sbuf = 0x7F ^ *sbuf;
 	if ((tag = hashfind(sbuf)) < start) {
 		mnem(tag);
 		return(TRUE);
@@ -705,6 +732,73 @@ ends()
 	    error("ENDS without SECTION.");
 }
 
+proc()
+{
+	if (nproc)
+		error("Proc nesting error.");
+	else {
+		nproc++;
+		nloc++;
+		procsym = freeptr;
+	}
+}
+
+endp()
+{
+	if (nproc) {
+		nproc = 0;
+		procsym = freeptr;
+	} else
+		error("ENDP without PROC.");
+}
+
+global()
+{
+	char buf[LINESIZE];
+	char *tag, *ltag;
+	int i;
+	i = 0;
+	if (nproc == 0)
+		error("GLOBAL outside of PROC.");
+	else if (pass == 1) {
+		while(i < LINESIZE) {
+			if (sym(buf)) {
+				if (hashfind(buf)) {
+					error("Redefinition of symbol");
+					break;
+				} else
+					tag = install(buf, 0);
+
+				locsuffix(buf);
+
+				if ((ltag = hashfind(buf)) != NULL) {
+					mputw(tag + VALUE, ltag);
+					*(tag + NAME) = *(tag + NAME) | 0x80;
+				}
+			} else
+				break;
+			if (match(',') == 0)
+				break;
+		}
+	}
+}
+
+locsuffix(str)
+char *str;
+{
+	char *ptr;
+	int cnt;
+	cnt = nloc;
+	strcpy(str + 1, str);
+	*str = ':';
+	ptr = str + strlen(str);
+	while (cnt > 0) {
+	    *ptr++ = 32 + cnt % 96;
+	    cnt = cnt / 96;
+	}
+	*ptr = 0;
+}
+
 /*
  * evaluate expression
  * -------------------
@@ -855,9 +949,20 @@ operand()
 lookup(name)
 char *name;
 {
+	char buf[LINESIZE];
 	char *tag;
 
-	tag = hashfind(name);
+	tag = 0;
+
+	if (nproc) {
+	    strcpy(buf, name);
+	    locsuffix(buf);
+	    tag = hashfind(buf);
+	}
+
+	if (tag == 0)
+		tag = hashfind(name);
+
 	if (pass == 2) {
 		if (tag == 0)
 			error("symbol undefined");
@@ -1121,9 +1226,9 @@ installop(name, val)
 char *name;
 int val;
 {
-	*name = 0xFF ^ *name;
+	*name = 0x7F ^ *name;
 	install(name, val);
-	*name = 0xFF ^ *name;
+	*name = 0x7F ^ *name;
 }
 
 /*
@@ -1148,6 +1253,7 @@ int val;
 	mputw(p + VALUE, val);
 	strcpy(p + NAME, name);
 	freeptr = p + len;
+	return p;
 }
 
 /*
@@ -1160,9 +1266,12 @@ char *name;
 
 	tag = hashtab[hash(name)];
 	while (tag) {
-		if (strcmp(tag + NAME, name) == SAME)
+		if (((*(tag + NAME) & 0x7F) == *name) &
+			(strcmp(tag + NAME + 1, name + 1) == SAME)) {
+			if (*(tag + NAME) & 0x80)
+				tag = mgetw(tag + VALUE);
 			break;
-		else
+		} else
 			tag = mgetw(tag + NEXTPTR);
 	}
 	return(tag);
@@ -1196,6 +1305,9 @@ int *p;
 dumpsym()
 {
 	char *p;
+	char *r;
+	char c;
+	int val;
 	FILE *out;
 
 	if (freeptr == start)
@@ -1209,8 +1321,18 @@ dumpsym()
 /*		if (*(p + NAME) != ':')
 			fprintf(out, "%s =$%04x\n", p + NAME, mgetw(p + VALUE));
  */
-		if (list)
-			printf("%s =$%04x\n", p + NAME, mgetw(p + VALUE));
+		if (list) {
+			if (*(p + NAME) & 0x80)
+				r = mgetw(p + VALUE);
+			else
+				r = p;
+			c = *(p + NAME) & 0x7F;
+			val = mgetw(r + VALUE);
+			if (val == 0)
+				printf("Orphaned global symbol %c%s\n", c, p + NAME + 1);
+			else
+				printf("%c%s =$%04x\n", c, p + NAME + 1, val);
+		}
 		p = p + strlen(p + NAME) + 5;
 	}
 	fclose(out);
