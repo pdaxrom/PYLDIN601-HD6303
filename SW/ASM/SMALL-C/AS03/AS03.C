@@ -141,6 +141,8 @@ int *argv[];
 	    origin = 0;
 	    endflag = FALSE;
 
+	    printf("Pass %d\n", pass);
+
 	    if ((in = fopen(ifile, "r")) == NULL) {
 		printf("as03: Cannot open %s\n", ifile);
 		exit();
@@ -155,7 +157,7 @@ int *argv[];
 	dumpsym();
 
 	/* print size of text and data areas if C 'segment' symbols present */
-	if ((hashfind("~eot", start) != NULL) & (hashfind("~eod", start) != NULL)) {
+	if ((hashfind("~eot") != NULL) & (hashfind("~eod") != NULL)) {
 		_text = origin;
 		_data = lookup("~eot");
 		_end = lookup("~eod");
@@ -294,17 +296,17 @@ prehash()
 		while (*p++ != 10) /* '\n' */
 			;
 		*--p = 0; /* '\0' */
-		install(ps, opcodes + n++ * NMODES);
+		installop(ps, opcodes + n++ * NMODES);
 		ps = p + 1;
 	}
 
-	install("ORG",	org   | 0x8000);
-	install("DS",	fillb | 0x8000);
-	install("DB",	byte  | 0x8000);
-	install("DW",	dbyte | 0x8000);
-	install("END",	psend | 0x8000);
-	install("TEXT",	text  | 0x8000);
-	install("INCLUDE",file| 0x8000);
+	installop("ORG",	org   | 0x8000);
+	installop("DS",		fillb | 0x8000);
+	installop("DB",		byte  | 0x8000);
+	installop("DW",		dbyte | 0x8000);
+	installop("END",	psend | 0x8000);
+	installop("TEXT",	text  | 0x8000);
+	installop("INCLUDE",	file  | 0x8000);
 
 	start = freeptr;
 }
@@ -334,7 +336,7 @@ putlab()
 {
 	char *tag;
 
-	if ((tag = hashfind(sbuf, start)) == NULL) {
+	if ((tag = hashfind(sbuf)) == NULL) {
 		if (match('=')) {
 			install(sbuf, exp_());
 			return(TRUE);
@@ -364,7 +366,7 @@ getlab()
 {
 	char *tag;
 
-	if ((tag = hashfind(sbuf, start)) >= start) {
+	if ((tag = hashfind(sbuf)) >= start) {
 		if (match('='))	{	
 			mputw(tag + VALUE, exp_());
 			return(TRUE);
@@ -397,7 +399,8 @@ getlab()
 qmnem()
 {
 	char *tag;
-	if ((tag = hashfind(sbuf, symtab)) < start) {
+	*sbuf = 0xFF ^ *sbuf;
+	if ((tag = hashfind(sbuf)) < start) {
 		mnem(tag);
 		return(TRUE);
 	}
@@ -602,12 +605,33 @@ fillb()
  */
 byte()
 {
+	char delim;
+	delim = 0;
 	nbytes = 0;
+
+	skip();
 	while(nbytes < LINESIZE) {
-		obj[nbytes++] = exp_() & 0xFF;
+		if (delim) {
+			if (*ip == 0 | *ip == 10 | *ip == 13)
+				break;
+			if (*ip != delim) {
+				obj[nbytes++] = *ip++;
+				continue;
+			}
+			delim = 0;
+			ip++;
+		} else if (*ip == '"' | *ip == 0x27) {
+		    delim = *ip++;
+		    continue;
+		} else {
+			obj[nbytes++] = exp_() & 0xFF;
+		}
 		if (match(',') == 0)
 			break;
+		skip();
 	}
+	if (delim)
+		error("Expected close quote.");
 }
 
 /*
@@ -824,7 +848,7 @@ char *name;
 {
 	char *tag;
 
-	tag = hashfind(name, start);
+	tag = hashfind(name);
 	if (pass == 2) {
 		if (tag == 0)
 			error("symbol undefined");
@@ -1075,6 +1099,15 @@ char *name;
 	return(h);
 }
 
+installop(name, val)
+char *name;
+int val;
+{
+	*name = 0xFF ^ *name;
+	install(name, val);
+	*name = 0xFF ^ *name;
+}
+
 /*
  * install new symbol
  */
@@ -1102,15 +1135,14 @@ int val;
 /*
  * find symbol using hash + chain
  */
-hashfind(name, start)
+hashfind(name)
 char *name;
-char *start;
 {
 	char *tag;
 
 	tag = hashtab[hash(name)];
 	while (tag) {
-		if ((tag >= start) & (strcmp(tag + NAME, name) == SAME))
+		if (strcmp(tag + NAME, name) == SAME)
 			break;
 		else
 			tag = mgetw(tag + NEXTPTR);
