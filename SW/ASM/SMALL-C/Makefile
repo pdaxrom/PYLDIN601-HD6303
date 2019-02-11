@@ -1,6 +1,6 @@
 VM = ./scvm
 
-all: scvm SMALLCX.CMD AS03X.CMD SMALLC.CMD AS03.CMD
+all: smallc as03
 
 CFLAGS = -O2
 
@@ -11,18 +11,31 @@ SMALLCX.CMD: scvm NATIVE/SMALLCX.C
 	$(VM) BOOTSTRAP/SMALLC.CMD -o SMALLCX.ASM NATIVE/SMALLCX.C
 	$(VM) BOOTSTRAP/AS03.CMD -o SMALLCX.CMD SMALLCX.ASM
 
-AS03X.CMD: scvm AS03/AS03.C
-	cd AS03 && ../$(VM) ../BOOTSTRAP/SMALLC.CMD -o ../AS03X.ASM AS03.C
+AS03X.CMD: scvm AS03/AS03.C SMALLCX.CMD
+	cd AS03 && ../$(VM) ../SMALLCX.CMD -o ../AS03X.ASM AS03.C
 	$(VM) BOOTSTRAP/AS03.CMD -o AS03X.CMD AS03X.ASM
 
-SMALLC.CMD: scvm NATIVE/SMALLCX.C
+SMALLC.CMD: scvm NATIVE/SMALLCX.C SMALLCX.CMD AS03X.CMD
 	$(VM) SMALLCX.CMD -o SMALLC.ASM NATIVE/SMALLCX.C
 	$(VM) AS03X.CMD -o SMALLC.CMD SMALLC.ASM
 
-AS03.CMD: scvm AS03/AS03.C
+AS03.CMD: scvm AS03/AS03.C AS03X.CMD
 	cd AS03 && ../$(VM) ../SMALLC.CMD -o ../AS03.ASM AS03.C
 	$(VM) AS03X.CMD -o AS03.CMD AS03.ASM
 
+smallc: scvm.c smallc.h
+	$(CC) -o $@ scvm.c -DAPP=\"smallc.h\" -Wall $(CFLAGS)
+
+smallc.h: SMALLC.CMD
+	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $^ | sed 's/0x  ,//g' > $@
+
+as03: scvm.c as03.h
+	$(CC) -o $@ scvm.c -DAPP=\"as03.h\" -Wall $(CFLAGS)
+
+as03.h: AS03.CMD
+	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $^ | sed 's/0x  ,//g' > $@
 
 clean:
 	rm -f scvm *.o out.sym AS03X.CMD AS03X.ASM SMALLCX.CMD SMALLCX.ASM AS03.CMD AS03.ASM SMALLC.CMD SMALLC.ASM
+	rm -f smallc smallc.h
+	rm -f as03 as03.h

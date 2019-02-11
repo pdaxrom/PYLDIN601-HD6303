@@ -79,6 +79,12 @@
 byte mem[0x10000];
 word start = 0x800;
 
+#ifdef APP
+byte app[] = {
+#include APP
+};
+#endif
+
 void chkfunc(word *sp, word *pc, word *reg)
 {
     if (*pc < start) {
@@ -151,14 +157,19 @@ void chkfunc(word *sp, word *pc, word *reg)
 
 int main(int argc, char *argv[])
 {
+#ifndef APP
     FILE *inf;
     word len;
+#endif
 
     word sp;
     word pc;
 
     fprintf(stderr, "SmallC virtual machine\n");
 
+#ifdef APP
+    memcpy(&mem[start], app, sizeof(app));
+#else
     inf = fopen(argv[1], "rb");
     if (!inf) {
 	fprintf(stderr, "Can't open file %s\n", argv[1]);
@@ -166,11 +177,16 @@ int main(int argc, char *argv[])
     }
     len = fread(&mem[start], 1, sizeof(mem) - start, inf);
     fclose(inf);
+#endif
 
     sp = 0xFF00;
     pc = 0xFF20;
+#ifdef APP
+    for (int i = 0; i < argc; i++) {
+#else
     for (int i = 1; i < argc; i++) {
-	strcpy(&mem[pc], argv[i]);
+#endif
+	strcpy((char *)&mem[pc], argv[i]);
 	mem[sp++] = pc >> 8;
 	mem[sp++] = pc & 0xFF;
 	pc += strlen(argv[i]) + 1;
@@ -184,7 +200,9 @@ int main(int argc, char *argv[])
     }
  */
 
+#ifndef APP
     argc--;
+#endif
     sp = 0xFEFF;
     mem[sp--] = argc & 0xFF;
     mem[sp--] = argc >> 8;
