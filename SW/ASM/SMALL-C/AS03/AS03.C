@@ -105,6 +105,8 @@ char *chkpos;				/* checksum file position */
 char *filepos;				/* output file size */
 
 int linecnt;				/* lines counter */
+int linecnt2;				/* include lines counter */
+int linestot;				/* total lines */
 
 main(argc, argv)
 int argc;
@@ -121,6 +123,8 @@ int *argv[];
 	ofile = "a.out";		/* default output file name */
 	lfile = NULL;
 	list = FALSE;			/* default no listing */
+
+	printf("AS03 - MC6801/HD6303 Assembler\n");
 
 	if (argc < 2)
 		usage();
@@ -185,8 +189,9 @@ int *argv[];
 		liston = 1;
 		truncon = 1;
 		linecnt = 0;
+		linestot = 0;
 
-		printf("Pass %d\n", pass);
+		printf("--- Pass %d ---\n", pass);
 
 		if ((in = fopen(ifile, "r")) == NULL) {
 			printf("as03: Cannot open %s\n", ifile);
@@ -200,7 +205,7 @@ int *argv[];
 
 	fclose(out);
 
-	printf("\n%d Lines assembled\n", linecnt);
+	printf("\n%d Lines assembled\n", linestot);
 	printf("%d Bytes code\n", filepos);
 
 	if ((chksumon != 0) & (errcnt == 0)) {
@@ -250,6 +255,7 @@ doasm()
 			fclose(in);
 			in = in2;
 			in2 = NULL;
+			linecnt = linecnt2;
 			continue;
 		    } else
 			break;
@@ -263,6 +269,7 @@ doasm()
 		if (endflag)
 			break;
 	}
+	putchar(10);
 }
 
 /*
@@ -277,11 +284,25 @@ inline_()
 
 	while ((p = fgets(ibuf, LINESIZE, in)) != NULL) {
 		linecnt++;
+		linestot++;
+
+		if (list == 0 |
+		    (list != 0 & (outlst != stdout | pass == 1))) {
+			printf("%d\r", linestot);
+		}
+
 		if (*p == ';') {
 			if (pass == 1 | list == FALSE)
 				continue;
 		}
 		break;
+	}
+
+	c = strlen(ibuf);
+	if (c > 0) {
+		ip = p + c - 1;
+		if (*ip != 10 & *ip != 13)
+			error("Line too long.");
 	}
 
 	ip = p;
@@ -748,6 +769,8 @@ file()
 	}
 
 	in2 = in;
+	linecnt2 = linecnt;
+	linecnt = 0;
 
 	skip();
 	bp = sbuf;
@@ -755,6 +778,7 @@ file()
 		*bp++ = *ip++;
 	*bp = 0; /* '\0' */
 	if ((in = fopen(sbuf, "r")) == NULL) {
+		linecnt = linecnt2;
 		printf("as03: Cannot open %s\n", sbuf);
 		fatal(-1);
 	}
@@ -1271,6 +1295,17 @@ int mem;
 error(message)
 char *message;
 {
+	char *p;
+
+	p = ibuf;
+	while (*p) {
+	    if (*p == 10) {
+		*p = 0;
+		break;
+	    }
+	    p++;
+	}
+
 	error1(stdout, message);
 	if (outlst != stdout)
 		error1(outlst, message);
@@ -1287,8 +1322,8 @@ error1(fd, message)
 int fd;
 char *message;
 {
-	fprintf(fd, "\n*****: %s", ibuf);
-	fprintf(fd, "error: %s\n", message);
+	fprintf(fd, "Error: %s\n", message);
+	fprintf(fd, "Line %d: %s\n", linecnt, ibuf);
 }
 
 error2(fd)
