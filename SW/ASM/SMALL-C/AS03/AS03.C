@@ -1174,7 +1174,7 @@ int mem;
 	if (list & liston) {
 		n = 0;
 		while (n < nbytes) {
-			if (truncon == 0 | ((truncon == 1) & (n < 4))) {
+			if (truncon == 0 | ((truncon == 1) & (n < 3))) {
 				printf("%c %04x  ", incl, mem + n);
 				byte = 0;
 				while (byte < 3) {
@@ -1189,7 +1189,8 @@ int mem;
 				else
 					printf("\n");
 				/* if (n >= nbytes) break; */
-			}
+			} else
+				break;
 		}
 		if (nbytes == 0) {
 			printf("%c %04x            %s", incl, mem, ibuf);
