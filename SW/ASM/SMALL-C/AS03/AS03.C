@@ -238,14 +238,10 @@ inline_()
 		if (*p == ';') {
 			if (pass == 1 | list == FALSE)
 				continue;
-			else
-				printf("                %s", p);
 		}
-		else if (*p == 10 | *p == 13) /* '\n' */
-			continue;
-		else
-			break;
+		break;
 	}
+
 	ip = p;
 
 	/* force upper case */
