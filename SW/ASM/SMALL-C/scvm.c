@@ -146,7 +146,7 @@ void chkfunc(word *sp, word *pc, word *reg)
 		*reg = strcmp((char *)&mem[tmp], (char *)&mem[tmp1]);
 		break;
 
-	case f_exit: exit(0); break;
+	case f_exit: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; exit((short)tmp); break;
 	default: fprintf(stderr, "Unimplemented function %X\n", *pc); exit(1); break;
 	}
 

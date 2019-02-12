@@ -225,7 +225,7 @@ int *argv[];
 		    usage();
 		if((output = fopen(argv[1], "w")) == NULL) {
 		    error("Can't open output file!");
-		    exit();
+		    exit(-1);
 		}
 		--argc;
 		argv++;
@@ -240,13 +240,13 @@ int *argv[];
 	if (output == 0) {
 		if((output = fopen("out.asm", "w")) == NULL) {
 		    error("Can't open output file!");
-		    exit();
+		    exit(-1);
 		}
 	}
 
         if((input=fopen(argv[0], "r")) == NULL) {
 	    error("Can't open input file!");
-	    exit();
+	    exit(-1);
 	}
 
         newfile();
@@ -265,13 +265,13 @@ int *argv[];
         trailer();              /* follow-up code */
         closeout();             /* close the output (if any) */
         errorsummary();         /* summarize errors (on console!) */
-        return;                 /* then exit to system */
+        return 0;                 /* then exit to system */
 }
 
 usage()
 {
 	error("smallc [-ctext] [-errstop] [-o outputfile] inputfile");
-	exit();
+	exit(-1);
 }
 
 /*                                      */
@@ -286,7 +286,7 @@ abort()
         closeout();
         toconsole();
         pl("Compilation aborted.");  nl();
-        exit();
+        exit(-1);
 /* end abort */}
 
 /*                                      */

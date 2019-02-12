@@ -195,8 +195,10 @@ int *argv[];
 	if (outlst > 2)
 		fclose(outlst);
 
-	if (errcnt)
+	if (errcnt) {
 		printf("as03: %d errors\n", errcnt);
+		exit(-1);
+	}
 	exit(0);
 }
 
