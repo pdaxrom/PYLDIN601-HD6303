@@ -37,7 +37,7 @@
  */
 #define LINESIZE  128
 #define HASHSIZE  257
-#define SYMSIZE 10000
+#define SYMSIZE 16000
 
 #define NEXTPTR     0
 #define VALUE       2
@@ -565,7 +565,12 @@ char *p;
 	if (match('#'))
 		return(immediate(p[OPFLAG]));
 	else if (*ip == 'X' & isalnum(ip[1]) == 0) {
-	    return(indexed(0));
+		ip++;
+		if (match(',')) {
+			oper = exp_();
+			return(xindex(oper));
+		}
+		return(xindex(0));
 	}
 /*
 	else if (match('('))
@@ -577,9 +582,13 @@ char *p;
 	oper = exp_();
 	if (match(','))
 		return(indexed(oper));
-	else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL))
+	else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL)) {
+		/* direct jsr ($9D) second pass issues fix */
+		if (((p[DIRECT] & 0xFF) == 0x9D) & (oper < 0x28)) {
+			return(extended(oper));
+		}
 		return(direct(oper));
-	else
+	} else
 		return(extended(oper));
 }
 
