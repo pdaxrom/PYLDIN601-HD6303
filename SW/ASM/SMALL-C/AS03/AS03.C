@@ -13,6 +13,8 @@
  * implementation dependant pathnames, and i/o modes
  */
 
+#define stdout 1
+
 #define MNEMTAB "mnemtab"		/* opcode mnemonics */
 #define OPTAB   "optab"			/* opcode table */
 #define IO_W    "w"			/* binary write mode */
@@ -93,6 +95,8 @@ char *procsym;				/* proc symbols */
 
 int liston;				/* temporary enable/disable listing */
 int truncon;				/* truncate DB, DW listing */
+char *lfile;				/* listing file */
+FILE *outlst;				/* listing stream */
 
 main(argc, argv)
 int argc;
@@ -104,39 +108,54 @@ int *argv[];
 	in = NULL;
 	in2 = NULL;
 	out = NULL;
+	outlst = stdout;
 	ifile = NULL;
 	ofile = "a.out";		/* default output file name */
+	lfile = NULL;
 	list = FALSE;			/* default no listing */
 
 	if (argc < 2)
-	    usage();
+		usage();
 
 	--argc;
 	argv++;
 	while (argc > 0) {
-	    if (strcmp(argv[0], "-l") == SAME)
-		list++;
-	    else if (strcmp(argv[0], "-o") == SAME) {
-		if (argc < 2)
-		    usage();
-		else {
-		    ofile = argv[1];
-		    --argc;
-		    argv++;
-		}
-	    } else break;
-	    --argc;
-	    argv++;
+		if (strcmp(argv[0], "-l") == SAME) {
+			list++;
+			if (argc > 3) {
+				lfile = argv[1];
+				if (*lfile != '-') {
+					--argc;
+					argv++;
+				} else
+					lfile = NULL;
+			}
+		} else if (strcmp(argv[0], "-o") == SAME) {
+			if (argc < 2)
+				usage();
+			else {
+				ofile = argv[1];
+				--argc;
+				argv++;
+			}
+		} else break;
+		--argc;
+		argv++;
 	}
 
 	if (argc == 0)
-	    usage();
+		usage();
 
 	ifile = argv[0];
 
 	if ((out = fopen(ofile, IO_W)) == NULL) {
 		printf("as03: Cannot open %s\n", ofile);
 		fatal(-1);
+	}
+
+	if (lfile) {
+		if ((outlst = fopen(lfile, IO_W)) == NULL)
+			printf("as03: Cannot open %s\n", lfile);
 	}
 
 	endsym = symtab + SYMSIZE;
@@ -146,41 +165,36 @@ int *argv[];
 	errcnt = 0;
 	pass = 1;
 	while(pass < 3) {
-	    nsect = 0;
-	    nproc = 0;
-	    nloc = 0;
-	    nset = 0;
-	    loc = 0;
-	    origin = 0;
-	    endflag = FALSE;
-	    liston = 1;
-	    truncon = 1;
+		nsect = 0;
+		nproc = 0;
+		nloc = 0;
+		nset = 0;
+		loc = 0;
+		origin = 0;
+		endflag = FALSE;
+		liston = 1;
+		truncon = 1;
 
-	    printf("Pass %d\n", pass);
+		printf("Pass %d\n", pass);
 
-	    if ((in = fopen(ifile, "r")) == NULL) {
-		printf("as03: Cannot open %s\n", ifile);
-		exit();
-	    }
-	    doasm();
-	    fclose(in);
+		if ((in = fopen(ifile, "r")) == NULL) {
+			printf("as03: Cannot open %s\n", ifile);
+			exit(-1);
+		}
+		doasm();
+		fclose(in);
 
-	    pass++;
+		pass++;
 	}
 
 	fclose(out);
-	dumpsym();
 
-	/* print size of text and data areas if C 'segment' symbols present */
-	if ((hashfind("~eot") != NULL) & (hashfind("~eod") != NULL)) {
-		_text = origin;
-		_data = lookup("~eot");
-		_end = lookup("~eod");
-		textsz = _data - _text;
-		datasz = _end - _data;
-		printf("%u = %u+%u ", textsz + datasz, textsz, datasz);
-		printf("(0x%04x, 0x%04x, 0x%04x)\n", _text, _data, _end);
-	}
+	if (list)
+		dumpsym();
+
+	if (outlst > 2)
+		fclose(outlst);
+
 	if (errcnt)
 		printf("as03: %d errors\n", errcnt);
 	exit(0);
@@ -191,7 +205,7 @@ int *argv[];
  */
 usage()
 {
-	printf("usage: as03 [-l] [-o outfile] file\n");
+	printf("usage: as03 [-l [listfile]] [-o outfile] file\n");
 	fatal(-1);
 }
 
@@ -1171,25 +1185,25 @@ int mem;
 		n = 0;
 		while (n < nbytes) {
 			if (truncon == 0 | ((truncon == 1) & (n < 3))) {
-				printf("%c %04x  ", incl, mem + n);
+				fprintf(outlst, "%c %04x  ", incl, mem + n);
 				byte = 0;
 				while (byte < 3) {
 					if (n < nbytes)
-						printf("%02x ", obj[n++] & 0xFF);
+						fprintf(outlst, "%02x ", obj[n++] & 0xFF);
 					else
-						printf("   ");
+						fprintf(outlst, "   ");
 					byte++;
 				}
 				if (n < 4)
-					printf(" %s", ibuf);
+					fprintf(outlst, " %s", ibuf);
 				else
-					printf("\n");
+					fprintf(outlst, "\n");
 				/* if (n >= nbytes) break; */
 			} else
 				break;
 		}
 		if (nbytes == 0) {
-			printf("%c %04x            %s", incl, mem, ibuf);
+			fprintf(outlst, "%c %04x            %s", incl, mem, ibuf);
 		}
 	}
 	if (nsect == 0) {
@@ -1208,12 +1222,30 @@ int mem;
 error(message)
 char *message;
 {
-	printf("\n*****: %s", ibuf);
-	printf("error: %s\n", message);
+	error1(stdout, message);
+	if (outlst != stdout)
+		error1(outlst, message);
+
 	if (++errcnt > 5) {
-		printf("as03: too many errors, assembly aborted\n");
+		error2(stdout);
+		if (outlst != stdout)
+			error2(outlst);
 		fatal(-1);
 	}
+}
+
+error1(fd, message)
+int fd;
+char *message;
+{
+	fprintf(fd, "\n*****: %s", ibuf);
+	fprintf(fd, "error: %s\n", message);
+}
+
+error2(fd)
+int fd;
+{
+	fprintf(fd, "as03: too many errors, assembly aborted\n");
 }
 
 /*
@@ -1224,8 +1256,12 @@ int stat;				/* exit status */
 {
 	if (in != NULL)
 		fclose(in);
+	if (in2 != NULL)
+		fclose(in2);
 	if (out != NULL)
 		fclose(out);
+	if (outlst > 2)
+		fclose(outlst);
 	exit(stat);
 }
 
@@ -1349,16 +1385,10 @@ dumpsym()
 
 	if (freeptr == start)
 		return;
-	if ((out = fopen("out.sym", "w")) == NULL) {
-		printf("as03: Cannot open g/out\n");
-		fatal(-1);
-	}
+
 	p = start;
 	while (p < freeptr) {
-/*		if (*(p + NAME) != ':')
-			fprintf(out, "%s =$%04x\n", p + NAME, mgetw(p + VALUE));
- */
-		if (list) {
+		if (*(p + NAME) != ':') {
 			if (*(p + NAME) & 0x80)
 				r = mgetw(p + VALUE);
 			else
@@ -1366,13 +1396,12 @@ dumpsym()
 			c = *(p + NAME) & 0x7F;
 			val = mgetw(r + VALUE);
 			if (val == 0)
-				printf("Orphaned global symbol %c%s\n", c, p + NAME + 1);
+				fprintf(outlst, "Orphaned global symbol %c%s\n", c, p + NAME + 1);
 			else
-				printf("%c%s =$%04x\n", c, p + NAME + 1, val);
+				fprintf(outlst, "%c%s =$%04x\n", c, p + NAME + 1, val);
 		}
 		p = p + strlen(p + NAME) + 5;
 	}
-	fclose(out);
 }
 
 /*
@@ -1388,8 +1417,6 @@ isxdigit(c) char c;
 {
 	return (isdigit(c) | ((c >= 'A') & (c <= 'F')) | ((c >= 'a') & (c <= 'f')));
 }
-
-#define stdout 1
 
 /*
  * utoi -- convert unsigned decimal string to integer nbr
@@ -1535,56 +1562,84 @@ int sz ;
 **        operates as described by Kernighan & Ritchie
 **        only d, x, c, s, and u specs are supported.
 */
-printf(argc) int argc;
+printf(argc)
+int argc;
 {
-  int  width, prec, preclen, len, *nxtarg;
-  char *ctl, *cx, c, right, str[7], *sptr, pad;
-  int i;
+	int *nxtarg;
+	int i;
 #asm       /* fetch arg count from primary reg first */
-    DB	22	;EXG1
+	DB	22	;EXG1
 #endasm
-  nxtarg = &argc + (i - (1 << 1));
-  ctl = *nxtarg;
-  while(c=*ctl++) {
-    if (c==0x5c) {
-	c=*ctl++;
-	if (c == 'n') {cout(10, stdout); continue;}
-	if (c == 'r') {cout(13, stdout); continue;}
-	if (c == 't') {cout(9, stdout); continue;}
-	cout(c, stdout);
-	continue;
-    }
-    if(c!='%') {cout(c, stdout); continue;}
-    if(*ctl=='%') {cout(*ctl++, stdout); continue;}
-    cx=ctl;
-    if(*cx=='-') {right=0; ++cx;} else right=1;
-    if(*cx=='0') {pad='0'; ++cx;} else pad=' ';
-    if((i=utoi(cx, &width)) >= 0) cx=cx+i; else continue;
-    if(*cx=='.') {
-      if((preclen=utoi(++cx, &prec)) >= 0) cx=cx+preclen;
-      else continue;
-      }
-    else preclen=0;
-    sptr=str; c=*cx++; i=*(--nxtarg);
-    if(c=='d') itod(i, str, 7);
-    else if(c=='x') itox(i, str, 7);
-    else if(c=='c') {str[0]=i; str[1]=NULL;}
-    else if(c=='s') sptr=i;
-    else if(c=='u') itou(i, str, 7);
-    else continue;
-    ctl=cx; /* accept conversion spec */
-    if(c!='s') while(*sptr==' ') ++sptr;
-    len=-1; while(sptr[++len]); /* get length */
-    if((c=='s')&(len>prec)&(preclen>0)) len=prec;
-    if(right) while(((width--)-len)>0) cout(pad, stdout);
-    while(len) {cout(*sptr++, stdout); --len; --width;}
-    while(((width--)-len)>0) cout(pad, stdout);
-    }
+	nxtarg = &argc + (i - (1 << 1));
+	return _printf(stdout, nxtarg);
+}
+
+fprintf(argc)
+int argc;
+{
+	int *nxtarg;
+	int fd;
+	int i;
+#asm       /* fetch arg count from primary reg first */
+	DB	22	;EXG1
+#endasm
+	nxtarg = &argc + (i - (1 << 1));
+	fd = *nxtarg--;
+	return _printf(fd, nxtarg);
+}
+
+_printf(fd, nxtarg)
+int fd;
+int *nxtarg;
+{
+	int  width, prec, preclen, len;
+	char *ctl, *cx, c, right, str[7], *sptr, pad;
+	int i;
+
+	ctl = *nxtarg;
+	while(c=*ctl++) {
+		if (c==0x5c) {
+			c=*ctl++;
+			if (c == 'n') {cout(10, fd); continue;}
+			if (c == 'r') {cout(13, fd); continue;}
+			if (c == 't') {cout(9, fd); continue;}
+			cout(c, fd);
+			continue;
+		}
+		if(c!='%') {cout(c, fd); continue;}
+		if(*ctl=='%') {cout(*ctl++, fd); continue;}
+		cx=ctl;
+		if(*cx=='-') {right=0; ++cx;} else right=1;
+		if(*cx=='0') {pad='0'; ++cx;} else pad=' ';
+		if((i=utoi(cx, &width)) >= 0) cx=cx+i; else continue;
+		if(*cx=='.') {
+			if((preclen=utoi(++cx, &prec)) >= 0) cx=cx+preclen;
+			else continue;
+		} else preclen=0;
+		sptr=str; c=*cx++; i=*(--nxtarg);
+		if(c=='d') itod(i, str, 7);
+		else if(c=='x') itox(i, str, 7);
+		else if(c=='c') {str[0]=i; str[1]=NULL;}
+		else if(c=='s') sptr=i;
+		else if(c=='u') itou(i, str, 7);
+		else continue;
+		ctl=cx; /* accept conversion spec */
+		if(c!='s') while(*sptr==' ') ++sptr;
+		len=-1; while(sptr[++len]); /* get length */
+		if((c=='s')&(len>prec)&(preclen>0)) len=prec;
+		if(right) while(((width--)-len)>0) cout(pad, fd);
+		while(len) {cout(*sptr++, fd); --len; --width;}
+		while(((width--)-len)>0) cout(pad, fd);
+	}
+	return 0;
 }
 
 cout(c, fd) char c; int fd; {
 /*  if(putc(c, fd)==EOF) xout(); */
-  putchar(c);
+	if (fd < 3)
+		putchar(c);
+	else
+		putc(c, fd);
 }
 
 fgets(s, size, stream)
@@ -1592,26 +1647,26 @@ char *s;
 int size;
 FILE *stream;
 {
-    char *p;
-    int len;
-    int c;
+	char *p;
+	int len;
+	int c;
 
-    p = s;
+	p = s;
 
-    len = 0;
-    while (len < size - 1) {
-	c = getc(stream);
-	if (c < 0) break;
-	*p++ = c;
-	if (c == 10) {
-	    *p = 0;
-	    return s;
+	len = 0;
+	while (len < size - 1) {
+		c = getc(stream);
+		if (c < 0) break;
+		*p++ = c;
+		if (c == 10) {
+			*p = 0;
+			return s;
+		}
+		len++;
 	}
-	len++;
-    }
-    *p = 0;
-    if (p == s) return NULL;
-    return s;
+	*p = 0;
+	if (p == s) return NULL;
+	return s;
 }
 
 fread(ptr, size, nmb, stream)
@@ -1620,18 +1675,18 @@ int size;
 int nmb;
 FILE *stream;
 {
-    int total;
-    int c;
-    int len;
-    len = 0;
-    total = size * nmb;
-    while (len < total) {
-	c = getc(stream);
-	if (c < 0) break;
-	*ptr++ = c;
-	len++;
-    }
-    return len;
+	int total;
+	int c;
+	int len;
+	len = 0;
+	total = size * nmb;
+	while (len < total) {
+		c = getc(stream);
+		if (c < 0) break;
+		*ptr++ = c;
+		len++;
+	}
+	return len;
 }
 
 #include OPCODES.ASM
