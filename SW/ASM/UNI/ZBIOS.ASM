@@ -1776,7 +1776,7 @@ int2D		proc
 		dex
 		stx	x1		;src_end
 		ldx	swix
-		ldx	x, 2
+		ldx	2,x
 		stx	x4		;dst_beg
 
 		staa	swix+1
