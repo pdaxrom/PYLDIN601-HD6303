@@ -98,6 +98,14 @@ int truncon;				/* truncate DB, DW listing */
 char *lfile;				/* listing file */
 FILE *outlst;				/* listing stream */
 
+int chksumon;				/* enable checksum */
+char *chkpoint;				/* checksum address */
+int csumval;				/* checksum value */
+char *chkpos;				/* checksum file position */
+char *filepos;				/* output file size */
+
+int linecnt;				/* lines counter */
+
 main(argc, argv)
 int argc;
 int *argv[];
@@ -162,6 +170,8 @@ int *argv[];
 	inithash();
 	prehash();
 
+	filepos = 0;
+	chksumon = 0;
 	errcnt = 0;
 	pass = 1;
 	while(pass < 3) {
@@ -174,6 +184,7 @@ int *argv[];
 		endflag = FALSE;
 		liston = 1;
 		truncon = 1;
+		linecnt = 0;
 
 		printf("Pass %d\n", pass);
 
@@ -188,6 +199,20 @@ int *argv[];
 	}
 
 	fclose(out);
+
+	printf("\n%d Lines assembled\n", linecnt);
+	printf("%d Bytes code\n", filepos);
+
+	if ((chksumon != 0) & (errcnt == 0)) {
+		if ((out = fopen(ofile, "r+")) == NULL) {
+			printf("as03: Cannot set checksum for %s\n", ofile);
+			fatal(-1);
+		}
+		while (chkpos--) getc(out);
+		putc((0xFF ^ csumval) & 0xFF, out);
+
+		fclose(out);
+	}
 
 	if (list)
 		dumpsym();
@@ -251,6 +276,7 @@ inline_()
 	char *p;
 
 	while ((p = fgets(ibuf, LINESIZE, in)) != NULL) {
+		linecnt++;
 		if (*p == ';') {
 			if (pass == 1 | list == FALSE)
 				continue;
@@ -342,7 +368,7 @@ prehash()
 	installop("PROC",	proc  | 0x8000);
 	installop("ENDP",	endp  | 0x8000);
 	installop("GLOBAL",	global| 0x8000);
-	installop("CHKSUM",	chksum| 0x8000);
+	installop("CHECKSUM",	chksum| 0x8000);
 	installop("ERROR",	chkerr| 0x8000);
 	installop("LIST",	listop| 0x8000);
 	installop("TRUNC",	trunop| 0x8000);
@@ -651,8 +677,10 @@ fillb()
 	loc = loc + count;
 
 	if (pass == 2 & nsect == 0) {
-		while (oldloc++ < loc)
+		while (oldloc++ < loc) {
 			putc(fill, out);
+			filepos++;
+		}
 	}
 }
 
@@ -806,6 +834,19 @@ global()
 
 chksum()
 {
+	if (pass == 1) {
+		if (chksumon) {
+			error("Improper use of CHECKSUM directive.");
+			return;
+		} else {
+			chksumon = 1;
+			csumval = 0;
+			chkpos = 0;
+		}
+	}
+	chkpoint = loc;
+	nbytes = 0;
+	obj[nbytes++] = 0xFF;
 }
 
 chkerr()
@@ -1179,6 +1220,7 @@ int mem;
 {
 	int n, byte;
 	char incl;
+	char *ptr;
 
 	if (in2) incl = '>';
 	else incl = ' ';
@@ -1209,8 +1251,13 @@ int mem;
 		}
 	}
 	if (nsect == 0) {
+		ptr = mem;
 		n = 0;
 		while (n < nbytes) {
+			if (ptr++ == chkpoint)
+				chkpos = filepos;
+			filepos++;
+			csumval = (csumval + obj[n]) & 0xFF;
 			putc(obj[n++], out);
 		}
 	}
