@@ -35,7 +35,7 @@
 /*
  * symbol table parameters
  */
-#define LINESIZE   80
+#define LINESIZE  128
 #define HASHSIZE  257
 #define SYMSIZE 10000
 
@@ -214,7 +214,7 @@ int *argv[];
 			fatal(-1);
 		}
 		while (chkpos--) getc(out);
-		putc((0xFF ^ csumval) & 0xFF, out);
+		putc(0xFF ^ (csumval & 0xFF), out);
 
 		fclose(out);
 	}
@@ -543,7 +543,7 @@ char *tag;
 			return;
 		}
 		else {
-			mode = getmode(p[OPFLAG]);
+			mode = getmode(p);
 			if ((obj[0] = p[mode]) != ILLEGAL)
 				return;
 			else if (pass == 1)
@@ -557,13 +557,13 @@ char *tag;
 /*
  * get address mode of opcode
  */
-getmode(flag)
-int flag;
+getmode(p)
+char *p;
 {
 	int oper;
 
 	if (match('#'))
-		return(immediate(flag));
+		return(immediate(p[OPFLAG]));
 	else if (*ip == 'X' & isalnum(ip[1]) == 0) {
 	    return(indexed(0));
 	}
@@ -577,7 +577,7 @@ int flag;
 	oper = exp_();
 	if (match(','))
 		return(indexed(oper));
-	else if (oper >= 0 & oper < BYTE)
+	else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL))
 		return(direct(oper));
 	else
 		return(extended(oper));
@@ -620,13 +620,9 @@ int oper;
 xindex(oper)
 int oper;
 {
-	if (oper >= 0 & oper < BYTE) {
-		nbytes = 2;
-		obj[1] = oper & 0xFF;
-		return(IND_X);
-	}
-	else
-		error("offset must be 0..255");
+	nbytes = 2;
+	obj[1] = oper & 0xFF;
+	return(IND_X);
 }
 
 /*
@@ -700,6 +696,7 @@ fillb()
 	if (pass == 2 & nsect == 0) {
 		while (oldloc++ < loc) {
 			putc(fill, out);
+			csumval = csumval + fill;
 			filepos++;
 		}
 	}
@@ -1281,7 +1278,7 @@ int mem;
 			if (ptr++ == chkpoint)
 				chkpos = filepos;
 			filepos++;
-			csumval = (csumval + obj[n]) & 0xFF;
+			csumval = csumval + (obj[n] & 0xFF);
 			putc(obj[n++], out);
 		}
 	}
