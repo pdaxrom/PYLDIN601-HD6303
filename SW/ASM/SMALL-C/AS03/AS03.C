@@ -807,9 +807,7 @@ char *str;
  */
 exp_()
 {
-	if (match('<'))
-		return(exp2() & 0xFF);
-	else if (match('>'))
+	if (match('/'))
 		return(exp2() >> 8);
 	else
 		return(exp2());
