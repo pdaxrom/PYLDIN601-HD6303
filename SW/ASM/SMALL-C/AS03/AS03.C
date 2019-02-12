@@ -91,6 +91,9 @@ int nproc;				/* proc pseudo-op */
 int nloc;				/* proc counter */
 char *procsym;				/* proc symbols */
 
+int liston;				/* temporary enable/disable listing */
+int truncon;				/* truncate DB, DW listing */
+
 main(argc, argv)
 int argc;
 int *argv[];
@@ -150,6 +153,8 @@ int *argv[];
 	    loc = 0;
 	    origin = 0;
 	    endflag = FALSE;
+	    liston = 1;
+	    truncon = 1;
 
 	    printf("Pass %d\n", pass);
 
@@ -325,6 +330,10 @@ prehash()
 	installop("PROC",	proc  | 0x8000);
 	installop("ENDP",	endp  | 0x8000);
 	installop("GLOBAL",	global| 0x8000);
+	installop("CHKSUM",	chksum| 0x8000);
+	installop("ERROR",	chkerr| 0x8000);
+	installop("LIST",	listop| 0x8000);
+	installop("TRUNC",	trunop| 0x8000);
 
 	start = freeptr;
 }
@@ -783,6 +792,37 @@ global()
 	}
 }
 
+chksum()
+{
+}
+
+chkerr()
+{
+	if (exp_())
+		error("User error.");
+}
+
+listop()
+{
+	liston = chkonoff();
+}
+
+trunop()
+{
+	truncon = chkonoff();
+}
+
+chkonoff()
+{
+	if (sym(sbuf)) {
+		if (strcmp(sbuf, "ON") == SAME)
+			return 1;
+		if (strcmp(sbuf, "OFF") == SAME)
+			return 0;
+	}
+	error("Only ON or OFF allowed.");
+}
+
 locsuffix(str)
 char *str;
 {
@@ -1131,23 +1171,25 @@ int mem;
 	if (in2) incl = '>';
 	else incl = ' ';
 
-	if (list) {
+	if (list & liston) {
 		n = 0;
 		while (n < nbytes) {
-			printf("%c %04x  ", incl, mem + n);
-			byte = 0;
-			while (byte < 3) {
-				if (n < nbytes)
-					printf("%02x ", obj[n++] & 0xFF);
+			if (truncon == 0 | ((truncon == 1) & (n < 4))) {
+				printf("%c %04x  ", incl, mem + n);
+				byte = 0;
+				while (byte < 3) {
+					if (n < nbytes)
+						printf("%02x ", obj[n++] & 0xFF);
+					else
+						printf("   ");
+					byte++;
+				}
+				if (n < 4)
+					printf(" %s", ibuf);
 				else
-					printf("   ");
-				byte++;
+					printf("\n");
+				/* if (n >= nbytes) break; */
 			}
-			if (n < 4)
-				printf(" %s", ibuf);
-			else
-				printf("\n");
-			/* if (n >= nbytes) break; */
 		}
 		if (nbytes == 0) {
 			printf("%c %04x            %s", incl, mem, ibuf);
