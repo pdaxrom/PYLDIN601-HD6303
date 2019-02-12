@@ -38,6 +38,7 @@
 #define LINESIZE  128
 #define HASHSIZE  257
 #define SYMSIZE 16000
+#define PROCSIZE   16
 
 #define NEXTPTR     0
 #define VALUE       2
@@ -90,8 +91,8 @@ int nsect;				/* section pseudo-op */
 char *locsave;				/* save old location */
 
 int nproc;				/* proc pseudo-op */
-int nloc;				/* proc counter */
-char *procsym;				/* proc symbols */
+int nloc[PROCSIZE];			/* proc counter */
+int procsym[PROCSIZE];			/* proc symbols */
 
 int liston;				/* temporary enable/disable listing */
 int truncon;				/* truncate DB, DW listing */
@@ -181,7 +182,6 @@ int *argv[];
 	while(pass < 3) {
 		nsect = 0;
 		nproc = 0;
-		nloc = 0;
 		nset = 0;
 		loc = 0;
 		origin = 0;
@@ -411,10 +411,10 @@ qlabel()
 
 	if (nproc) {
 		if (pass == 1) {
-			if ((tag = hashfind(sbuf)) < procsym)
+			if ((tag = hashfind(sbuf)) < procsym[nproc])
 				tag = 0;
 		}
-		locsuffix(sbuf);
+		locsuffix(sbuf, nloc[nproc]);
 	}
 	if (pass == 1)
 		return(putlab(tag));
@@ -813,20 +813,19 @@ ends()
 
 proc()
 {
-	if (nproc)
-		error("Proc nesting error.");
+	if (nproc + 1 == PROCSIZE)
+		error("Too much nested PROC.");
 	else {
 		nproc++;
-		nloc++;
-		procsym = freeptr;
+		nloc[nproc] = loc;
+		procsym[nproc] = freeptr;
 	}
 }
 
 endp()
 {
 	if (nproc) {
-		nproc = 0;
-		procsym = freeptr;
+		nproc--;
 	} else
 		error("ENDP without PROC.");
 }
@@ -848,7 +847,7 @@ global()
 				} else
 					tag = install(buf, 0);
 
-				locsuffix(buf);
+				locsuffix(buf, nloc[nproc]);
 
 				if ((ltag = hashfind(buf)) != NULL) {
 					mputw(tag + VALUE, ltag);
@@ -906,16 +905,15 @@ chkonoff()
 	error("Only ON or OFF allowed.");
 }
 
-locsuffix(str)
+locsuffix(str, cnt)
 char *str;
+int cnt;
 {
 	char *ptr;
-	int cnt;
-	cnt = nloc;
 	strcpy(str + 1, str);
 	*str = ':';
 	ptr = str + strlen(str);
-	while (cnt > 0) {
+	while (cnt != 0) {
 	    *ptr++ = 32 + cnt % 96;
 	    cnt = cnt / 96;
 	}
@@ -1072,13 +1070,17 @@ char *name;
 {
 	char buf[LINESIZE];
 	char *tag;
+	int n;
 
 	tag = 0;
 
 	if (nproc) {
-	    strcpy(buf, name);
-	    locsuffix(buf);
-	    tag = hashfind(buf);
+		n = nproc;
+		while (n > 0 & tag == 0) {
+			strcpy(buf, name);
+			locsuffix(buf, nloc[n--]);
+			tag = hashfind(buf);
+		}
 	}
 
 	if (tag == 0)
