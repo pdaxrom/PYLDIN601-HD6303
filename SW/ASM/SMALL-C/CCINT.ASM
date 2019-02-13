@@ -1,4 +1,4 @@
- ORG $100
+	ORG	$100
 ; NAM SMALL-C INTERPRETER
 ; OPT NOP,NOG
 ;
@@ -89,80 +89,28 @@ BEGIN
 	PSHB
 	PSHA
 
-EXECUTE	LDX #$800
-	BRA NEXT2		; START THE INTERPRETATION
+EXECUTE	LDX	#$800
+	BRA	NEXT2		; START THE INTERPRETATION
 
 ;*************************************************************
 ;
 ;  THE HEART OF THE INTERPRETER--- NEXT INSTRUCTION FETCHER.
 ;
-BUMP2	LDX PC			; GET PROG COUNTER
+BUMP2	LDX	PC		; GET PROG COUNTER
 BUMP2A	INX			; INCR BY 2
 	INX
-	BRA NEXT1		; FETCH NEXT INSTRUCTION
+	BRA	NEXT1		; FETCH NEXT INSTRUCTION
 
-NEXT	LDX PC
-NEXT1	STD R1A			; SAVE THE WORK REGISTER
-NEXT2	LDAB 0,X		; GET THE PSEUDO-INSTRUCTION
-
-; staa $88
-; stab $89
-; stx  $8a
-; xgdx
-;; int $25
-; jsr  $f317
-; tba
-;; int $25
-; jsr  $f317
-;
-; ldx $8a
-; ldaa #' '
-;; int $22
-; jsr $f676
-; ldaa 0,x
-;; int $25
-; jsr  $f317
-;
-; ldaa #' '
-;; int $22
-; jsr  $f676
-;
-; tsx
-; xgdx
-;; int $25
-; jsr  $f317
-; tba
-;; int $25
-; jsr  $f317
-;
-; ldaa #' '
-;; int $22
-; jsr  $f676
-;
-; ldaa R1A
-;; int $25
-; jsr  $f317
-; ldaa R1B
-;; int $25
-; jsr  $f317
-;
-; ldaa #10
-;; int $22
-; jsr  $f676
-; ldaa #13
-;; int $22
-; jsr  $f676
-; ldx  $8a
-; ldab $89
-; ldaa $88
-
+NEXT	LDX	PC
+NEXT1	STD	R1A		; SAVE THE WORK REGISTER
+NEXT2	LDAB	0,X		; GET THE PSEUDO-INSTRUCTION
 	INX			;  (B CONTAINS A TABLE OFFSET)
-	STX PC			; SAVE NEW PC
+	STX	PC		; SAVE NEW PC
 	LDX	#JTABLE
 	ABX
 	LDX	0,X
-	LDD R1A			; RESTORE
-	JMP 0,X			; GO EXECUTE THE PSEUDO-INSTR.
+	LDD	R1A		; RESTORE
+	JMP	0,X		; GO EXECUTE THE PSEUDO-INSTR.
 
 ;*************************************************************
 ;                  THE JUMP TABLE                            *
@@ -170,7 +118,8 @@ NEXT2	LDAB 0,X		; GET THE PSEUDO-INSTRUCTION
 
 	DS $200-*		;  MUST START ON A PAGE BOUNDARY
 
-JTABLE DW LD1IM		; #0
+JTABLE
+ DW LD1IM		; #0
  DW LD1SOFF		; #1
  DW LD1			; #2
  DW LDB1		; #3
@@ -218,231 +167,231 @@ JTABLE DW LD1IM		; #0
 ;************************************************************
 ;-------------------------
 ; #0 LOAD REG WITH IMMED. VALUE
-LD1IM LDX PC
- LDD 0,X
- JMP BUMP2A
+LD1IM	LDX	PC
+	LDD	0,X
+	JMP	BUMP2A
 
 ;-------------------------
 ; #1 LOAD STACK ADDRESS + OFFSET INTO REG
-LD1SOFF STS R1A		; SAVE STACK VALUE
- LDX PC
- LDD 0,X		; GET OFFSET VALUE
- ADDD R1A
- ADDD #1		; ADD OFFSET + 1
- JMP BUMP2A
+LD1SOFF	STS	R1A	; SAVE STACK VALUE
+	LDX	PC
+	LDD	0,X	; GET OFFSET VALUE
+	ADDD	R1A
+	ADDD	#1	; ADD OFFSET + 1
+	JMP	BUMP2A
 
 ;-------------------------
 ; #2  LOAD WORD @ ADDRESS
-LD1 LDX PC
- LDX 0,X		; GET ADDRESS
- LDD 0,X		; GET WORD
- JMP BUMP2
+LD1	LDX	PC
+	LDX	0,X	; GET ADDRESS
+	LDD	0,X	; GET WORD
+	JMP	BUMP2
 
 ;-------------------------
 ; #3  LOAD BYTE @ ADDRESS
-LDB1 LDX PC
- LDX 0,X		; GET ADDRESS
- CLRA
- LDAB 0,X		; GET BYTE
- BPL LDB1A
- COMA			; SIGN EXTEND
-LDB1A JMP BUMP2
+LDB1	LDX	PC
+	LDX	0,X	; GET ADDRESS
+	CLRA
+	LDAB	0,X	; GET BYTE
+	BPL	LDB1A
+	COMA		; SIGN EXTEND
+LDB1A	JMP	BUMP2
 
 ;-------------------------
 ; #4  LOAD WORD INDIRECT (ADDR IN REG)
-LD1R LDX R1A		; GET ADDRESS
- LDD 0,X		; GET WORD
- JMP NEXT
+LD1R	LDX	R1A	; GET ADDRESS
+	LDD	0,X	; GET WORD
+	JMP	NEXT
 
 ;-------------------------
 ; #5  LOAD BYTE INDIRECT (ADDR IN REG)
-LDB1R LDX R1A
- CLRA
- LDAB 0,X		; GET BYTE
- BPL LDB1RA
- COMA
-LDB1RA JMP NEXT
+LDB1R	LDX	R1A
+	CLRA
+	LDAB	0,X	; GET BYTE
+	BPL	LDB1RA
+	COMA
+LDB1RA	JMP	NEXT
 
 ;-------------------------
 ; #6  STORE WORD @ ADDRESS
-ST1 LDX PC
- LDX 0,X		; GET ADDRESS
- STD 0,X		; STORE WORD
- JMP BUMP2
+ST1	LDX	PC
+	LDX	0,X	; GET ADDRESS
+	STD	0,X	; STORE WORD
+	JMP	BUMP2
 
 ;-------------------------
 ; #7  STORE BYTE @ ADDRESS
-STB1 LDX PC
- LDX 0,X		; GET ADDR
- STAB 0,X		; STORE BYTE
- JMP BUMP2
+STB1	LDX	PC
+	LDX	0,X	; GET ADDR
+	STAB	0,X	; STORE BYTE
+	JMP	BUMP2
 
 ;-------------------------
 ; #8  STORE WORD @ ADDRESS ON STACK
-ST1SP TSX		; STACK TO INDEX
- LDX 0,X		; GET ADDRESS
- STD 0,X		; STORE WORD
- INS
- INS			; POP STACK
- JMP NEXT
+ST1SP	TSX		; STACK TO INDEX
+	LDX	0,X	; GET ADDRESS
+	STD	0,X	; STORE WORD
+	INS
+	INS		; POP STACK
+	JMP	NEXT
 
 ;-------------------------
 ; #9  STORE BYTE @ ADDRESS ON STACK
-STB1SP TSX
- LDX 0,X
- STAB 0,X		; STORE BYTE
- INS			; POP ...
- INS
- JMP NEXT
+STB1SP	TSX
+	LDX	0,X
+	STAB	0,X	; STORE BYTE
+	INS		; POP ...
+	INS
+	JMP	NEXT
 
 ;-------------------------
 ; #10  PUSH WORD ON STACK
-PUSHR1 PSHB
- PSHA
- LDX PC
- JMP NEXT2
+PUSHR1	PSHB
+	PSHA
+	LDX PC
+	JMP NEXT2
 
 ;-------------------------
 ; #11  SWAP REG AND TOP OF STACK
-EXG1 TSX
- LDX 0,X		; GET VALUE ON STACK
- STX R1A		; SAVE
- INS
- INS
- PSHB
- PSHA			; REG ON STACK
- LDD R1A		; NEW REG
- LDX PC
- JMP NEXT2
+EXG1	TSX
+	LDX	0,X	; GET VALUE ON STACK
+	STX	R1A	; SAVE
+	INS
+	INS
+	PSHB
+	PSHA		; REG ON STACK
+	LDD	R1A	; NEW REG
+	LDX	PC
+	JMP	NEXT2
 
 ;-------------------------
 ; #12  JUMP TO LABEL
-JMPL LDX PC
-JMP1 LDX 0,X		; GET ADDRESS (NEW PC)
- JMP NEXT2
+JMPL	LDX	PC
+JMP1	LDX	0,X	; GET ADDRESS (NEW PC)
+	JMP	NEXT2
 
 ;-------------------------
 ; #13  JUMP TO LABEL IF FALSE
-BRZL ORAA R1B		; SET FLAGS
- BEQ JMPL		; IF REG=0 -- JUMP
- JMP BUMP2		; ELSE, PROCEED
+BRZL	ORAA	R1B	; SET FLAGS
+	BEQ	JMPL	; IF REG=0 -- JUMP
+	JMP	BUMP2	; ELSE, PROCEED
 
 ;-------------------------
 ; #14  CALL TO LABEL
-JSRL LDX PC
- INX			; ADJUST RETURN
- INX			; -- ADDRESS
- DES
- STS *+5		; *** SELF MODIFYING CODE ***
- DES
- STX $FFFF		; PUSH RETURN ADDRESS
- BRA JMPL
+JSRL	LDX	PC
+	INX		; ADJUST RETURN
+	INX		; -- ADDRESS
+	DES
+	STS	*+5	; *** SELF MODIFYING CODE ***
+	DES
+	STX	$FFFF	; PUSH RETURN ADDRESS
+	BRA	JMPL
 
 ;-------------------------
 ; #15  CALL TO TOP OF STACK
-JSRSP TSX		; POINT TO STACK
- LDX 0,X		; GET ADDRESS (NEW PC)
- INS			; POP
- INS
- LDD PC
- PSHB
- PSHA
- JMP NEXT2
+JSRSP	TSX		; POINT TO STACK
+	LDX	0,X	; GET ADDRESS (NEW PC)
+	INS		; POP
+	INS
+	LDD	PC
+	PSHB
+	PSHA
+	JMP	NEXT2
 
 ;-------------------------
 ; #16  RETURN TO CALLER
-RTSC TSX
- LDX 0,X		; GET ADDRESS
- INS			; POP
- INS
- JMP NEXT1
+RTSC	TSX
+	LDX	0,X	; GET ADDRESS
+	INS		; POP
+	INS
+	JMP	NEXT1
 
 ;-------------------------
 ; #17  MODIFY THE STACK POINTER
-MODSP LDX PC
- LDD 0,X		; GET VALUE
- STS STEMP
- ADDD STEMP		; ADD STACK POINTER
- STD STEMP
- LDS STEMP		; NEW STACK POINTER
- LDD R1A		; RESTORE REGISTER
- JMP BUMP2A
+MODSP	LDX	PC
+	LDD	0,X	; GET VALUE
+	STS	STEMP
+	ADDD	STEMP	; ADD STACK POINTER
+	STD	STEMP
+	LDS	STEMP	; NEW STACK POINTER
+	LDD	R1A	; RESTORE REGISTER
+	JMP	BUMP2A
 
 ;---------------------------
 ; #18  DOUBLE THE PRIMARY REGISTER
-DBL1 ASLB
- ROLA
- JMP NEXT
+DBL1	ASLB
+	ROLA
+	JMP	NEXT
 
 ;---------------------------
 ; #19  ADD REG AND TOP OF STACK (THEN POP)
-ADDS TSX
- ADDD 0,X		; DO THE ADD
- JMP POPS		; POP & RETURN
+ADDS	TSX
+	ADDD	0,X	; DO THE ADD
+	JMP	POPS	; POP & RETURN
 
 ;---------------------------
 ; #20  SUBTRACT REG FROM TOP OF STACK
-SUBFST PULA		; GET VALUE OFF STACK
- PULB
- SUBD R1A		; SUBTRACK REGISTER
- JMP NEXT
+SUBFST	PULA		; GET VALUE OFF STACK
+	PULB
+	SUBD	R1A	; SUBTRACK REGISTER
+	JMP	NEXT
 
 ;---------------------------
 ; #21  MULTIPLY TOP OF STACK BY REG (RESULT IN REG)
-MUL1 PSHB
- PSHA			; REG ON STACK
- LDAA #16
- PSHA			; SET COUNTER
- CLRA
- CLRB
- TSX			; POINT TO DATA
+MUL1	PSHB
+	PSHA		; REG ON STACK
+	LDAA	#16
+	PSHA		; SET COUNTER
+	CLRA
+	CLRB
+	TSX		; POINT TO DATA
 
-M2 ROR 3,X		; SHIFT MULTIPLIER
- ROR 4,X
- DEC 0,X		; DONE ?
- BMI M4
- BCC M3
- ADDD 1,X
+M2	ROR	3,X	; SHIFT MULTIPLIER
+	ROR	4,X
+	DEC	0,X	; DONE ?
+	BMI	M4
+	BCC	M3
+	ADDD	1,X
 
-M3 RORA
- RORB			; SHIFT RESULT
- BRA M2			; AND LOOP
+M3	RORA
+	RORB		; SHIFT RESULT
+	BRA	M2	; AND LOOP
 
-M4 INS			; CLEAN STACK
- INS
- INS
- PULA			; GET RESULT
- PULB
- JMP NEXT
+M4	INS		; CLEAN STACK
+	INS
+	INS
+	PULA		; GET RESULT
+	PULB
+	JMP	NEXT
 
 ;-----------------------------
 ; #22  DIVIDE THE TOP OF STACK BY REG --- RESULT IN REG.
-DIV1 BSR BDIV		; DO THE BASIC DIVIDE
- LDAA DFLAG		; GET SIGN FLAG
- ANDA #1		; MASK OFF BIT ZERO
- PULA			; GET RESULT
- PULB
- BEQ DIV1R
+DIV1	BSR	BDIV	; DO THE BASIC DIVIDE
+	LDAA	DFLAG	; GET SIGN FLAG
+	ANDA	#1	; MASK OFF BIT ZERO
+	PULA		; GET RESULT
+	PULB
+	BEQ	DIV1R
 
-DIV1N BSR NEGATE	; NEGATE THE VALUE IN A,B
+DIV1N	BSR	NEGATE	; NEGATE THE VALUE IN A,B
 
-DIV1R JMP NEXT
+DIV1R	JMP	NEXT
 
 ;-----------------------------
 ; #23  DIVIDE TOP OF STACK BY REG --- REMAINDER IN REG
-MOD BSR BDIV
- INS			; CLEAN STACK
- INS
- PSHA			; TEMP SAVE
- LDAA DFLAG		; GET SIGN FLAG
- BPL MOD1
- COMA
+MOD	BSR	BDIV
+	INS		; CLEAN STACK
+	INS
+	PSHA		; TEMP SAVE
+	LDAA	DFLAG	; GET SIGN FLAG
+	BPL	MOD1
+	COMA
 
-MOD1 ANDA #1		; MASK OFF BIT 0
- PULA
- BNE DIV1N		; IF BIT 0 SET, NEGATE
+MOD1	ANDA	#1	; MASK OFF BIT 0
+	PULA
+	BNE	DIV1N	; IF BIT 0 SET, NEGATE
 
- JMP NEXT
+	JMP	NEXT
 
 ;****************************************************
 ;   BASIC 16 BIT DIVIDE ROUTINE
@@ -452,136 +401,135 @@ MOD1 ANDA #1		; MASK OFF BIT 0
 ;             REMAINDER IN A,B
 ;             SIGN FLAG IN DFLAG
 ;
-BDIV CLR DFLAG
- TSTA			; CHECK DIVISOR SIGN
- BPL BDIV1
+BDIV	CLR	DFLAG
+	TSTA			; CHECK DIVISOR SIGN
+	BPL	BDIV1
 
- INC DFLAG		; ADJUST SIGN FLAG
- BSR NEGATE		; TAKE ABSOLUTE VALUE
+	INC	DFLAG		; ADJUST SIGN FLAG
+	BSR	NEGATE		; TAKE ABSOLUTE VALUE
 
-BDIV1 PSHB		; FORCE ON STACK
- PSHA
- LDAA #17		; BIT COUNTER
- PSHA
- TSX			; POINT TO DATA
- LDAA 5,X		; CHECK SIGN
- BPL BDIV2		; -- OF DIVIDEND
+BDIV1	PSHB			; FORCE ON STACK
+	PSHA
+	LDAA	#17		; BIT COUNTER
+	PSHA
+	TSX			; POINT TO DATA
+	LDAA	5,X		; CHECK SIGN
+	BPL	BDIV2		; -- OF DIVIDEND
 
- COM DFLAG		; ADJUST FLAG
- LDAB 6,X
- BSR NEGATE
- STD  5,X
+	COM	DFLAG		; ADJUST FLAG
+	LDAB	6,X
+	BSR	NEGATE
+	STD	5,X
 
-BDIV2 CLRA
- CLRB
+BDIV2	CLRA
+	CLRB
 
 ; MAIN DIVIDE LOOP (UNSIGNED)
 
-UDIV1 CMPA 1,X
- BHI UDIV3
- BCS UDIV2
- CMPB 2,X
- BCC UDIV3
+UDIV1	CMPA	1,X
+	BHI	UDIV3
+	BCS	UDIV2
+	CMPB	2,X
+	BCC	UDIV3
 
-UDIV2 CLC
- BRA UDIV4
+UDIV2	CLC
+	BRA	UDIV4
 
-UDIV3 SUBD 1,X
- SEC
+UDIV3	SUBD	1,X
+	SEC
 
-UDIV4 ROL 6,X
- ROL 5,X
- DEC 0,X
- BEQ UDIV5
+UDIV4	ROL	6,X
+	ROL	5,X
+	DEC	0,X
+	BEQ	UDIV5
 
- ROLB
- ROLA
- BCC UDIV1
- BRA UDIV3
+	ROLB
+	ROLA
+	BCC	UDIV1
+	BRA	UDIV3
 
-UDIV5 INS
- INS
- INS
- RTS
+UDIV5	INS
+	INS
+	INS
+	RTS
 
 ;----------------------------------------
 ; NEGATE THE VALUE IN A,B
-NEGATE COMA
- COMB
- ADDD #1
- RTS
+NEGATE	COMA
+	COMB
+	ADDD	#1
+	RTS
 
 ;----------------------------------
 ; #24  INCLUSIVE OR THE TOP OF STACK AND REG.
-ORS TSX
- ORAA 0,X
- ORAB 1,X
-POPS INS		; POP THE STACK
- INS
- JMP NEXT
+ORS	TSX
+	ORAA	0,X
+	ORAB	1,X
+POPS	INS		; POP THE STACK
+	INS
+	JMP	NEXT
 
 ;----------------------------------
 ; #25  EXCLUSIVE OR ......
-XORS TSX
- EORA 0,X
- EORB 1,X
- BRA POPS
+XORS	TSX
+	EORA	0,X
+	EORB	1,X
+	BRA	POPS
 
 ;----------------------------------
 ; #26  AND .........
-ANDS TSX
- ANDA 0,X
- ANDB 1,X
- BRA POPS
+ANDS	TSX
+	ANDA	0,X
+	ANDB	1,X
+	BRA	POPS
 
 ;----------------------------------
 ; #27  ARITH. SHIFT RIGHT THE TOP OF STACK
-ASRS TSX
- ANDB #$1F		; MAX REASONABLE SHIFT
- BEQ ASRS2
+ASRS	TSX
+	ANDB	#$1F	; MAX REASONABLE SHIFT
+	BEQ	ASRS2
 
-ASRS1 ASR 0,X
- ROR 1,X
- DECB
- BNE ASRS1
+ASRS1	ASR	0,X
+	ROR	1,X
+	DECB
+	BNE	ASRS1
 
-ASRS2 PULA		; GET THE RESULT
- PULB
- JMP NEXT
+ASRS2	PULA		; GET THE RESULT
+	PULB
+	JMP	NEXT
 
 ;--------------------------------
 ; #28  ARITH. SHIFT LEFT THE TOP OF STACK
-ASLS TSX
- ANDB #$1F
- BEQ ASRS2
+ASLS	TSX
+	ANDB	#$1F
+	BEQ	ASRS2
 
-ASLS1 ASL 1,X
- ROL 0,X
- DECB
- BNE ASLS1
-
- BRA ASRS2
+ASLS1	ASL	1,X
+	ROL	0,X
+	DECB
+	BNE	ASLS1
+	BRA	ASRS2
 
 ;--------------------------------
 ; #29  NEGATE THE REGISTER
-NEGR BSR NEGATE
- JMP NEXT
+NEGR	BSR	NEGATE
+	JMP	NEXT
 
 ;--------------------------------
 ; #30  COMPLEMENT THE REGISTER
-NOTR COMA
- COMB
- JMP NEXT
+NOTR	COMA
+	COMB
+	JMP	NEXT
 
 ;--------------------------------
 ; #31  ADD 1 TO REG
-INCR ADDD #1
- JMP NEXT
+INCR	ADDD	#1
+	JMP	NEXT
 
 ;--------------------------------
 ; #32 SUBTRACT 1 FROM REG
-DECR SUBD #1
- JMP NEXT
+DECR	SUBD	#1
+	JMP	NEXT
 
 ;****************************************************
 ;
@@ -591,101 +539,101 @@ DECR SUBD #1
 ;  Signed compare -- Carry reflects the sign of difference
 ;         (set means: top of stack < A,B )
 ;
-SCMP TSX
- LDD 2,X		; GET TOP OF STACK
- SUBD R1A		; SET CONDITION FLAGS
- BPL STCMP1		; SKIP IF PLUS
+SCMP	TSX
+	LDD	2,X		; GET TOP OF STACK
+	SUBD	R1A		; SET CONDITION FLAGS
+	BPL	STCMP1		; SKIP IF PLUS
 
- STAB R1B		; TEMP SAVE
- ORAA R1B		; SET/RESET ZERO FLAG
- SEC			; AND SET CARRY
- RTS
+	STAB	R1B		; TEMP SAVE
+	ORAA	R1B		; SET/RESET ZERO FLAG
+	SEC			; AND SET CARRY
+	RTS
 
-STCMP1 STAB R1B
- ORAA R1B
- CLC			; CLEAR THE CARRY
- RTS
+STCMP1	STAB	R1B
+	ORAA	R1B
+	CLC			; CLEAR THE CARRY
+	RTS
 ;
 ;  Unsigned compare, Carry set if top of stack < A,B
 ;
-BCMP TSX
- LDD 2,X		; GET TOP OF STACK
- CMPA R1A		; CHECK TOP BYTE
- BNE BCMP1
- CMPB R1B
-BCMP1 RTS
+BCMP	TSX
+	LDD	2,X		; GET TOP OF STACK
+	CMPA	R1A		; CHECK TOP BYTE
+	BNE	BCMP1
+	CMPB	R1B
+BCMP1	RTS
 
 ;-------------------------------
 ; #33  TEST FOR EQUALITY
-ZEQ BSR BCMP
- BEQ TRUE
- BRA FALSE
+ZEQ	BSR	BCMP
+	BEQ	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #34  TEST FOR NOT-EQUAL
-ZNE BSR BCMP
- BNE TRUE
- BRA FALSE
+ZNE	BSR	BCMP
+	BNE	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #35  TEST FOR LESS THAN
-ZLT BSR SCMP
- BCS TRUE
- BRA FALSE
+ZLT	BSR	SCMP
+	BCS	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #36  TEST FOR LESS THAN OR EQUAL
-ZLE BSR SCMP
- BLS TRUE
- BRA FALSE
+ZLE	BSR	SCMP
+	BLS	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #37  TEST FOR GREATER THAN
-ZGT BSR SCMP
- BHI TRUE
- BRA FALSE
+ZGT	BSR	SCMP
+	BHI	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #38  TEST FOR GREATER THAN OR EQUAL
-ZGE BSR SCMP
- BCC TRUE
- BRA FALSE
+ZGE	BSR	SCMP
+	BCC	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #39 TEST FOR LESS THAN (UNSIGNED)
-ULT BSR BCMP
- BCS TRUE
- BRA FALSE
+ULT	BSR	BCMP
+	BCS	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #40  TEST FOR LESS THAN OR EQUAL (UNSIGNED)
-ULE BSR BCMP
- BLS TRUE
- BRA FALSE
+ULE	BSR	BCMP
+	BLS	TRUE
+	BRA	FALSE
 
 ;-------------------------------
 ; #41  TEST FOR GREATER THAN (UNSIGNED)
-UGT BSR BCMP
- BHI TRUE
- BRA FALSE
+UGT	BSR	BCMP
+	BHI	TRUE
+	BRA	FALSE
 
 ;------------------------------
 ; #42  TEST FOR GREATER THAN OR EQUAL (UNSIGNED)
-UGE BSR BCMP
- BCC TRUE
+UGE	BSR	BCMP
+	BCC	TRUE
 
-FALSE CLRB		; RETURN FALSE
- BRA TRUE1
+FALSE	CLRB		; RETURN FALSE
+	BRA	TRUE1
 
-TRUE LDAB #1		; RETURN TRUE
+TRUE	LDAB	#1	; RETURN TRUE
 
-TRUE1 CLRA
- JMP POPS		; POP STACK AND PROCEED
+TRUE1	CLRA
+	JMP	POPS	; POP STACK AND PROCEED
 
 ;-------------------------------------
 ; #43  SWITCH TO EXECUTABLE (ASSEMBLY) CODE
-ASMC LDX PC		; POINT TO CODE
- JMP 0,X		; GO EXECUTE IT
+ASMC	LDX	PC	; POINT TO CODE
+	JMP	0,X	; GO EXECUTE IT
 
 ;**********************************************************
 ;
@@ -839,11 +787,13 @@ puts	DB	86
 ;               (c='_'));
 ; }
 ;
-isalpha DB      86	; switch to assembly
-        TSX
-        LDAB    3,X	;     get char
-        BSR     alPHA
-        JMP     RTSC
+isalpha	PROC
+	DB	86	; switch to assembly
+	TSX
+	LDAB	3,X	; get char
+	BSR	alPHA
+	JMP	RTSC
+	ENDP
 ;
 ;---------------------------------------------
 ;       Test if given char is numeric   *
@@ -854,11 +804,13 @@ isalpha DB      86	; switch to assembly
 ;       return((c>='0')&(c<='9'));
 ; }
 ;
-isdigit DB      86
-        TSX
-        LDAB    3,X
-        BSR     nuMERIC
-        JMP     RTSC
+isdigit	PROC
+	DB	86
+	TSX
+	LDAB	3,X
+	BSR	nuMERIC
+	JMP	RTSC
+	ENDP
 ;
 ;----------------------------------------------
 ;       Test if given char is alphanumeric      *
@@ -868,147 +820,165 @@ isdigit DB      86
 ; {     return((alpha(c)|(numeric(c)));
 ; }
 ;
-isalnum DB      86
-        TSX
-        LDAB    3,X     ;get char
-        BSR     alPHA   ;check if alpha
-        TSX
-        PSHB            ;save result
-        LDAB    3,X     ;get char again
-        BSR     nuMERIC ;check if decimal
-        TSX
-        ORAB    0,X     ;fix flag
-        INS             ;clean stack
-        JMP     RTSC
+isalnum	PROC
+	GLOBAL	alPHA, nuMERIC
+	DB	86
+	TSX
+	LDAB	3,X	;get char
+	BSR	alPHA	;check if alpha
+	TSX
+	PSHB		;save result
+	LDAB	3,X	;get char again
+	BSR	nuMERIC	;check if decimal
+	TSX
+	ORAB	0,X	;fix flag
+	INS		;clean stack
+	JMP	RTSC
 ;
 ;
-alPHA   CLRA
-        ANDB   #$7F
-        CMPB   #'a'
-        BLT     alPHA1
-        CMPB   #'z'
-        BLE     alYES
-alPHA1  CMPB   #'A'
-        BLT     alPHA2
-        CMPB   #'Z'
-        BLE     alYES
-alPHA2  CMPB   #'_'
-        BEQ     alYES
+alPHA	CLRA
+	ANDB	#$7F
+	CMPB	#'a'
+	BLT	alPHA1
+	CMPB	#'z'
+	BLE	alYES
+alPHA1	CMPB	#'A'
+	BLT	alPHA2
+	CMPB	#'Z'
+	BLE	alYES
+alPHA2	CMPB	#'_'
+	BEQ	alYES
 ;
-alNO    CLRB
-        RTS
+alNO	CLRB
+	RTS
 ;
-alYES   LDAB   #1
-        RTS
+alYES	LDAB	#1
+	RTS
 ;
 ;
-nuMERIC CLRA
-        ANDB   #$7F
-        CMPB   #'0'
-        BLT     alNO
-        CMPB   #'9'
-        BLE     alYES
-        BRA     alNO
+nuMERIC	CLRA
+	ANDB	#$7F
+	CMPB	#'0'
+	BLT	alNO
+	CMPB	#'9'
+	BLE	alYES
+	BRA	alNO
+	ENDP
 ;
 ;-----------------------------------------------
 ;  islower(c)
 ;       char c;        returns TRUE if c is lower case alpha,
 ;                        FALSE otherwise.
 ;
-islower DB 86		; SWITCH TO IN-LINE
- TSX
- LDAB 3,X		; GET CHAR
- ANDB #$7F
- CLRA
- CMPB #'a'
- BLT ISNO
- CMPB #'z'
- BLE ISYES
+islower	PROC
+	GLOBAL	ISNO, ISYES
+	DB	86	; SWITCH TO IN-LINE
+	TSX
+	LDAB	3,X	; GET CHAR
+	ANDB	#$7F
+	CLRA
+	CMPB	#'a'
+	BLT	ISNO
+	CMPB	#'z'
+	BLE	ISYES
 ;
-ISNO CLRB
- JMP RTSC		;    RETURN FALSE
+ISNO	CLRB
+	JMP	RTSC	; RETURN FALSE
 ;
-ISYES LDAB #1
- JMP RTSC		; RETURN TRUE
+ISYES	LDAB	#1
+	JMP	RTSC	; RETURN TRUE
+	ENDP
 ;
 ;----------------------------------------------
 ;  isupper(c)
 ;      char c;      return TRUE if c is upper case alpha.
 ;
-isupper DB 86
- TSX
- LDAB 3,X
- ANDB #$7F
- CLRA
- CMPB #'A'
- BLT ISNO
- CMPB #'Z'
- BLE ISYES
- BRA ISNO
+isupper	PROC
+	DB	86
+	TSX
+	LDAB	3,X
+	ANDB	#$7F
+	CLRA
+	CMPB	#'A'
+	BLT	ISNO
+	CMPB	#'Z'
+	BLE	ISYES
+	BRA	ISNO
+	ENDP
 ;
 ;-----------------------------------------------
 ;  isspace(c)
 ;      char c;       return TRUE if a "white space" char
 ;
-isspace DB 86
- TSX
- LDAB 3,X		; GET CHAR
- ANDB #$7F
- CLRA
- CMPB #' '		;  SPACE ?
- BEQ ISYES
- CMPB #$0D		;  CR ???
- BEQ ISYES
- CMPB #$0A		;  LF ???
- BEQ ISYES
- CMPB #$09		;  HOR TAB ???
- BEQ ISYES
- BRA ISNO
+isspace	PROC
+	DB	86
+	TSX
+	LDAB	3,X	; GET CHAR
+	ANDB	#$7F
+	CLRA
+	CMPB	#' '	;  SPACE ?
+	BEQ	ISYES
+	CMPB	#$0D	;  CR ???
+	BEQ	ISYES
+	CMPB	#$0A	;  LF ???
+	BEQ	ISYES
+	CMPB	#$09	;  HOR TAB ???
+	BEQ	ISYES
+	BRA	ISNO
+	ENDP
 ;
 ;----------------------------------------------
 ;  toupper(c)
 ;      char c;   make c an upper case char if lower
 ;                          case alpha
 ;
-toupper DB 86
- TSX
- LDD 2,X
- BNE TOUPP1		;  SKIP IF MSB'S NOT ZERO
- CMPB #'a'
- BLT TOUPP1
- CMPB #'z'
- BGT TOUPP1
- SUBB #$20		;  CONVERT TO UPPER CASE
-TOUPP1 JMP RTSC
+toupper	PROC
+	DB	86
+	TSX
+	LDD	2,X
+	TSTA
+	BNE	TOUPP1	;  SKIP IF MSB'S NOT ZERO
+	CMPB	#'a'
+	BLT	TOUPP1
+	CMPB	#'z'
+	BGT	TOUPP1
+	SUBB	#$20	;  CONVERT TO UPPER CASE
+TOUPP1	JMP	RTSC
+	ENDP
 ;
 ;---------------------------------------------
 ;  tolower(c)
 ;      char c;   convert to lower case if upper case alpha.
 ;
-tolower DB 86
- TSX
- LDD 2,X
- BNE TOLOW1
- CMPB #'A'
- BLT TOLOW1
- CMPB #'Z'
- BGT TOLOW1
- ADDB #$20		; CONVERT TO LOWER CASE
-TOLOW1 JMP RTSC
+tolower	PROC
+	DB	86
+	TSX
+	LDD	2,X
+	TSTA
+	BNE	TOLOW1
+	CMPB	#'A'
+	BLT	TOLOW1
+	CMPB	#'Z'
+	BGT	TOLOW1
+	ADDB	#$20	; CONVERT TO LOWER CASE
+TOLOW1	JMP	RTSC
+	ENDP
 ;
 ;---------------------------------------------
 ;  strclr(s,n)
 ;      char *s;  int n;  clear a string of n bytes.
 ;
-strclr DB 86
- TSX
- LDD  2,X		; GET LENGTH OF STRING
- LDX  4,X		; POINT TO STRING
-SCLR1 CLR 0,X
- INX
- SUBD #1
- BNE SCLR1
-SCLR3 JMP RTSC
+strclr	PROC
+	DB	86
+	TSX
+	LDD	2,X	; GET LENGTH OF STRING
+	LDX	4,X	; POINT TO STRING
+SCLR1	CLR	0,X
+	INX
+	SUBD	#1
+	BNE	SCLR1
+SCLR3	JMP	RTSC
+	ENDP
 ;
 ;-----------------------------------------------
 ;  return the length of a string
@@ -1021,70 +991,79 @@ SCLR3 JMP RTSC
 ;       return (s-t);
 ; }
 ;
-strlen  DB     86
-        TSX
-        LDX     2,X	; point to string
-        CLRA            ; preset counter
-        CLRB
-;
-strlLP  TST     0,X     ; look for NULL
-        BEQ     strlRT  ; found !!
-        INX
-        ADDD   #1	; bump counter
-        BRA     strlLP
-;
-strlRT  JMP     RTSC
+strlen	PROC
+	DB	86
+	TSX
+	LDX	2,X	; point to string
+	CLRA		; preset counter
+	CLRB
+loop	TST	0,X	; look for NULL
+	BEQ	exit	; found !!
+	INX
+	ADDD	#1	; bump counter
+	BRA	loop
+exit	JMP	RTSC
+	ENDP
 ;
 ;------------------------------------------------
 ;  strcpy(s1,s2)
 ;      char *s1, *s2;    copy s2 into s1.
 ;
-strcpy DB 86
- TSX
- LDX 4,X		; POINT TO S1
- STX X1TMP		; SAVE POINTER
- TSX
- LDX 2,X		; POINT TO S2
-
-SCPY1 LDAB 0,X
- INX
- STX X2TMP
- LDX X1TMP
- STAB 0,X
- BEQ SCLR3		;  END OF STRING ???
- INX
- STX X1TMP
- LDX X2TMP
- BRA SCPY1
+strcpy	PROC
+	DB	86
+	TSX
+	LDD	4,X		; POINT TO S1
+	STD	X2TMP		; SAVE POINTER
+	LDD	2,X		; POINT TO S2
+	STD	X1TMP		;
+	XGDX
+	CLRA
+	CLRB
+loop	TST	0,X
+	BEQ	copy
+	ADDD	#1
+	INX
+	BRA	loop
+copy	ADDD	#1		; zero - end of string
+	PSHB			; Pyldin use BA instead of AB :(
+	TAB
+	PULA
+	LDX	#X1TMP
+	INT	$2D		; memmove
+	LDD	X2TMP
+	JMP	RTSC
+	ENDP
 ;
 ;------------------------------------------------
 ;  strcat(s1,s2)
 ;      char *s1, *s2;   s2 is concatenated onto s1.
 ;
-strcat DB 86
- TSX
- LDX 2,X
- STX X2TMP		; SAVE POINTER TO S2
- TSX
- LDX 4,X		; POINT TO S1
+strcat	PROC
+	DB	86
+	TSX
+	LDX	2,X
+	STX	X2TMP	; SAVE POINTER TO S2
+	TSX
+	LDX	4,X	; POINT TO S1
 
-SCAT1 TST 0,X		; LOOK FOR END OF STRING
- BEQ SCAT2
- INX
- BRA SCAT1
+SCAT1	TST	0,X	; LOOK FOR END OF STRING
+	BEQ	SCAT2
+	INX
+	BRA	SCAT1
 
-SCAT2 STX X1TMP		; SAVE POINTER
- LDX X2TMP
- LDAB 0,X
- INX
- STX X2TMP
- LDX X1TMP
- STAB 0,X
- BEQ SCAT3
- INX
- BRA SCAT2
+SCAT2	STX	X1TMP	; SAVE POINTER
+	LDX	X2TMP
+	LDAB	0,X
+	INX
+	STX	X2TMP
+	LDX	X1TMP
+	STAB	0,X
+	BEQ	SCAT3
+	INX
+	BRA	SCAT2
 
-SCAT3 JMP RTSC
+SCAT3	JMP	RTSC
+	ENDP
 ;
 ;--------------------------------------------
 ;  strcmp(s1,s2)
@@ -1092,47 +1071,64 @@ SCAT3 JMP RTSC
 ;                                       <0  if s1 < s2
 ;                                       >0  if s1 > s2
 ;
-strcmp DB 86
- TSX
- LDX 2,X		; POINT TO S2
- STX X2TMP
- TSX
- LDX 4,X		; POINT TO S1
+;strcmp(s1, s2)
+;char *s1, *s2;
+;{
+;  do
+;    {
+;      c1 = (unsigned char) *s1++;
+;      c2 = (unsigned char) *s2++;
+;      if (c1 == '\0')
+;        return c1 - c2;
+;    }
+;  while (c1 == c2);
+;  return c1 - c2;
+;}
+;
 
-SCMP1 LDAA 0,X		; GET S1 CHAR
- BEQ SCMP3
- INX
- STX X1TMP
- LDX X2TMP
- LDAB 0,X
- BEQ SCMP2
- SBA			; COMPARE BY SUBTRACTING
- BNE SCMP3
- INX
- STX X2TMP
- LDX X1TMP
- BRA SCMP1
+strcmp	PROC
+	DB	86
+	TSX
+	LDD	4,X	; POINT TO S1
+	STD	X1TMP
+	LDX	2,X	; POINT TO S2
 
-SCMP2 CLRA
+loop	LDAB	0,X	; GET S1 CHAR
+	INX
+	STX	X2TMP
+	LDX	X1TMP
+	LDAA	0,X
+	BEQ	s1exit
+	SBA		; COMPARE BY SUBTRACTING
+	BNE	exit
+	INX
+	STX	X1TMP
+	LDX	X2TMP
+	BRA	loop
 
-SCMP3 TAB
- BMI SCMP4
- CLRA
- JMP RTSC
+s1exit	SBA
+	BEQ	exit1
+exit	TAB
+	CLRA
+	TSTB
+	BPL	exit1
+	COMA
+exit1	JMP	RTSC
+	ENDP
 
-SCMP4 LDAA #$FF		; SIGN EXTEND
- JMP RTSC
 ;
 ;--------------------------------------------
 ;  exit()
-sysexit	DB	86
+sysexit	PROC
+	DB	86
 	INT	$38
+	ENDP
 
 ;
 ;
 ;****************************************************
 ;
 	DS	$800-*,$FF
-HERE EQU *		;   END OF INTERPRETER
+HERE	EQU	*	;   END OF INTERPRETER
 ; 
 ; END
