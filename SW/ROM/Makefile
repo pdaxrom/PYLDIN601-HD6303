@@ -1,16 +1,20 @@
-UNIASM = ../DEVEL/uniasm
+#UNIASM = ../DEVEL/uniasm
+AS03 = ../ASM/SMALL-C/as03
 
-all: $(UNIASM) bootloader rom.bin
+all: $(AS03) bootloader rom.bin
 
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
 
-rom.bin: $(UNIASM)
+$(AS03):
+	make -C $(shell dirname $(AS03)) $(shell basename $(AS03))
+
+rom.bin: $(AS03)
 	cp ../../generic/src/ROM/BOOTROM.INC .
 	cp ../../generic/src/ROM/BOOTMEM.INC .
 	sed -i -e 's/$FF00/$FE00/' BOOTMEM.INC
 	cpp -P -traditional -DHD6303Y ../../generic/src/ROM/ROM.ASM > ROM.S
-	$(UNIASM) ROM.S ROM.LST ROM.CMD
+	$(AS03) -l ROM.LST -o ROM.CMD ROM.S
 	dd if=/dev/zero ibs=1k count=128 | tr "\000" "\377" >rom.bin
 	dd if=ROM.CMD of=rom.bin conv=notrunc bs=1 seek=$$((0x1fe00))
 	dd if=/dev/zero ibs=1k count=4 | tr "\000" "\377" >bios.bin
