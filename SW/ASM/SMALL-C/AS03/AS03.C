@@ -470,7 +470,7 @@ getlab()
 	char *tag;
 
 	if ((tag = hashfind(sbuf)) >= start) {
-		if (match('='))	{	
+		if (match('=')) {
 			mputw(tag + VALUE, exp_());
 			return(TRUE);
 		}
@@ -488,7 +488,7 @@ getlab()
 		mnem(tag);
 		return(TRUE);
  */
-		printf("Internal error (missed label)");
+		printf("Internal error (missed label %s)\n", sbuf);
 		fatal(-1);
 	}
 }
@@ -549,7 +549,7 @@ char *tag;
 			else if (pass == 1)
 				return;
 			else
-				error("illegal address mode");
+				error("Illegal address mode");
 		}
 	}
 }
@@ -560,34 +560,69 @@ char *tag;
 getmode(p)
 char *p;
 {
+	int bitop;
 	int oper;
 
-	if (match('#'))
-		return(immediate(p[OPFLAG]));
-	else if (*ip == 'X' & isalnum(ip[1]) == 0) {
+	bitop = 0;
+
+	if (match('#')) {
+		if (p[OPFLAG] & 0x80) {
+			if (p[OPFLAG] & 0x60) {
+				error("Bit number required.");
+			}
+			bitop = 1;
+			immediate(p[OPFLAG]);
+			if (match(',') == 0)
+				return IMMED;
+		} else
+			return(immediate(p[OPFLAG]));
+	} else if (p[OPFLAG] & 0x60) {
+		oper = exp_();
+		if (oper >= 0 & oper < 8) {
+			if (p[OPFLAG] & 0x20) {
+				oper = 0xFF ^ (1 << oper);
+			} else
+				oper = 1 << oper;
+			obj[1] = oper & 0xFF;
+		} else
+			error("Illegal bit number.");
+		nbytes = 2;
+		bitop = 1;
+		if (match(',') == 0)
+			return IMMED;
+	}
+
+	skip();
+
+	if (((p[OPFLAG] & 0x80) == 0x80) & (bitop == 0)) {
+		if ((p[OPFLAG] & 0xE0) == 0x80)
+			error("#Imm value missed.");
+		else
+			error("Bit number missed.");
+		bitop = 1; /* forced for byte counter */
+	}
+
+	if (*ip == 'X' & isalnum(ip[1]) == 0) {
 		ip++;
 		if (match(',')) {
 			oper = exp_();
-			return(xindex(oper));
+			return(xindex(oper, bitop));
 		}
-		return(xindex(0));
+		return(xindex(0, bitop));
 	}
-/*
-	else if (match('('))
-		return(indirect());
-	else if (*ip == 'a' & isalnum(ip[1]) == 0)
-		return(accum());
-	else
- */
+
 	oper = exp_();
-	if (match(','))
-		return(indexed(oper));
-	else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL)) {
+	if (match(',')) {
+		if (match('X'))
+			return(xindex(oper, bitop));
+		error("'X' expected");
+		return(IND_X);
+	} else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL)) {
 		/* direct jsr ($9D) second pass issues fix */
 		if (((p[DIRECT] & 0xFF) == 0x9D) & (oper < 0x28)) {
 			return(extended(oper));
 		}
-		return(direct(oper));
+		return(direct(oper, bitop));
 	} else
 		return(extended(oper));
 }
@@ -612,36 +647,26 @@ int flag;
 }
 
 /*
- * register indexed address modes
- */
-indexed(oper)
-int oper;
-{
-	if (match('X'))
-		return(xindex(oper));
-	else
-		error("'X' expected");
-}
-
-/*
  * index register X
  */
-xindex(oper)
+xindex(oper, offs)
 int oper;
+int offs;
 {
-	nbytes = 2;
-	obj[1] = oper & 0xFF;
+	nbytes = 2 + offs;
+	obj[1 + offs] = oper & 0xFF;
 	return(IND_X);
 }
 
 /*
  * direct (zero page) address
  */
-direct(oper)
+direct(oper, offs)
 int oper;
+int offs;
 {
-	nbytes = 2;
-	obj[1] = oper & 0xFF;
+	nbytes = 2 + offs;
+	obj[1 + offs] = oper & 0xFF;
 	return(DIRECT);
 }
 
