@@ -1,6 +1,7 @@
-UNIASM = ../DEVEL/uniasm
+#UNIASM = ../DEVEL/uniasm
+AS03 = ./SMALL-C/as03
 
-all: $(UNIASM)		\
+all: $(AS03)		\
     UART.CMD		\
     RAMCHK.CMD		\
     RAMTEST.CMD		\
@@ -30,10 +31,16 @@ all: $(UNIASM)		\
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
 
+$(AS03):
+	make -C $(shell dirname $(AS03)) $(shell basename $(AS03))
+
 .SUFFIXES: .ASM .CMD
 
+#.ASM.CMD: ../DEVMAP.INC ../BOOTROM.INC
+#	$(UNIASM) $< $(basename $@) $@
+
 .ASM.CMD: ../DEVMAP.INC ../BOOTROM.INC
-	$(UNIASM) $< $(basename $@) $@
+	$(AS03) -l $(basename $@).LST -o $@ $<
 
 MON.BIN: 6303MON.CMD
 	dd if=/dev/zero ibs=1k count=128 | tr "\000" "\377" >MON.BIN
