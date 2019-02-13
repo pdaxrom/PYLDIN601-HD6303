@@ -216,11 +216,11 @@ int *argv[];
 	--argc;
 	argv++;
 	while (argc > 0) {
-	    if (strcmp(argv[0], "-ctext") == 0)
+	    if (streq(argv[0], "-ctext"))
 		ctext = 1;
-	    else if (strcmp(argv[0], "-errstop") == 0)
+	    else if (streq(argv[0], "-errstop"))
 		errstop = 1;
-	    else if (strcmp(argv[0], "-o") == 0) {
+	    else if (streq(argv[0], "-o")) {
 		if (argc < 2)
 		    usage();
 		if((output = fopen(argv[1], "w")) == NULL) {
