@@ -1,6 +1,6 @@
 VM = ./scvm
 
-all: smallc as03
+all: smallc as03 UNICC.CMD UNIAS.CMD
 
 CFLAGS = -O2
 
@@ -35,7 +35,20 @@ as03: scvm.c as03.h
 as03.h: AS03.CMD
 	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $^ | sed 's/0x  ,//g' > $@
 
+UNIAS.CMD: AS03.CMD CCINT.CMD
+	cat CCINT.CMD AS03.CMD > UNIAS.CMD
+
+UNICC.CMD: SMALLC.CMD CCINT.CMD
+	$(VM) SMALLC.CMD -o CCTMP.ASM NATIVE/SMALLC.C
+	$(VM) AS03.CMD -o CCTMP.CMD CCTMP.ASM
+	cat CCINT.CMD CCTMP.CMD > UNICC.CMD
+
+CCINT.CMD: AS03.CMD CCINT.ASM
+	$(VM) AS03.CMD -o CCINT.CMD CCINT.ASM
+
 clean:
 	rm -f scvm *.o out.sym AS03X.CMD AS03X.ASM SMALLCX.CMD SMALLCX.ASM AS03.CMD AS03.ASM SMALLC.CMD SMALLC.ASM
 	rm -f smallc smallc.h
 	rm -f as03 as03.h
+	rm -f CCTMP.CMD CCTMP.ASM CCINT.CMD
+	rm -f UNIAS.CMD UNICC.CMD

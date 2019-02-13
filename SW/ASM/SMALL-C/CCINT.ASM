@@ -53,6 +53,8 @@
 	JMP	strcat+1
 	DB	86
 	JMP	strcmp+1
+	DB	86
+	JMP	sysexit+1
 	DS	4*4	;ROOM FOR 4 MORE
 
 ; LIB FLEXPTRS
@@ -87,8 +89,8 @@ BEGIN
 	PSHB
 	PSHA
 
-Initend LDX #$800
- BRA NEXT2		; START THE INTERPRETATION
+EXECUTE	LDX #$800
+	BRA NEXT2		; START THE INTERPRETATION
 
 ;*************************************************************
 ;
@@ -166,7 +168,7 @@ NEXT2	LDAB 0,X		; GET THE PSEUDO-INSTRUCTION
 ;                  THE JUMP TABLE                            *
 ;*************************************************************
 
- DS $200-*		;  MUST START ON A PAGE BOUNDARY
+	DS $200-*		;  MUST START ON A PAGE BOUNDARY
 
 JTABLE DW LD1IM		; #0
  DW LD1SOFF		; #1
@@ -1120,6 +1122,12 @@ SCMP3 TAB
 
 SCMP4 LDAA #$FF		; SIGN EXTEND
  JMP RTSC
+;
+;--------------------------------------------
+;  exit()
+sysexit	DB	86
+	INT	$38
+
 ;
 ;
 ;****************************************************

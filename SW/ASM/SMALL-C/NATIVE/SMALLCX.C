@@ -270,7 +270,8 @@ int *argv[];
 
 usage()
 {
-	error("smallc [-ctext] [-errstop] [-o outputfile] inputfile");
+	pl("smallc [-ctext] [-errstop] [-o outputfile] inputfile");
+	nl();
 	exit(-1);
 }
 
