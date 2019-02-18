@@ -75,6 +75,17 @@
 #define f_strcat	0x154
 #define f_strcmp	0x158
 #define f_exit		0x15C
+#define f_fgets		0x160
+#define f_fputs		0x164
+#define f_fread		0x168
+#define f_fwrite	0x16C
+#define f_feof		0x170
+#define f_fflush	0x174
+#define f_fseek		0x178
+#define f_ftell		0x17C
+#define f_unlink	0x180
+
+FILE *fdtab[256];
 
 byte mem[0x10000];
 word start = 0x800;
@@ -85,68 +96,135 @@ byte app[] = {
 };
 #endif
 
+#define GETBYTE(a) (mem[a])
+#define GETWORD(a) ((GETBYTE(a) << 8) | GETBYTE((a) + 1))
+#define GETDWORD(a) ((GETWORD(a) << 16) | GETWORD((a) + 2))
+
+#define GETARG1() GETWORD(*sp + 3)
+#define GETARG2() GETWORD(*sp + 5)
+#define GETARG3() GETWORD(*sp + 7)
+#define GETARG4() GETWORD(*sp + 9)
+
 void chkfunc(word *sp, word *pc, word *reg)
 {
     if (*pc < start) {
-	word tmp, tmp1;
-	byte c;
+	word tmp, tmp1, tmp2, tmp3;
 //	fprintf(stderr, "External function request, PC=$%04X\n", *pc);
 
 	switch (*pc) {
-	case f_fclose: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; close(tmp); *reg = 0; break;
+	case f_fclose: tmp = GETARG1(); fclose(fdtab[tmp]); *reg = 0; break;
 	case f_fopen:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		tmp1 = GETARG1();
+		tmp = GETARG2();
 		FILE *f = fopen((char *)&mem[tmp], (char *)&mem[tmp1]);
-		*reg = f ? fileno(f) : 0;
+		if (f) {
+		    *reg = fileno(f);
+		    if (*reg > sizeof(fdtab) / sizeof(FILE *)) {
+			fprintf(stderr, "fd > fdtab, error!\n");
+			exit(-1);
+		    }
+		    fdtab[*reg] = f;
+		} else {
+		    *reg = 0;
+		}
 		break;
-	case f_getc: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; tmp1 = read(tmp, &c, 1); *reg = (tmp1 == 1) ? c : -1; break;
+	case f_getc: tmp = GETARG1(); *reg = fgetc(fdtab[tmp]); break;
 	case f_getchar: *reg = getchar(); break;
-	case f_gets: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = gets(&mem[tmp]) ? tmp : 0; break;
+	case f_gets: tmp = GETARG1(); *reg = gets(&mem[tmp]) ? tmp : 0; break;
 	case f_putc:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
-		c = tmp;
-		tmp1 = write(tmp1, &c, 1);
-		*reg = (tmp1 == 1) ? c : -1;
+		tmp1 = GETARG1();
+		tmp = GETARG2();
+		*reg = fputc(tmp, fdtab[tmp1]);
 		break;
-	case f_putchar: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; printf("%c", tmp); *reg = tmp; break;
-	case f_puts: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; printf("%s", &mem[tmp]); *reg = 0; break;
+	case f_putchar: tmp = GETARG1(); printf("%c", tmp); *reg = tmp; break;
+	case f_puts: tmp = GETARG1(); printf("%s", &mem[tmp]); *reg = 0; break;
 
-	case f_isalpha: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isalpha(tmp); break;
-	case f_isdigit: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isdigit(tmp); break;
-	case f_isalnum: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isalnum(tmp); break;
-	case f_islower: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = islower(tmp); break;
-	case f_isupper: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isupper(tmp); break;
-	case f_isspace: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = isspace(tmp); break;
-	case f_toupper: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = toupper(tmp); break;
-	case f_tolower: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = tolower(tmp); break;
+	case f_isalpha: tmp = GETARG1(); *reg = isalpha(tmp); break;
+	case f_isdigit: tmp = GETARG1(); *reg = isdigit(tmp); break;
+	case f_isalnum: tmp = GETARG1(); *reg = isalnum(tmp); break;
+	case f_islower: tmp = GETARG1(); *reg = islower(tmp); break;
+	case f_isupper: tmp = GETARG1(); *reg = isupper(tmp); break;
+	case f_isspace: tmp = GETARG1(); *reg = isspace(tmp); break;
+	case f_toupper: tmp = GETARG1(); *reg = toupper(tmp); break;
+	case f_tolower: tmp = GETARG1(); *reg = tolower(tmp); break;
 	case f_strclr:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		tmp1 = GETARG1();
+		tmp = GETARG2();
 		memset(&mem[tmp], 0, tmp1);
 		*reg = tmp;
 		break;
-	case f_strlen: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; *reg = strlen((char *)&mem[tmp]); break;
+	case f_strlen: tmp = GETARG1(); *reg = strlen((char *)&mem[tmp]); break;
 	case f_strcpy:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		tmp1 = GETARG1();
+		tmp = GETARG2();
 		strcpy((char *)&mem[tmp], (char *)&mem[tmp1]);
 		*reg = tmp;
 		break;
 	case f_strcat:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		tmp1 = GETARG1();
+		tmp = GETARG2();
 		strcat((char *)&mem[tmp], (char *)&mem[tmp1]);
 		*reg = tmp;
 		break;
 	case f_strcmp:
-		tmp1 = (mem[*sp + 3] << 8) | mem[*sp + 4];
-		tmp = (mem[*sp + 5] << 8) | mem[*sp + 6];
+		tmp1 = GETARG1();
+		tmp = GETARG2();
 		*reg = strcmp((char *)&mem[tmp], (char *)&mem[tmp1]);
 		break;
 
-	case f_exit: tmp = (mem[*sp + 3] << 8) | mem[*sp + 4]; exit((short)tmp); break;
+	case f_exit: tmp = GETARG1(); exit((short)tmp); break;
+
+	case f_fgets:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		tmp2 = GETARG3();
+		*reg = fgets((char *)&mem[tmp2], tmp1, fdtab[tmp]) ? tmp2 : 0;
+		break;
+	case f_fputs:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		*reg = fputs((char *)&mem[tmp1], fdtab[tmp]);
+		break;
+	case f_fread:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		tmp2 = GETARG3();
+		tmp3 = GETARG4();
+		*reg = fread(&mem[tmp3], tmp2, tmp1, fdtab[tmp]);
+		break;
+	case f_fwrite:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		tmp2 = GETARG3();
+		tmp3 = GETARG4();
+		*reg = fwrite(&mem[tmp3], tmp2, tmp1, fdtab[tmp]);
+		break;
+	case f_feof:
+		tmp  = GETARG1();
+		*reg = feof(fdtab[tmp]);
+		break;
+	case f_fflush:
+		tmp  = GETARG1();
+		*reg = fflush(fdtab[tmp]);
+		break;
+	case f_fseek:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		tmp2 = GETARG3();
+		*reg = fseek(fdtab[tmp2], GETDWORD(tmp1) , tmp);
+		break;
+	case f_ftell:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		long pos = ftell(fdtab[tmp1]);
+		mem[tmp    ] = (pos >> 24);
+		mem[tmp + 1] = (pos >> 16) & 0xFF;
+		mem[tmp + 2] = (pos >> 8 ) & 0xFF;
+		mem[tmp + 3] = (pos      ) & 0xFF;
+		*reg = tmp;
+		break;
+	case f_unlink: tmp = GETARG1(); *reg = unlink((char *)&mem[tmp]); break;
+
 	default: fprintf(stderr, "Unimplemented function %X\n", *pc); exit(1); break;
 	}
 

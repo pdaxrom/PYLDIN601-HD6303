@@ -55,7 +55,25 @@
 	JMP	strcmp+1
 	DB	86
 	JMP	sysexit+1
-	DS	4*4	;ROOM FOR 4 MORE
+	DB	86
+	JMP	fgets+1
+	DB	86
+	JMP	fputs+1
+	DB	86
+	JMP	fread+1
+	DB	86
+	JMP	fwrite+1
+	DB	86
+	JMP	feof+1
+	DB	86
+	JMP	fflush+1
+	DB	86
+	JMP	fseek+1
+	DB	86
+	JMP	ftell+1
+	DB	86
+	JMP	unlink+1
+	DS	4*4,$FF	;ROOM FOR 4 MORE
 
 ; LIB FLEXPTRS
 
@@ -643,7 +661,9 @@ ASMC	LDX	PC	; POINT TO CODE
 
 ;   fopen(file-name, "type")
 ;   Open a File..........
-fopen	DB	86		; SWITCH TO INLINE CODE
+fopen	PROC
+	GLOBAL	FEXIT
+	DB	86		; SWITCH TO INLINE CODE
 	LDAA	#$EB		; WRONG FILE OPEN MODE
 	STAA	ERRNO
 	TSX
@@ -660,45 +680,68 @@ fopen	DB	86		; SWITCH TO INLINE CODE
 	LDX	#FTABLE
 	INT	$4A
 	TSTA
-	BEQ	FEXIT
-	CLRA
+	BNE	FCREAT
+	PSHA
+	PSHB
+	TBA
+	INT	$6C	; truncate
+	PULB
+	PULA
+FWRRD	PSHB
+	TSX
+	LDX	2,X
+	LDAB	1,X
+	CMPB	#'+'
+	PULB
+	BNE	FEXIT
+	TSTA
+	BNE	FEXIT
+	TBA
+	INT	$4E
+	BRA	FOPENRW
+FCREAT	CLRA
 	LDX	#FTABLE
 	INT	$4B
-	BRA	FEXIT
+	BRA	FWRRD
+
 FOPEN1	CMPB	#'r'
 	BNE	FOPERR
 	LDAA	#1
 	LDAB	1,X
-	BEQ	FOPENRW
+	BEQ	FOPENR
 	CMPB	#'+'
 	BNE	FOPERR
-	LDAA	#3
-FOPENRW	LDX	#FTABLE
+FOPENRW	LDAA	#3
+FOPENR	LDX	#FTABLE
 	INT	$4A
 FEXIT	STAA	ERRNO
 	TSTA
 	BEQ	FOPEXIT
 FOPERR	LDD	#0	; FIXME STDIN
 FOPEXIT JMP	RTSC
-
+	ENDP
 
 ;-------------------------------------------------
 
 ;  fclose(unit)
 ;  CLOSE A FILE
-fclose	DB 86		; SWITCH TO IN-LINE
+fclose	PROC
+	DB 86		; SWITCH TO IN-LINE
 	TSX
 	LDD	2,X		; FILE HANDLE
 	TBA
 	INT	$4E
 	BRA	FEXIT
+	ENDP
 
 ;--------------------------------------------------
 
 ;  getc(unit)  read a byte from file
 ;        return a char, else a -1 if EOF
 
-getc	DB	86
+getc	PROC
+	GLOBAL	FRWERR
+	DB	86
 	TSX
 	LDD	2,X
 	TBA
@@ -714,12 +757,14 @@ FRWERR	STAA	ERRNO
 	BRA	GETCOK
 GETCER	LDD	#-1
 GETCOK	JMP	RTSC
+	ENDP
 
 ;----------------------------------------------
 
 ;  putc(c,unit)   write to file
 
-putc	DB	86
+putc	PROC
+	DB	86
 	TSX
 	LDAA	5,X
 	STAA	FCHARBUF
@@ -727,10 +772,12 @@ putc	DB	86
 	LDX	#FCHARIO
 	INT	$4D
 	BRA	FRWERR
+	ENDP
 
 ;   getchar()    get a char from standard input
 
-getchar	DB	86
+getchar	PROC
+	DB	86
 	INT	$20
 	CMPA	#$1A		; COMPARE TO CNTRL-Z (EOF)
 	BNE	GETCHOK		; NO
@@ -739,24 +786,28 @@ getchar	DB	86
 GETCHOK	TAB			;  COPY CHAR IN A
 	CLRA
 GETCH1	JMP	RTSC
+	ENDP
 
 ;-----------------------------------------------
 
 ;   putchar(c)   write a char to standard output
 
-putchar	DB	86
+putchar	PROC
+	DB	86
 	TSX
 	LDAA	3,X		; GET THE CHAR
 	INT	$22
 	TAB
 	CLRA
 	JMP	RTSC
+	ENDP
 
 ;----------------------------------------------
 
 ;   gets(buffer)  get a char string into buffer
 
-gets	DB	86
+gets	PROC
+	DB	86
 	TSX
 	LDX	2,X GET START OF BUFFER
 	LDAB	#80		; max buffer size
@@ -765,15 +816,20 @@ gets	DB	86
 	TSX
 	LDD	2,X
 	JMP	RTSC
+	ENDP
 
 ;----------------------------------------------
 ;  puts(string)  print a string on the terminal
-puts	DB	86
+puts	PROC
+	DB	86
 	TSX
 	LDX	2,X		; GET STRING ADDRESS
 	INT	$23
+	LDAA	#10
+	INT	$22
 	LDD	#1
 	JMP	RTSC
+	ENDP
 
 ;----------------------------------------------
 ;
@@ -1122,6 +1178,210 @@ exit1	JMP	RTSC
 sysexit	PROC
 	DB	86
 	INT	$38
+	ENDP
+
+;
+;--------------------------------------------
+;  fgets(s, size, stream)
+fgets	PROC
+	DB	86
+	TSX
+	LDAB	5,X	; POINT TO size
+	LDX	6,X	; POINT to s
+loop	PSHB
+	PSHX
+	TSX
+	LDAA	6,X	; POINT TO stream
+	LDX	#FCHARIO
+	INT	$4C
+	STAA	ERRNO
+	CPX	#1
+	PULX
+	PULB
+	BNE	error
+	TST	ERRNO
+	BNE	error
+	LDAA	FCHARBUF
+	STAA	0,X
+	INX
+	CMPA	#10
+	BEQ	endstr
+	DECB
+	BNE	loop
+endstr	CLR	0,X
+	BRA	ok
+error	CLRB
+	CLRA
+exit	JMP	RTSC
+ok	TSX
+	LDD	6,X
+	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  fputs(s, stream)
+fputs	PROC
+	DB	86
+	TSX
+	LDX	4,X
+	LDAA	3,X
+	CLRB
+loop	TST	0,X
+	BEQ	write
+	INCB
+	INX
+	BRA	loop
+write	TSX
+	LDX	4,X
+	PSHB		;
+	CLRB
+	PSHB		;
+	PSHX		;
+	INT	$4D
+	STAA	ERRNO
+	INS
+	INS
+	INS
+	INS
+	TSTA
+	BEQ	ok
+	LDD	#-1
+exit	JMP	RTSC
+ok	XGDX
+	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  fread(s, size, n, stream)
+fread	PROC
+	GLOBAL	freader
+	DB	86
+	TSX
+	LDD	4,X	; N
+	LDX	6,X	; SIZE
+	INT	$EE
+	TSX
+	LDX	8,X	; S
+	PSHB
+	PSHA
+	PSHX
+	TSX
+	LDAA	7,X	; STREAM
+	INT	$4C
+freader	STAA	ERRNO
+	INS
+	INS
+	INS
+	INS
+	TSTA
+	BEQ	ok
+	CLRB
+	CLRA
+exit	JMP	RTSC
+ok	XGDX
+	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  fwrite(s, size, n, stream)
+fwrite	PROC
+	DB	86
+	TSX
+	LDD	4,X	; N
+	LDX	6,X	; SIZE
+	INT	$EE
+	TSX
+	LDX	8,X	; S
+	PSHB
+	PSHA
+	PSHX
+	TSX
+	LDAA	7,X	; STREAM
+	INT	$4D
+	BRA	freader
+	ENDP
+
+;
+;--------------------------------------------
+;  feof(stream)
+feof	PROC
+	DB	86
+	TSX
+	LDAA	3,X
+	CLRB
+	INT	$58
+	STAA	ERRNO
+	CLRA
+	JMP	RTSC
+	ENDP
+
+;
+;--------------------------------------------
+;  fflush(stream)
+fflush	PROC
+	DB	86
+	TSX
+	LDAA	3,X
+	INT	$5A
+	STAB	ERRNO
+	JMP	RTSC
+	ENDP
+
+;
+;--------------------------------------------
+;  fseek(stream, offset, whence)
+fseek	PROC
+	DB	86
+	TSX
+	LDAB	3,X
+	LDAA	7,X
+	LDX	4,X
+	INT	$50
+	STAA	ERRNO
+	TSTA
+	BEQ	ok
+	LDD	#-1
+exit	JMP	RTSC
+ok	CLRB
+	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  ftell(stream, *pos)
+;  return pos pointer
+ftell	PROC
+	DB	86
+	TSX
+	LDAA	5,X
+	LDX	2,X
+	INT	$53
+	STAA	ERRNO
+	TSTA
+	BEQ	ok
+	LDD	#-1
+exit	JMP	RTSC
+ok	XGDX
+	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  unlink(name)
+unlink	PROC
+	DB	86
+	TSX
+	LDX	2,X
+	INT	$4F
+	STAA	ERRNO
+	BEQ	ok
+	LDD	#-1
+exit	JMP	RTSC
+ok	CLRB
+	BRA	exit
 	ENDP
 
 ;

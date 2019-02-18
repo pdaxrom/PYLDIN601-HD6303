@@ -25,4 +25,13 @@ strcpy		EQU $150
 strcat		EQU $154
 strcmp		EQU $158
 exit		EQU $15C
+fgets		EQU $160
+fputs		EQU $164
+fread		EQU $168
+fwrite		EQU $16C
+feof		EQU $170
+fflush		EQU $174
+fseek		EQU $178
+ftell		EQU $17C
+unlink		EQU $180
 EOF		EQU -1
