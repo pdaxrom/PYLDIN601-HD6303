@@ -187,7 +187,7 @@ int *argv[];
 
 	if (lfile) {
 		if ((outlst = fopen(lfile, IO_W)) == NULL)
-			printf("as03: Cannot open %s\n", lfile);
+			printf("unias: Cannot open %s\n", lfile);
 	}
 
 	endsym = symtab + SYMSIZE;
@@ -213,7 +213,7 @@ int *argv[];
 		printf("--- Pass %d ---\n", pass);
 
 		if ((in = fopen(ifile, "r")) == NULL) {
-			printf("as03: Cannot open %s\n", ifile);
+			printf("unias: Cannot open %s\n", ifile);
 			fatal(-1);
 		}
 
@@ -222,7 +222,7 @@ int *argv[];
 				addext(pfile, ofile, ".PGM");
 
 				if ((outpgm = fopen(pfile, "w+")) == NULL) {
-					printf("as03: Cannot open %s\n", pfile);
+					printf("unias: Cannot open %s\n", pfile);
 					fatal(-1);
 				}
 				outword(0xA55A);
@@ -239,7 +239,7 @@ int *argv[];
 				addext(bfile, ofile, ".CMD");
 
 			if ((out = fopen(bfile, "w+")) == NULL) {
-				printf("as03: Cannot open %s\n", bfile);
+				printf("unias: Cannot open %s\n", bfile);
 				fatal(-1);
 			}
 		}
@@ -265,14 +265,14 @@ int *argv[];
 		if (fseek(out, fpos, 0) == 0)
 			putc(0xFF ^ (csumval & 0xFF), out);
 		else {
-			printf("as03: Cannot set checksum position\n");
+			printf("unias: Cannot set checksum position\n");
 			fatal(-1);
 		}
 		fclose(out);
 	} else if (outpgm) {
 		fclose(out);
 		if ((out = fopen(bfile, "r")) == NULL) {
-			printf("as03: Cannot open %s\n", bfile);
+			printf("unias: Cannot open %s\n", bfile);
 			fatal(-1);
 		}
 
@@ -301,7 +301,7 @@ int *argv[];
 		fclose(outlst);
 
 	if (errcnt) {
-		printf("as03: %d errors\n", errcnt);
+		printf("unias: %d errors\n", errcnt);
 		exit(-1);
 	}
 	exit(0);
@@ -327,7 +327,7 @@ char *ext;
  */
 usage()
 {
-	printf("usage: as03 [-l [listfile]] [-o outfile] file\n");
+	printf("usage:\nunias [-l [listfile]] [-o outfile] file\n");
 	fatal(-1);
 }
 
@@ -926,7 +926,7 @@ file()
 	char *bp;
 
 	if (in2) {
-	    printf("as03: Cannot nest include files\n");
+	    printf("unias: Cannot nest include files\n");
 	    fatal(-1);
 	}
 
@@ -941,7 +941,7 @@ file()
 	*bp = 0; /* '\0' */
 	if ((in = fopen(sbuf, "r")) == NULL) {
 		linecnt = linecnt2;
-		printf("as03: Cannot open %s\n", sbuf);
+		printf("unias: Cannot open %s\n", sbuf);
 		fatal(-1);
 	}
 }
@@ -1517,7 +1517,7 @@ char *message;
 error2(fd)
 int fd;
 {
-	fprintf(fd, "as03: too many errors, assembly aborted\n");
+	fprintf(fd, "unias: too many errors, assembly aborted\n");
 }
 
 /*

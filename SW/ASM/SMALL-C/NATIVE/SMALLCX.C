@@ -10,7 +10,7 @@
 
 #define VERSION "UniDOS Version 2.1, 10 Feb 2019"
 
-#define AUTHOR "by sashz <sashz@pdaXrom.org"
+#define AUTHOR "  by sashz <sashz@pdaXrom.org>"
 
 /*      Define system dependent parameters      */
 
@@ -270,7 +270,7 @@ int *argv[];
 
 usage()
 {
-	pl("smallc [-ctext] [-errstop] [-o outputfile] inputfile");
+	pl("unicc [-ctext] [-errstop] [-o outputfile] inputfile");
 	nl();
 	exit(-1);
 }
