@@ -4,6 +4,30 @@
 ;
 ;   LAST UPDATE   9-SEP-82
 ;
+
+; LIB FLEXPTRS
+	SECTION	$E8
+PC	DS	2	; PSEUDO PROGRAM COUNTER
+R1A	DS	1	; WORKING 16 BIT
+R1B	DS	1	; --REGISTER
+STEMP	DS	2	; TEMP STORAGE FOR STACK POINTER
+X1TMP	DS	2	; TEMP STORAGE FOR X REG
+X2TMP	DS	2	; ... DITTO ...
+DFLAG	DS	1	; DIVIDE ROUTINE FLAG
+
+ERRNO	DS	1
+FTABLE	DS	4
+FCHARIO	DS	2
+	DS	2
+FCHARBUF DS	1
+	ENDS
+
+;**************************************************
+
+CURR_PCB EQU	$EC00
+ARGC	EQU	$1D
+ARGV	EQU	$20
+
 	JMP	BEGIN ;START THE INTERPRETER
 
 ;  AN INDIRECT CALL TABLE
@@ -73,31 +97,20 @@
 	JMP	ftell+1
 	DB	86
 	JMP	unlink+1
+	DB	86
+	JMP	system+1
+	DB	86
+	JMP	geterrno+1
+	DB	86
+	JMP	getstrerr+1
 	DS	4*4,$FF	;ROOM FOR 4 MORE
 
-; LIB FLEXPTRS
-
-PC		DS	2	; PSEUDO PROGRAM COUNTER
-R1A		DS	1	; WORKING 16 BIT
-R1B		DS	1	; --REGISTER
-STEMP		DS	2	; TEMP STORAGE FOR STACK POINTER
-X1TMP		DS	2	; TEMP STORAGE FOR X REG
-X2TMP		DS	2	; ... DITTO ...
-DFLAG		DS	1	; DIVIDE ROUTINE FLAG
-
-ERRNO		DS	1
-FTABLE		DS	4
-FCHARIO		DW	FCHARBUF
-		DW	1
-FCHARBUF	DB	1
-
-;**************************************************
-
-CURR_PCB	EQU	$EC00
-ARGC		EQU	$1D
-ARGV		EQU	$20
-
 BEGIN
+	LDX	#FCHARBUF
+	STX	FCHARIO
+	LDX	#1
+	STX	FCHARIO+2
+
 	LDX	CURR_PCB
 	LDAB	ARGC,X
 	CLRA
@@ -1379,6 +1392,42 @@ unlink	PROC
 exit	JMP	RTSC
 ok	CLRB
 	BRA	exit
+	ENDP
+
+;
+;--------------------------------------------
+;  system(cmdline)
+system	PROC
+	DB	86
+	TSX
+	LDX	2,X
+	INT	$39
+	STAA	ERRNO
+	TAB
+	CLRA
+	JMP	RTSC
+	ENDP
+
+;
+;--------------------------------------------
+;  geterrno()
+geterrno PROC
+	DB	86
+	LDAB	ERRNO
+	CLRA
+	JMP	RTSC
+	ENDP
+
+;
+;--------------------------------------------
+;  getstrerr(err, str)
+getstrerr PROC
+	DB	86
+	TSX
+	LDAA	5,X
+	LDX	2,X
+	INT	$3D
+	JMP	RTSC
 	ENDP
 
 ;

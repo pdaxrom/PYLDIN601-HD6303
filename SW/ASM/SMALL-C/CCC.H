@@ -34,4 +34,7 @@ fflush		EQU $174
 fseek		EQU $178
 ftell		EQU $17C
 unlink		EQU $180
+system		EQU $184
+geterrno	EQU $188
+getstrerr	EQU $18C
 EOF		EQU -1

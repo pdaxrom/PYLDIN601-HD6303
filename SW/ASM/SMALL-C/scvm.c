@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 #define byte unsigned char
 #define word unsigned short
@@ -84,6 +85,9 @@
 #define f_fseek		0x178
 #define f_ftell		0x17C
 #define f_unlink	0x180
+#define f_system	0x184
+#define f_geterrno	0x188
+#define f_getstrerr	0x18C
 
 FILE *fdtab[256];
 
@@ -224,6 +228,13 @@ void chkfunc(word *sp, word *pc, word *reg)
 		*reg = tmp;
 		break;
 	case f_unlink: tmp = GETARG1(); *reg = unlink((char *)&mem[tmp]); break;
+	case f_system: tmp = GETARG1(); *reg = system((char *)&mem[tmp]); break;
+	case f_geterrno: *reg = errno; break;
+	case f_getstrerr:
+		tmp  = GETARG1();
+		tmp1 = GETARG2();
+		strcpy((char *)&mem[tmp1], strerror(tmp));
+		break;
 
 	default: fprintf(stderr, "Unimplemented function %X\n", *pc); exit(1); break;
 	}
