@@ -116,7 +116,14 @@ void chkfunc(word *sp, word *pc, word *reg)
 //	fprintf(stderr, "External function request, PC=$%04X\n", *pc);
 
 	switch (*pc) {
-	case f_fclose: tmp = GETARG1(); fclose(fdtab[tmp]); *reg = 0; break;
+	case f_fclose:
+		tmp = GETARG1();
+		if (fdtab[tmp]) {
+		    fclose(fdtab[tmp]);
+		    fdtab[tmp] = 0;
+		}
+		*reg = 0;
+		break;
 	case f_fopen:
 		tmp1 = GETARG1();
 		tmp = GETARG2();
