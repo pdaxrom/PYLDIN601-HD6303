@@ -53,46 +53,52 @@
 #define UGE		2*42
 #define ASMC		2*43
 
-#define f_fclose	0x104
-#define f_fopen		0x108
-#define f_getc		0x10C
-#define f_getchar	0x110
-#define f_gets		0x114
-#define f_putc		0x118
-#define f_putchar	0x11C
-#define f_puts		0x120
-#define f_RTSC		0x124
-#define f_isalpha	0x128
-#define f_isdigit	0x12C
-#define f_isalnum	0x130
-#define f_islower	0x134
-#define f_isupper	0x138
-#define f_isspace	0x13C
-#define f_toupper	0x140
-#define f_tolower	0x144
-#define f_strclr	0x148
-#define f_strlen	0x14C
-#define f_strcpy	0x150
-#define f_strcat	0x154
-#define f_strcmp	0x158
-#define f_exit		0x15C
-#define f_fgets		0x160
-#define f_fputs		0x164
-#define f_fread		0x168
-#define f_fwrite	0x16C
-#define f_feof		0x170
-#define f_fflush	0x174
-#define f_fseek		0x178
-#define f_ftell		0x17C
-#define f_unlink	0x180
-#define f_system	0x184
-#define f_geterrno	0x188
-#define f_getstrerr	0x18C
+#define ZVM_BASE	0xC000
+
+#define f_fclose	ZVM_BASE+0x104
+#define f_fopen		ZVM_BASE+0x108
+#define f_getc		ZVM_BASE+0x10C
+#define f_getchar	ZVM_BASE+0x110
+#define f_gets		ZVM_BASE+0x114
+#define f_putc		ZVM_BASE+0x118
+#define f_putchar	ZVM_BASE+0x11C
+#define f_puts		ZVM_BASE+0x120
+#define f_RTSC		ZVM_BASE+0x124
+#define f_isalpha	ZVM_BASE+0x128
+#define f_isdigit	ZVM_BASE+0x12C
+#define f_isalnum	ZVM_BASE+0x130
+#define f_islower	ZVM_BASE+0x134
+#define f_isupper	ZVM_BASE+0x138
+#define f_isspace	ZVM_BASE+0x13C
+#define f_toupper	ZVM_BASE+0x140
+#define f_tolower	ZVM_BASE+0x144
+#define f_strclr	ZVM_BASE+0x148
+#define f_strlen	ZVM_BASE+0x14C
+#define f_strcpy	ZVM_BASE+0x150
+#define f_strcat	ZVM_BASE+0x154
+#define f_strcmp	ZVM_BASE+0x158
+#define f_exit		ZVM_BASE+0x15C
+#define f_fgets		ZVM_BASE+0x160
+#define f_fputs		ZVM_BASE+0x164
+#define f_fread		ZVM_BASE+0x168
+#define f_fwrite	ZVM_BASE+0x16C
+#define f_feof		ZVM_BASE+0x170
+#define f_fflush	ZVM_BASE+0x174
+#define f_fseek		ZVM_BASE+0x178
+#define f_ftell		ZVM_BASE+0x17C
+#define f_unlink	ZVM_BASE+0x180
+#define f_system	ZVM_BASE+0x184
+#define f_geterrno	ZVM_BASE+0x188
+#define f_getstrerr	ZVM_BASE+0x18C
+
+#define f_first		f_fclose
+#define f_last		f_getstrerr
 
 FILE *fdtab[256];
 
 byte mem[0x10000];
-word start = 0x800;
+word load = 0x100;
+word start = 0x140;
 
 #ifdef APP
 byte app[] = {
@@ -111,7 +117,7 @@ byte app[] = {
 
 void chkfunc(word *sp, word *pc, word *reg)
 {
-    if (*pc < start) {
+    if ((*pc >= (f_first)) && (*pc <= (f_last))) {
 	word tmp, tmp1, tmp2, tmp3;
 //	fprintf(stderr, "External function request, PC=$%04X\n", *pc);
 
@@ -243,6 +249,7 @@ void chkfunc(word *sp, word *pc, word *reg)
 		strcpy((char *)&mem[tmp1], strerror(tmp));
 		break;
 
+//	default: return; break; 
 	default: fprintf(stderr, "Unimplemented function %X\n", *pc); exit(1); break;
 	}
 
@@ -264,14 +271,14 @@ int main(int argc, char *argv[])
     fprintf(stderr, "SmallC virtual machine\n");
 
 #ifdef APP
-    memcpy(&mem[start], app, sizeof(app));
+    memcpy(&mem[load], app, sizeof(app));
 #else
     inf = fopen(argv[1], "rb");
     if (!inf) {
 	fprintf(stderr, "Can't open file %s\n", argv[1]);
 	return 1;
     }
-    len = fread(&mem[start], 1, sizeof(mem) - start, inf);
+    len = fread(&mem[load], 1, sizeof(mem) - load, inf);
     fclose(inf);
 #endif
 
