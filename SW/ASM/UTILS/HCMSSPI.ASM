@@ -20,8 +20,23 @@ font		ds	2
 framebuf	ds	2
 		ends
 
-		org $100
+;		org $100
 
+		ldx	#drv_hdr
+		ldab	MEMPAGE_SEL
+		int	$5E
+		rts
+
+drv_hdr	db	'DISP    '
+		dw	0
+		dw	drv_write
+		dw	drv_init
+		db	0, 0, 0
+
+hello		db	'HCMS Display driver (DISP:)', 10
+		db	'(c) sashz <sashz@pdaXrom.org>, 2019', 10, 0
+
+drv_init	proc
 		ldx	#hello
 		int	$23
 
@@ -45,18 +60,20 @@ framebuf	ds	2
 		ldaa	#3
 		bsr	putchar
 
-readkey		int	$20
-		int	$25
-		bsr	putchar
-
-
 		ldx	#disptbl
 		ldx	framebuf,x
 		jsr	send_data
 
-		bra	readkey
-
 		rts
+		endp
+
+drv_write	proc
+		bsr	putchar
+		ldx	#disptbl
+		ldx	framebuf,x
+		jsr	send_data
+		rts
+		endp
 
 putstring	proc
 loop		ldaa	0,x
@@ -278,8 +295,6 @@ disp_init	proc
 
 		rts
 		endp
-
-hello		db	'HCMS test', 10, 0
 
 disptbl		db	0, 0	; W, W
 		db	0, 0	; X, Y

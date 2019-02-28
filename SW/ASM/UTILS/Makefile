@@ -7,7 +7,7 @@ all: $(AS03)		\
     LOADBIOS.CMD	\
     TRAP.CMD		\
     XONIX.CMD		\
-    HCMSSPI.CMD		\
+    HCMSSPI.PGM		\
     CHIPTUNE.CMD	\
     RAMCHK.CMD		\
     TEST.CMD
@@ -22,7 +22,7 @@ $(UNIASM):
 $(AS03):
 	make -C $(shell dirname $(AS03)) $(shell basename $(AS03))
 
-.SUFFIXES: .ASM .CMD
+.SUFFIXES: .ASM .CMD .PGM
 
 #.ASM.CMD: ../../DEVMAP.INC
 #	$(UNIASM) $< $(basename $@) $@
@@ -30,5 +30,8 @@ $(AS03):
 .ASM.CMD: ../../DEVMAP.INC ../../BOOTROM.INC
 	$(AS03) -l $(basename $@).LST -o $@ $<
 
+.ASM.PGM: ../../DEVMAP.INC ../../BOOTROM.INC
+	$(AS03) -l $(basename $@).LST -o $@ $<
+
 clean:
-	rm -f *.LST *.CMD
+	rm -f *.LST *.CMD *.PGM
