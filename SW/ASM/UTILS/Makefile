@@ -11,7 +11,8 @@ all: $(AS03)		\
     CHIPTUNE.CMD	\
     RAMCHK.CMD		\
     TEST.CMD		\
-    MAKEBOOT.CMD
+    MAKEBOOT.CMD	\
+    SDFORMAT.CMD
 
 #    HELLO.CMD		\
 #    INOUT.CMD

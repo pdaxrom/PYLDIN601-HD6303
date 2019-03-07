@@ -1,5 +1,18 @@
 		org	$100
 
+fat12sec	section	$0B
+sectorsz	ds	2
+clustersz	ds	1
+reservsz	ds	2
+fatnum		ds	1
+dirsz		ds	2
+sectnum		ds	2
+mediadesc	ds	1
+fatsz		ds	2
+tracksz		ds	2
+headnum		ds	2
+		ends
+
 		ldx	#text1
 		int	$23
 		int	$20
@@ -10,23 +23,48 @@
 		bhi	drverror
 		suba	#'A'
 		staa	drive
-		int	$25
 
-		ldx	#param
-		ldaa	#1
-		int	$40
-		tsta
-		bne	error
+		ldx	#areyou
+		int	$23
+		int	$20
+		cmpa	#'Y'
+		bne	exit
+		bra	format
 
-		ldx	#cparam
-		ldab	#1
-		ldaa	#$100-$4D
-		int	$2d
+drverror	ldx	#texterdrv
+		bra	showerror
 
-		ldx	#cparam0
-		ldab	#0
-		ldaa	#11
-		int	$2d
+format		ldx	#newline
+		int	$23
+
+		ldx	#bootsec
+		ldab	x,reservsz
+		ldaa	x,reservsz+1
+		pshb
+		psha
+		ldaa	x,fatnum
+		pulx
+fatloop		psha
+		pshx
+		bsr	fatformat
+		ldx	#newline
+		int	$23
+		pulx
+		xgdx
+		ldx	#bootsec
+		addb	x,fatsz
+		adca	x,fatsz+1
+		xgdx
+		pula
+		deca
+		bne	fatloop
+
+		bsr	dirformat
+
+		ldx	#bootsec
+		stx	param
+		ldx	#0
+		stx	param+3
 
 		ldx	#param
 		ldaa	#2
@@ -37,17 +75,101 @@
 		ldx	#textok
 		int	$23
 
-		rts
-
-drverror	ldx	#texterdrv
-		bra	showerror
+exit		rts
 
 error		ldx	#texterror
 showerror	int	$23
 		rts
 
+fatformat	proc
+		stx	param+3
 
-text1		db	'Makeboot utility v1.0',10
+		pshx
+
+		ldx	#buffer
+		stx	param
+
+clrbuf		clr	x
+		inx
+		cpx	#buffer+512
+		bne	clrbuf
+
+		ldx	#bootsec
+		ldab	x,fatsz
+		ldaa	x,fatsz+1
+		xgdx
+
+		bsr	clearsectors
+
+		ldx	#newline
+		int	$23
+
+		pulx
+
+		stx	param+3
+
+		ldaa	#$F0
+		staa	buffer
+		ldd	#$FFFF
+		stx	buffer+1
+
+		ldx	#param
+		ldaa	#2
+		int	$40
+		tsta
+		bne	error
+
+		rts
+		endp
+
+dirformat	proc
+		stx	param+3
+
+		ldx	#buffer
+		stx	param
+
+clrbuf		clr	x
+		inx
+		cpx	#buffer+512
+		bne	clrbuf
+
+		ldx	#bootsec
+		ldab	x,dirsz
+		ldaa	x,dirsz+1
+		ldx	#32
+		int	$EE
+		xgdx
+		ldd	#512
+		int	$EF
+		xgdx
+		bsr	clearsectors
+
+		rts
+		endp
+
+clearsectors	proc
+loop		pshx
+		ldx	param+3
+		pshx
+		ldx	#sectorno
+		int	$23
+		pulx
+		int	$24
+		ldx	#param
+		ldaa	#2
+		int	$40
+		tsta
+		bne	error
+		ldx	param+3
+		inx
+		stx	param+3
+		pulx
+		dex
+		bne	loop
+		rts
+		endp
+
+text1		db	'SD Format utility v1.0',10
 		db	'(c) sashz <sashz@pdaXrom.org>, 2019',10
 		db	'Boot disk (A-Z)? ',0
 newline		db	10,0
@@ -55,20 +177,18 @@ texterdrv	db	10,'Drive error',10,0
 texterror	db	10,'Error',10,0
 textok		db	10,'Completed',10,0
 
+areyou		db	10,'Are you sure(Y/N)? ',0
+
+sectorno	db	13,'Sector: ',0
+
 param		dw	buffer
 drive		db	0
 		dw	0
 
-cparam		dw	bootsec+$4D
-		dw	buffer+$4D
-
-cparam0		dw	bootsec
-		dw	buffer
-
-bootsec		db	  $EB,$4B,$90,$55,$6E,$69,$44,$4F,$53,$20,$20,$00,$02,$02,$01,$00
-		db	  $02,$70,$00,$D0,$02,$FD,$02,$00,$09,$00,$02,$00,$00,$00,$00,$00
-		db	  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$12
-		db	  $00,$00,$00,$00,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+bootsec		db	  $EB,$4B,$90,$55,$6E,$69,$44,$4F,$53,$20,$20,$00,$02,$08,$01,$00
+		db	  $02,$00,$02,$90,$7E,$F8,$0C,$00,$51,$00,$02,$00,$00,$00,$00,$00
+		db	  $00,$00,$00,$00,$00,$00,$29,$C5,$56,$C4,$11,$55,$6E,$69,$44,$4F
+		db	  $53,$20,$20,$20,$20,$20,$46,$41,$54,$31,$32,$20,$20,$20,$00,$00
 		db	  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$E9,$B0,$00
 		db	  $BD,$01,$B3,$FF,$01,$AA,$CE,$00,$00,$FF,$01,$AC,$86,$01,$CE,$01
 		db	  $AA,$3F,$4A,$4D,$26,$32,$F7,$01,$B2,$17,$CE,$01,$AE,$3F,$51,$FE
@@ -93,10 +213,11 @@ bootsec		db	  $EB,$4B,$90,$55,$6E,$69,$44,$4F,$53,$20,$20,$00,$02,$02,$01,$00
 		db	  $72,$69,$6B,$65,$20,$61,$6E,$79,$20,$6B,$65,$79,$20,$77,$68,$65
 		db	  $6E,$20,$72,$65,$61,$64,$79,$0D,$0A,$00,$55,$4E,$49,$44,$4F,$53
 		db	  $2E,$43,$4D,$44,$00,$00,$00,$00
-		db	  'Format Utility  '
-		db	  '  Version 2.0   '
-		db	  '(C) Ivan Gorinov'
-		db	  ' - Pendgy   1989'
-		db	  $00,$00,$00,$00,$00,$00,$A5,$5A
+		db	  'SDFormat Utility'
+		db	  '  Version 1.0   '
+		db	  '(C) sashz <sashz'
+		db	  '@pdaXrom.org>, 2'
+		db	  '019 '
+		db	  $00,$00,$A5,$5A
 
-buffer		ds	512
+buffer		ds	512,0
