@@ -10,7 +10,8 @@ all: $(AS03)		\
     HCMSSPI.PGM		\
     CHIPTUNE.CMD	\
     RAMCHK.CMD		\
-    TEST.CMD
+    TEST.CMD		\
+    MAKEBOOT.CMD
 
 #    HELLO.CMD		\
 #    INOUT.CMD
