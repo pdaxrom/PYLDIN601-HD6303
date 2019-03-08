@@ -12,7 +12,8 @@ all: $(AS03)		\
     RAMCHK.CMD		\
     TEST.CMD		\
     MAKEBOOT.CMD	\
-    SDFORMAT.CMD
+    SDFORMAT.CMD	\
+    FLASHROM.CMD
 
 #    HELLO.CMD		\
 #    INOUT.CMD
