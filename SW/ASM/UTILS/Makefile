@@ -13,7 +13,8 @@ all: $(AS03)		\
     TEST.CMD		\
     MAKEBOOT.CMD	\
     SDFORMAT.CMD	\
-    FLASHROM.CMD
+    FLASHROM.CMD	\
+    PAGEINFO.CMD
 
 #    HELLO.CMD		\
 #    INOUT.CMD
