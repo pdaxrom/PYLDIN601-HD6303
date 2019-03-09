@@ -734,8 +734,9 @@ char *p;
 		return(IND_X);
 	} else if ((oper >= 0 & oper < BYTE) & (p[DIRECT] != ILLEGAL)) {
 		/* direct jsr ($9D) second pass issues fix */
-		if (((p[DIRECT] & 0xFF) == 0x9D) &
-			((oper < 0x28)| (bintype != BIN_CMD))) {
+		if ((((p[DIRECT] & 0xFF) == 0x9D) &
+			((oper < 0x28) | (bintype != BIN_CMD))) |
+		    ((bintype != BIN_CMD) & (flgrel != 0) & (p[EXTEND] != ILLEGAL))) {
 			return(extended(oper));
 		}
 		return(direct(oper, bitop));
