@@ -24,7 +24,7 @@ module spiio (
 
 	input wire clk_in,
 
-	output wire mosi,
+	output reg mosi,
 	output reg msck,
 	input wire miso,
 	output wire [1:0] mss,
@@ -107,9 +107,9 @@ module spiio (
 
 	assign mss = cfg_ssm ? cfg_ss : int_mss;
 
-	assign mosi = ((bit_counter == 0) && (!msck)) ? 1'b1 :
-					cfg_16b ? shifted_tx_data[15] :
-					shifted_tx_data[7];
+//	assign mosi = ((bit_counter == 0) && (!msck)) ? 1'b1 :
+//					cfg_16b ? shifted_tx_data[15] :
+//					shifted_tx_data[7];
 
 	always @ (posedge clk_in) begin
 		if (rst) begin
@@ -121,17 +121,21 @@ module spiio (
 			shifted_tx_data <= tx_data;
 			bit_counter <= cfg_16b ? 16 : 8;
 			int_mss <= cfg_ss;
+			mosi <= cfg_16b ? shifted_tx_data[15] :
+						shifted_tx_data[7];
 		end else begin
 			if (bit_counter != 0) begin
 				if (scale_counter == prescaler) begin
 					scale_counter <= 0;
-					msck <= ~msck;
 					if (msck) begin
-//						shifted_tx_data <= cfg_16b ? {shifted_tx_data[14:0], 1'b1} : {shifted_tx_data[6:0], 1'b1};
-//						rx_data <= cfg_16b ? {rx_data[14:0], miso} : {rx_data[6:0], miso};
-						shifted_tx_data <= {shifted_tx_data[14:0], 1'b1};
 						rx_data <= {rx_data[14:0], miso};
 						bit_counter <= bit_counter - 1'b1;
+						msck <= 0;
+					end else begin
+						mosi <= cfg_16b ? shifted_tx_data[15] :
+									shifted_tx_data[7];
+						shifted_tx_data <= {shifted_tx_data[14:0], 1'b1};
+						msck <= 1;
 					end
 				end else scale_counter <= scale_counter + 1'b1;
 			end else begin
