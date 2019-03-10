@@ -15,7 +15,9 @@ all: $(AS03)		\
     SDFORMAT.CMD	\
     FLASHROM.CMD	\
     PAGEINFO.CMD	\
-    IRQTEST.CMD
+    IRQTEST.CMD		\
+    VPUGRF.CMD		\
+    P601EGRF.PGM
 
 #    HELLO.CMD		\
 #    INOUT.CMD
