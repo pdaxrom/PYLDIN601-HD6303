@@ -42,8 +42,6 @@ module superio (
 
 	reg			sys_res;
 	reg	[19:0]	sys_res_delay;
-	
-	wire		resreq;
 
 	reg		[1:0]	led_anode;
 	reg		[24:0]	led_cnt;
@@ -75,20 +73,6 @@ module superio (
 	always @ (posedge pixel_clk) clkdiv <= clkdiv + 1;
 	wire clk2m = clkdiv[1];
 
-	always @ (posedge E or posedge resreq)
-	begin
-		if (resreq) begin
-			sys_res <= 1;
-			sys_res_delay <= 0;
-		end else begin
-			if (sys_res_delay[17]) begin
-				sys_res <= 0;
-			end else sys_res_delay <= sys_res_delay + 1;
-		end
-	end
-
-	assign RESET = !sys_res;
-
 	/*
 		Mapping IO
 	 */
@@ -101,10 +85,51 @@ module superio (
 	wire DS5 = !EXTCS && (ADDR[7:5] == 3'b101); // $E6A0
 	wire DS6 = !EXTCS && (ADDR[7:5] == 3'b110); // $E6C0
 	wire DS7 = !EXTCS && (ADDR[7:5] == 3'b111); // $E6E0
+
+/*
+ **************************** IRQ and DMA control ****************************
+ * 0 - 16 BITS IRQ ROUTER
+ * ------+-------+-------+-------+-------+-------+-------+------
+ * 15 14 | 13 12 | 11 10 | 09 08 | 07 06 | 05 04 | 03 02 | 01 00
+ * ------+-------+-------+-------+-------+-------+-------+------
+ * IRQS7 | IRQS6 | IRQS5 | IRQS4 | IRQS3 | IRQS2 | IRQS1 | IRQS0
+ *
+ * IRQSX - 00 - IRQ0 (by default)
+ *         01 - IRQ1
+ *         10 - NMI
+ *         11 - RESET
+ */
+
+	wire pctrl_cs = DS7 && (ADDR[4:1] == 4'b1111); // $E6FE
+	reg [7:0]  pctrl_dout;
+	reg [15:0] pctrl_dat;
 	
+	always@(posedge E) begin
+		if (pctrl_cs && RW) begin
+			if (ADDR[0]) pctrl_dout <= pctrl_dat[7:0];
+			else pctrl_dout <= pctrl_dat[15:8];
+		end
+	end
+	
+	always@(negedge E) begin
+		if (sys_res) pctrl_dat <= 0;
+		else if (pctrl_cs && !RW) begin
+			if (ADDR[0]) pctrl_dat[7:0] <= DATA;
+			else pctrl_dat[15:8] <= DATA;
+		end
+	end
+
+/*
+ *****************************************************************************
+ */
+
 	wire vpu_cs = DS0 && (ADDR[4] == 1'b1); // $E610
 	wire [7:0] vpu_dout;
 	wire vpu_irq;
+	wire [3:0] vpu_isel = (pctrl_dat[1:0] == 2'b00) ? 4'b0001 :
+						  (pctrl_dat[1:0] == 2'b01) ? 4'b0010 :
+						  (pctrl_dat[1:0] == 2'b10) ? 4'b0100 :
+						                              4'b1000;
 	vpu vpu1 (
 		.clk(E),
 		.rst(sys_res),
@@ -121,6 +146,10 @@ module superio (
 	wire simpleio_cs = DS5 && (ADDR[4] == 1'b0); // $E6A0
 	wire [7:0] simpleio_dout;
 	wire simpleio_irq;
+	wire [3:0] simpleio_isel = (pctrl_dat[11:10] == 2'b00) ? 4'b0001 :
+						       (pctrl_dat[11:10] == 2'b01) ? 4'b0010 :
+						       (pctrl_dat[11:10] == 2'b10) ? 4'b0100 :
+						                                     4'b1000;
 	simpleio simpleio1 (
 		.clk(E),
 		.rst(sys_res),
@@ -190,6 +219,11 @@ module superio (
 	wire ps2io_cs = DS6 && (ADDR[4:3] == 2'b10); // $E6D0
 	wire [7:0] ps2io_dout;
 	wire ps2io_irq;
+	wire [3:0] ps2io_isel = (pctrl_dat[13:12] == 2'b00) ? 4'b0001 :
+							(pctrl_dat[13:12] == 2'b01) ? 4'b0010 :
+							(pctrl_dat[13:12] == 2'b10) ? 4'b0100 :
+						                                  4'b1000;
+	wire		ps2resreq;
 	ps2io ps2io_impl(
 		.clk(E),
 		.rst(sys_res),
@@ -199,7 +233,7 @@ module superio (
 		.rw(RW),
 		.cs(ps2io_cs),
 		.irq(ps2io_irq),
-		.resreq(resreq),
+		.resreq(ps2resreq),
 		.ps2clk(PS2CLK),
 		.ps2dat(PS2DAT)
 	);
@@ -209,11 +243,28 @@ module superio (
 					  spiio_cs	  ? spiio_dout		:
 					  ps2io_cs	  ? ps2io_dout		:
 					  vpu_cs	  ? vpu_dout		:
+					  pctrl_cs    ? pctrl_dout      :
 					  8'b10100101;
 	
 	assign DATA = (RW & !EXTCS) ? DOUT : 8'bZZZZZZZZ;
-	
-	assign IRQ[0] = !(simpleio_irq | vpu_irq | ps2io_irq);
-	assign IRQ[1] = 1;
-	assign NMI = 1;
+	assign IRQ[0] = !((simpleio_irq & simpleio_isel[0]) | (vpu_irq & vpu_isel[0]) | (ps2io_irq & ps2io_isel[0]));
+	assign IRQ[1] = !((simpleio_irq & simpleio_isel[1]) | (vpu_irq & vpu_isel[1]) | (ps2io_irq & ps2io_isel[1]));	assign NMI    = !((simpleio_irq & simpleio_isel[2]) | (vpu_irq & vpu_isel[2]) | (ps2io_irq & ps2io_isel[2]));
+	wire softres = (simpleio_irq & simpleio_isel[3]) | (vpu_irq & vpu_isel[3]) | (ps2io_irq & ps2io_isel[3]);
+
+	wire		resreq = softres | ps2resreq;
+
+	always @ (posedge E or posedge resreq)
+	begin
+		if (resreq) begin
+			sys_res <= 1;
+			sys_res_delay <= 0;
+		end else begin
+			if (sys_res_delay[17]) begin
+				sys_res <= 0;
+			end else sys_res_delay <= sys_res_delay + 1;
+		end
+	end
+
+	assign RESET = !sys_res;
+
 endmodule
