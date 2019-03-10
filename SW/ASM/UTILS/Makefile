@@ -14,7 +14,8 @@ all: $(AS03)		\
     MAKEBOOT.CMD	\
     SDFORMAT.CMD	\
     FLASHROM.CMD	\
-    PAGEINFO.CMD
+    PAGEINFO.CMD	\
+    IRQTEST.CMD
 
 #    HELLO.CMD		\
 #    INOUT.CMD
