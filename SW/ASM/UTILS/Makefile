@@ -14,6 +14,7 @@ all: $(UNIAS)		\
     MAKEBOOT.CMD	\
     SDFORMAT.CMD	\
     FLASHROM.CMD	\
+    FLASHBIOS.CMD	\
     PAGEINFO.CMD	\
     IRQTEST.CMD		\
     VPUGRF.CMD		\
