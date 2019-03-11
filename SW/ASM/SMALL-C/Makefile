@@ -1,6 +1,6 @@
 VM = ./scvm
 
-all: smallc as03 UNICC.CMD UNIAS.CMD
+all: unicc unias UNICC.CMD UNIAS.CMD
 
 CFLAGS = -O2
 
@@ -23,16 +23,16 @@ AS03.CMD: scvm AS03/AS03.C AS03X.CMD SMALLC.CMD
 	cd AS03 && ../$(VM) ../SMALLC.CMD -o ../AS03.ASM AS03.C
 	$(VM) AS03X.CMD -o AS03.CMD AS03.ASM
 
-smallc: scvm.c smallc.h
-	$(CC) -o $@ scvm.c -DAPP=\"smallc.h\" -Wall $(CFLAGS)
+unicc: scvm.c unicc.h
+	$(CC) -o $@ scvm.c -DAPP=\"unicc.h\" -Wall $(CFLAGS)
 
-smallc.h: SMALLC.CMD
+unicc.h: SMALLC.CMD
 	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $^ | sed 's/0x  ,//g' > $@
 
-as03: scvm.c as03.h
-	$(CC) -o $@ scvm.c -DAPP=\"as03.h\" -Wall $(CFLAGS)
+unias: scvm.c unias.h
+	$(CC) -o $@ scvm.c -DAPP=\"unias.h\" -Wall $(CFLAGS)
 
-as03.h: AS03.CMD
+unias.h: AS03.CMD
 	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $^ | sed 's/0x  ,//g' > $@
 
 UNIAS.CMD: AS03.CMD ZCODE.ROM
@@ -48,6 +48,6 @@ ZCODE.ROM: AS03.CMD ZCODE.ASM
 
 clean:
 	rm -f scvm *.o out.sym AS03X.CMD AS03X.ASM SMALLCX.CMD SMALLCX.ASM AS03.CMD AS03.ASM SMALLC.CMD SMALLC.ASM
-	rm -f smallc smallc.h
-	rm -f as03 as03.h
+	rm -f unicc unicc.h
+	rm -f unias unias.h
 	rm -f UNICC.ASM UNIAS.CMD UNICC.CMD UNIAS.CMD ZCODE.ROM ZCODE.LST

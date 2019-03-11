@@ -1,7 +1,7 @@
 #UNIASM = ../../DEVEL/uniasm
-AS03 = ../SMALL-C/as03
+UNIAS = ../SMALL-C/unias
 
-all: $(AS03)		\
+all: $(UNIAS)		\
     LOADPAGE.CMD	\
     COPYPAGE.CMD	\
     LOADBIOS.CMD	\
@@ -26,8 +26,8 @@ all: $(AS03)		\
 $(UNIASM):
 	make -C $(shell dirname $(UNIASM)) $(shell basename $(UNIASM))
 
-$(AS03):
-	make -C $(shell dirname $(AS03)) $(shell basename $(AS03))
+$(UNIAS):
+	make -C $(shell dirname $(UNIAS)) $(shell basename $(UNIAS))
 
 .SUFFIXES: .ASM .CMD .PGM
 
@@ -35,10 +35,10 @@ $(AS03):
 #	$(UNIASM) $< $(basename $@) $@
 
 .ASM.CMD: ../../DEVMAP.INC ../../BOOTROM.INC
-	$(AS03) -l $(basename $@).LST -o $@ $<
+	$(UNIAS) -l $(basename $@).LST -o $@ $<
 
 .ASM.PGM: ../../DEVMAP.INC ../../BOOTROM.INC
-	$(AS03) -l $(basename $@).LST -o $@ $<
+	$(UNIAS) -l $(basename $@).LST -o $@ $<
 
 clean:
 	rm -f *.LST *.CMD *.PGM
