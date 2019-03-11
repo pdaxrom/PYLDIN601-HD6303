@@ -10,6 +10,7 @@ all: $(UNIAS)		\
     HCMSSPI.PGM		\
     CHIPTUNE.CMD	\
     RAMCHK.CMD		\
+    RAMTEST.CMD		\
     TEST.CMD		\
     MAKEBOOT.CMD	\
     SDFORMAT.CMD	\

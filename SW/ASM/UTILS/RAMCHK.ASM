@@ -189,11 +189,11 @@ err1	ldaa	0,x
 	rts
 	endp
 
-hello	db	$0a, 'RAM CHECK', $0a, 0
+hello	db	10, 'RAM CHECK', 10, 0
 fillram1 db	'Fill RAM with byte ', 0
-okay	db	' Okay', 10, 13, 0
+okay	db	' Okay', 10, 0
 failed	db	' Failed ($',0
-failed1 db	')', 10, 13, 0
+failed1 db	')', 10, 0
 
 RAM_START	dw	0
 RAM_END		dw	0
