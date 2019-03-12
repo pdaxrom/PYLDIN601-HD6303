@@ -75,7 +75,7 @@ setup		sei
 
 bitblit		ldaa	#25
 		staa	rowcnt
-		ldaa	#39
+		ldaa	#41
 		staa	colcnt
 		ldx	screenb
 		ldd	#0
@@ -102,10 +102,10 @@ loopline	std	fb_addr
 		bra	loopline
 nextline	dec	rowcnt
 		beq	ret
-		ldaa	#39
+		ldaa	#41
 		staa	colcnt
 		ldd	fb_addr
-		addd	#40*7-1
+		addd	#40*7
 		bra	loopline
 		endp
 
