@@ -2,7 +2,7 @@
 
 Это проект 8-битного компьютера, программно совместимого с Пълдин-601 на уровне приложений. 
 
-[Видео на Youtube](https://www.youtube.com/watch?v=-_IdSySlPXs&t=10s)
+[Видео на Youtube](https://www.youtube.com/watch?v=-_IdSySlPXs)
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/-_IdSySlPXs/0.jpg)](https://www.youtube.com/watch?v=-_IdSySlPXs)
 
