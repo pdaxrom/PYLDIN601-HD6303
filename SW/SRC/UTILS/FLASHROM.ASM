@@ -11,12 +11,9 @@
 ; 1F000 - BIOS
 ;
 
-HIADDR		EQU	$01
-LOADDR		EQU	$6000
+putc		equ	$F003		;text screen write char
 
 		include ../../DEVMAP.INC
-;		include ../ROM/BOOTMEM.INC
-;		include ../ROM/BOOTROM.INC
 
 		org $100
 
@@ -62,7 +59,13 @@ LOADDR		EQU	$6000
 		int	$23
 		bra	exit
 
-gowrite		ldx	#txtwrite
+gowrite		ldx	#rebootq
+		int	$23
+		int	$20
+		int	$22
+		staa	freboot
+
+		ldx	#txtwrite
 		int	$23
 		jsr	readfile
 		pulb
@@ -70,9 +73,6 @@ gowrite		ldx	#txtwrite
 		tsta
 		bne	error
 
-
-;		ldab	#HIADDR		; addr
-;		ldx	#LOADDR		;
 		jsr	addrtopage
 
 		ldx	#wrdata
@@ -94,10 +94,12 @@ gowrite		ldx	#txtwrite
 		jsr	writerom
 
 		ldx	#nl
-		int	$23
+		jsr	putstr
 
-		int	$25
-		bra	exit
+		ldaa	freboot
+		cmpa	#'Y'
+		bne	exit
+		jmp	$F006
 
 readonly	ldx	#txtread
 		int	$23
@@ -105,8 +107,6 @@ readonly	ldx	#txtread
 		pulb
 		pulx
 
-;		ldab	#HIADDR		; addr
-;		ldx	#LOADDR		;
 		jsr	addrtopage
 
 		pshb
@@ -393,10 +393,10 @@ printwrsec	proc
 		psha
 		pshb
 		ldx	#txtwritesec
-		int	$23
-		int	$25
+		jsr	putstr
+		jsr	puthex
 		tba
-		int	$25
+		jsr	puthex
 		pulb
 		pula
 		pulx
@@ -406,8 +406,8 @@ printwrsec	proc
 printwrtot	proc
 		pshx
 		ldx	#txtwritetotal
-		int	$23
-		int	$25
+		jsr	putstr
+		jsr	puthex
 		pulx
 		rts
 		endp
@@ -553,6 +553,38 @@ txtcantopen	db	10, 'Cannot open file!', 0
 txtwrerr	db	10, 'File write error!', 0
 		endp
 
+putstr		proc
+		pshx
+loop		ldaa	0,x
+		beq	exit
+		jsr	putc
+		inx
+		bra	loop
+exit		pulx
+		rts
+		endp
+
+puthex		proc
+		psha
+		bsr	prhex2
+		pula
+		rts
+prhex2		psha
+		lsra
+		lsra
+		lsra
+		lsra
+		bsr	prhex1
+		pula
+prhex1		anda	#$f
+		oraa	#$30
+		cmpa	#$3a
+		bcs	prhexz
+		adda	#7
+prhexz		jsr	putc
+		rts
+		endp
+
 hello		db	10, 'FLASHROM Utility version 1.0'
 		db	10, '(c) sashz <sashz@pdaXrom.org>, 2018-2019', 10, 0
 code		db	10, 'Flash Manufacture/Device code ', 0
@@ -565,12 +597,16 @@ txtpageerr	db	10, 'Wrong page!', 10, 'Type again or press CTRL+C to exit.', 0
 
 rwquest		db	10, 'Write(W) Read(R)? ', 0
 
+rebootq		db	10, 'Reboot after flashing (Y/N)? ', 0
+
 txterror	db	10, 'Error!', 10, 0
 
 txtexit		db	10, 'Nothing to do, exit.', 10, 0
 
 txtread		db	10, '*** READ  ROM ***', 10, 0
 txtwrite	db	10, '*** WRITE ROM ***', 10, 0
+
+freboot		db	0
 
 filename	ds	41
 
