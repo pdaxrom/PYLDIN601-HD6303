@@ -1,0 +1,597 @@
+
+LineEdOnly      db      0
+ProcessCmd      proc
+;;                jsr     savregs
+;;                ldx     #cmdmsg
+;;                ldb     #0
+;;                jsr     Msg
+;;                jsr     lodregs
+                jsr     LineCmds
+                tst     LineEdOnly
+                bne     rtn
+                tstb
+                beq     LongCmd
+rtn             rts
+LongCmd
+                cmpa    #T_Undo
+                beq     _loop
+
+                pha
+                jsr     UpdatePtrs
+                ldb     #3
+                jsr     ClrCrsr
+                pla
+
+                jsr     DoCmd
+_loop
+                jmp     PrepareLine
+
+DoCmd
+                ldx     #CmmdTable
+Search          ldb     x
+                beq     NotFound
+                cba
+                beq     CmmdFound
+                inx
+                inx
+                inx
+                bra     Search
+NotFound        lda     #7
+                int     Wchar
+                rts
+CmmdFound       inx
+                ldx     x
+                jmp     x
+CmmdTable
+;;                db      T_ToggleDbg
+;;                dw      ToggleDbgCmd
+                db      T_UpLine
+                dw      MoveUpCmd
+                db      T_DownLine
+                dw      MoveDownCmd
+                db      T_WndTopFile
+                dw      MoveToTopCmd
+                db      T_WndBottomFile
+                dw      MoveToEndCmd
+                db      T_ScrollUp
+                dw      ScrollUpCmd
+                db      T_ScrollDown
+                dw      ScrollDownCmd
+                db      T_DownPage
+                dw      PageDownCmd
+                db      T_UpPage
+                dw      PageUpCmd
+                db      T_TopScreen
+                dw      TopEdgeCmd
+                db      T_BottomScreen
+                dw      BottomEdgeCmd
+
+                db      T_NewLine              ; Return <cr>
+                dw      CRkeyCmd
+                db      T_DeleteLine           ; c-RubOut
+                dw      DelLine
+                db      T_Join                ; F9
+                dw      JoinLines
+                db      T_PrintFile            ; F5
+                dw      PrintFile
+                db      T_SaveFile             ; F2
+                dw      SaveCmd
+                db      T_NameAndSave
+                dw      NameSaveCmd
+                db      T_Exit                 ; F4
+                dw      QuitCmd
+                db      T_GetFname             ;F1
+                dw      NameCmd
+                db      T_Split
+                dw      SplitLineCmd
+                db      T_InsertLine
+                dw      InsLineCmd
+
+                db      T_BlockBegin
+                dw      MarkBlkBegin
+                db      T_BlockEnd
+                dw      MarkBlkEnd
+                db      T_JumpLastPos
+                dw      LastCursorCmd
+                db      T_BlockHide
+                dw      UnmarkBlk
+                db      T_BlockWord
+                dw      MarkBlkWord
+                db      T_JmpTopOfBlk
+                dw      MoveToBlkTop
+                db      T_JmpBottomBlk
+                dw      MoveToBlkEnd
+                db      T_Reflow
+                dw      Reflow
+                db      T_Justify
+                dw      Justify
+                db      T_BlockCopy
+                dw      CopyBlk
+                db      T_BlockMove
+                dw      MoveBlk
+                db      T_BlockDelete
+                dw      DeleteBlk
+                db      T_PrintBlk
+                dw      PrintBlk
+                db      T_Find
+                dw      FindCmd
+                db      T_FindReplace
+                dw      ChangeCmd
+                db      T_FindNext
+                dw      FindAgain
+
+                db      0
+                endp    ; ProcessCmd
+
+; --- Move Cursor Up ---
+MoveUpCmd       proc
+                lda     Yposition
+                ldx     ScrStart
+                cpx     TopMsg
+                beq     hasmsg
+                tsta
+                beq     ScrollDn
+                bra     NoScroll
+hasmsg          cmpa    #1
+                bhi     NoScroll
+ScrollDn        jmp     ScrollDownCmd
+NoScroll
+                dec     Yposition
+                jsr     LineUp
+                clra
+exit            rts
+                endp    ; MoveUpCmd
+
+; --- Move Cursor Down ---
+MoveDownCmd     proc
+                jsr     ChkEos
+                beq     NoBot
+                cpx     BottomMsg
+                bne     NoBot
+                lda     Yposition
+                inca
+                inca
+                cmpa    ScreenLines
+                bcs     NoScroll
+DoScrl          jmp     ScrollUpCmd
+NoBot           lda     Yposition
+                inca
+                cmpa    ScreenLines
+                bcc     DoSCrl
+NoScroll
+                ldx     Curline2
+                jsr     SuccLine
+                lda     #1
+                cpx     BottomFile
+                beq     exit
+                inc     Yposition
+                jsr     LineDown
+                clra
+exit            tsta
+                rts
+                endp    ; MoveDownCmd
+
+; --- Move Cursor to top of file ---
+MoveToTopCmd    proc
+                jsr     MoveUpCmd
+                beq     MoveToTopCmd
+exit            rts
+                endp ; MoveToTopCmd
+
+; --- Move Cursor to bottom of file ---
+MoveToEndCmd    proc
+                jsr     MoveDownCmd
+                beq     MoveToEndCmd
+exit            rts
+                endp ; MoveToEndCmd
+
+; --- Scroll Up ---
+ScrollUpCmd     proc
+                jsr     ChkEos
+                bne     NoScroll
+                cpx     BottomFile
+                bne     ScrollIt
+                lda     Yposition
+                inca
+                cmpa    ScreenLines
+                bne     ScrollIt
+                dec     Yposition
+                bra     ScrollBot
+ScrollIt        jsr     LineDown
+ScrollBot       ldx     ScrStart
+                jsr     SuccLine
+                stx     ScrStart
+                jsr     Refresh
+                clra
+                rts
+Special         cpx     BottomFile
+                bne     NoScroll
+noscroll        lda     #1
+exit            rts
+                endp ; ScrollUpCmd
+
+; --- Scroll Down ---
+ScrollDownCmd   proc
+                ldx     ScrStart
+                cpx     TopMsg
+                beq     exit1
+                cpx     TopFile
+                beq     TopExit
+                dex
+loop            dex
+                lda     x
+                bne     loop
+                inx
+empty           stx     ScrStart
+                jsr     LineUp
+                jsr     Refresh
+                clra
+                rts
+TopExit         ldx     TopMsg
+                stx     ScrStart
+                lda     Yposition
+                inca
+                cmpa    ScreenLines
+                bne     NoBottomScr
+                jsr     LineUp
+                dec     Yposition
+NoBottomScr     inc     Yposition
+                jsr     Refresh
+                bra     exit1
+exit1           lda     #1
+exit            rts
+                endp ; Scroll Down Cmd
+
+; --- Page Down ---
+PageDownCmd     proc
+                ldb     ScreenLines
+loop            stb     tmpb
+                jsr     ScrollUpCmd
+                bne     exit
+                ldb     tmpb
+                decb
+                bne     loop
+exit            rts
+                endp ; PageDownCmd
+tmpb            db      0
+
+; --- Page Up ---
+PageUpCmd       proc
+                ldb     ScreenLines
+loop            stb     tmpb
+                jsr     ScrollDownCmd
+                bne     exit
+                ldb     tmpb
+                decb
+                bne     loop
+exit            rts
+                endp ; PageUpCmd
+
+; --- Top Edge ---
+TopEdgeCmd      proc
+                lda     Yposition
+                beq     exit
+                deca
+                beq     GoUp
+                jsr     MoveUpCmd
+                bra     TopEdgeCmd
+GoDn            jmp     MoveUpCmd
+GoUp            jmp     MoveUpCmd
+exit            rts
+                endp ; TopEdgeCmd
+
+; --- Bottom Edge ---
+BottomEdgeCmd   proc
+                lda     ScreenLines
+                adda    #3
+                sta     cnt
+BottomEdge      lda     Yposition
+                inca
+                cmpa    ScreenLines
+                beq     exit
+                inca
+                cmpa    ScreenLines
+                beq     GoDn
+                jsr     MoveDownCmd
+                dec     cnt
+                bne     BottomEdge
+                rts
+GoDn            jmp     MoveDownCmd
+exit            rts
+cnt             db      0
+                endp ; BottomEdgeCmd
+
+; --- Go to specifyed line ---
+; x- lineno
+GoToLine        proc
+                stx     MyLine
+                lda     MyLine
+                cmpa    LineNo
+                bhi     GoDown
+                bne     GoUp
+                ldb     MyLine+1
+                cmpb    LineNo+1
+                bhi     GoDown
+                beq     exit
+GoUp            lda     LineNo
+                ldb     LineNo+1
+                subb    MyLine+1
+                sbca    MyLine
+                sta     MyLine
+                stb     MyLine+1
+loopup          ldx     MyLine
+                beq     exit
+                dex
+                stx     MyLine
+                jsr     MoveUpCmd
+                bra     loopup
+GoDown          subb    LineNo+1
+                sbca    LineNo
+                stb     MyLine+1
+                sta     MyLine
+loopdn          ldx     MyLine
+                beq     exit
+                dex
+                stx     MyLine
+                jsr     MoveDownCmd
+                bra     loopdn
+exit            rts
+MyLine          ds      2
+                endp ; GoToLine
+
+; --- Insert Line ---
+InsLineCmd      proc
+                clr     position
+exit            bra     SplitLineCmd
+                endp ; InsLineCmd
+CRkeyCmd        proc
+                lda     InsState
+                beq     nosplit
+                jsr     SplitLineCmd
+                jsr     PrepareLine
+nosplit
+                jsr     LineIsEmpty
+                ldb     Lmarg
+                tsta
+                bne     GoDown
+                ldb     Pmarg
+GoDown          stb     position
+                lda     InsState
+                bne     JustLine
+                jmp     MoveDownCmd
+JustLine        pshb
+                jsr     MoveDownCmd
+                jsr     PrepareLine
+                pula
+                psha
+                clr     AutoMargin
+                jsr     LeftJustIns
+                com     AutoMargin
+                jsr     UpdatePtrs
+                pula
+                jmp     GoToCol
+                endp ;crkey
+
+; --- Split Line ---
+SplitLineCmd    proc
+                lda     CurLine2+1
+                ldb     CurLine2
+                suba    CurLine1+1
+                sbcb    CurLine1
+                beq     error
+                cmpb    #3  ;1
+                bne     AllOK
+                cmpa    #7              ; in case of
+                bcc     AllOK ; ama s klizma
+error           ldx     #NoMem
+                jmp     SayMsg       ; jsr + rts
+AllOK           lda     position
+                clrb
+                ldx     CurLine2
+                tsta
+                beq     EndFound
+FindLoop        tst     x
+                beq     EndFound
+                incb
+                inx
+                deca
+                bne     FindLoop
+EndFound        stx     tmps
+                tba
+                clrb
+                ldx     CurLine2
+                stx     x1
+                dex
+                stx     x2
+                stx     CurLine2
+                ldx     #x1
+                int     MoveMem
+                ldx     tmps
+                dex
+                clr     x
+                clr     FileModifyed
+                jsr     MarkInsLine
+                jmp     Refresh
+                endp    ; SplitLine
+NoMem           db      'Insuficient memory',0
+
+; --- Delete Line ---
+DelLine         proc
+                ldx     CurLine2
+loop            lda     x
+                beq     Found
+                inx
+                bra     loop
+Found           inx
+                cpx     BottomFile
+                bne     Store
+                dex
+Store           stx     CurLine2
+                clr     FileModifyed
+                jsr     MarkDelLine
+                jmp     Refresh
+                endp    ; DelLine
+
+; --- Join Lines ---
+JoinLines       proc
+                ldx     CurLine2
+                dex
+                clrb
+loop            inx
+                incb
+                lda     x
+                bne     loop
+Found           inx
+                cpx     BottomFile
+                beq     exit
+                decb
+                stb     LineLen
+                incb
+                cmpb    MaxLineLen1
+                bcc     exit
+                decb
+loop1
+                incb
+                cmpb    MaxLineLen1
+                beq     exit
+                lda     x
+                beq     MayJoin
+                inx
+                bra     loop1
+MayJoin
+                ldx     CurLine2
+                stx     x1
+                inx
+                stx     x2
+                stx     CurLine2
+                ldx     #x1
+                clrb
+                lda     LineLen
+                int     MoveMem
+                clr     FileModifyed
+                lda     LineLen
+                jsr     MarkJoinLine
+                jsr     Refresh
+exit            rts
+LineLen         ds      1
+                endp    ; JoinLines
+
+; --- Move to the previous line in stream ---
+LineUp          proc
+                ldx     CurLine1
+                cpx     TopFile
+                beq     return
+                dex
+                stx     CurLine1
+                ldx     CurLine2
+                dex
+                clr     x
+                stx     CurLine2
+loop1           ldx     CurLine1
+                cpx     TopFile
+                beq     exitl1
+                dex
+                lda     x
+                beq     exitl1
+                stx     CurLine1
+                ldx     CurLine2
+                dex
+                sta     x
+                stx     CurLine2
+                bra     loop1
+exitl1
+                ldx     LineNo
+                dex
+                stx     LineNo
+return          rts
+                endp
+
+; --- Move to the next line in stream  ---
+LineDown        proc
+                ldx     CurLine2
+loop0           lda     x
+                beq     EndL0
+                inx
+                bra     loop0
+EndL0
+                inx
+                cpx     BottomFile
+                beq     return
+                ldx     CurLine2
+                stx     X1
+                ldx     CurLine1
+                stx     X2
+                jsr     StrCopy
+                ldx     CurLine1
+loop1           lda     x
+                beq     ExitL1
+                inx
+                bra     loop1
+ExitL1          inx
+                stx     CurLine1
+                ldx     CurLine2
+loop2           lda     x
+                beq     ExitL2
+                inx
+                bra     loop2
+ExitL2          inx
+                stx     CurLine2
+                ldx     LineNo
+                inx
+                stx     LineNo
+return          rts
+                endp    ; LineDown
+
+; --- Move to Top of File ---
+MoveToTop       proc
+                ldx     CurLine1
+                cpx     TopFile
+                bne     MakeMove
+                rts
+MakeMove
+                jsr     LineUp
+                ldx     CurLine1
+                cpx     TopFile
+                bne     MakeMove
+                ldx     TopFile
+                stx     ScrStart
+                clr     Yposition
+                jmp     Refresh         ; jsr + rts
+                endp    ; MoveToTop
+
+SuccLine        proc
+                cpx     CurLine1
+                bne     no1
+                ldx     CurLine2
+no1             cpx     BottomMsg
+                beq     exit1
+                cpx     BottomFile
+                bne     lp
+                ldx     BottomMsg
+                bra     exit1
+lp              lda     x
+                beq     EndL
+                inx
+                bra     lp
+EndL            inx
+                cpx     BottomFile
+                beq     exit1
+                clra
+exit            rts
+exit1           lda     #1
+                rts
+                endp ; SuccLine
+
+ChkEos          proc
+                ldb     ScreenLines
+                ldx     ScrStart
+loop            jsr     SuccLine
+                beq     dcr
+                cpx     BottomFile
+                bne     exit
+dcr             decb
+                bne     loop
+exit            rts
+                endp ; ChkEos
+
+

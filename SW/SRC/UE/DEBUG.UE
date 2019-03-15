@@ -1,0 +1,191 @@
+dbg             db      $ff
+
+ToggleDbgCmd    proc
+                com     dbg
+                jsr     init_scr
+                jsr     phyrefresh
+exit            rts
+                endp ; ToggleDbgCmd
+
+PrintIt         proc
+                lda     x, 0
+                int     Whex
+                lda     x, 1
+                int     Whex
+                lda     #' '
+                int     Wchar
+                rts
+                endp
+
+Msg1            proc
+                tst     dbg
+                bne     exit
+                clra
+                ldb     #22
+                int     GotoXY
+                lda     #$18
+                int     Wchar
+                clra
+                int     GotoXY
+                int     Wstr
+exit            rts
+                endp ; Msg1
+
+Msg             proc
+                tst     dbg
+                bne     exit
+                sta     tmpa
+                stb     tmpb
+                jsr     msg1
+                ldx     #amsg
+                int     Wstr
+                ldb     #3
+                ldx     tmpahi
+                jsr     pr_dec
+                ldx     #bmsg
+                int     Wstr
+                ldb     #3
+                ldx     tmpbhi
+                jsr     pr_dec
+
+key             int     GetChar
+                cmpa    #'t'
+                bne     not
+                ldx     CurLine1
+                jsr     ShowBuf
+not             cmpa    #'c'
+                bne     noc
+                ldx     #circbuf
+                jsr     ShowBuf
+noc             cmpa    #'l'
+                bne     nol
+                ldx     #LineBuf
+                jsr     ShowBuf
+nol             cmpa    #'x'
+                bne     nox
+                ldx     r_x
+                jsr     ShowBuf
+nox
+                cmpa    #27
+                bne     key
+exit            rts
+
+amsg            db      ' ,a=',0
+bmsg            db      ' ,b=',0
+tmpahi          db      0
+tmpa            ds      1
+tmpbhi          db      0
+tmpb            ds      1
+                endp ; Msg
+
+SavRegs         proc
+                sta     r_a
+                stb     r_b
+                stx     r_x
+                ldx     x1
+                stx     r_x1
+                ldx     r_x
+exit            rts
+                endp ; SavRegs
+r_a             ds      1
+r_b             ds      1
+r_x             ds      2
+r_x1            ds      2
+LodRegs         proc
+                lda     r_a
+                ldb     r_b
+                ldx     r_x1
+                stx     x1
+                ldx     r_x
+exit            rts
+                endp ; LodRegs
+
+ShowCircBuf     proc
+                tst     dbg
+                beq     dbgit
+                jmp     exit
+dbgit
+                jsr     savregs
+                ldx     #CircBuf
+                jsr     ShowBuf
+                jsr     lodregs
+exit            rts
+                endp; Showcircbuf
+
+ShowBuf         proc
+                clra
+                ldb     #23
+                int     GotoXY
+                ldb     #32
+loop
+                lda     #27
+                int     Wchar
+                lda     0,x
+                int     Wchar
+                inx
+                decb
+                bne     loop
+
+                lda     #'|'
+                int     Wchar
+                int     Wchar
+
+                ldx     #CmdBuf
+                ldb     #4
+loop1
+                lda     #27
+                int     Wchar
+                lda     0,x
+                int     Wchar
+                inx
+                decb
+                bne     loop1
+                lda     #'|'
+                int     Wchar
+
+                clra
+                ldb     #24
+                int     GotoXY
+                ldx     #CircNdx
+                int     Wstr
+                clra
+                ldb     #20
+                int     GotoXY
+                lda     #'i'
+                int     Wchar
+                ldb     circin
+                stb     x1+1
+                clr     x1
+                ldx     x1
+                ldb     #2
+                jsr     pr_dec
+                lda     #'o'
+                int     Wchar
+                ldb     circout
+                stb     x1+1
+                clr     x1
+                ldx     x1
+                ldb     #2
+                jsr     pr_dec
+                lda     #'p'
+                int     Wchar
+                ldb     cmdptr
+                stb     x1+1
+                clr     x1
+                ldx     x1
+                ldb     #2
+                jsr     pr_dec
+                lda     #'u'
+                int     Wchar
+                ldb     usrcmdinp
+                stb     x1+1
+                clr     x1
+                ldx     x1
+                ldb     #2
+                jsr     pr_dec
+
+exit            rts
+CircNdx         db      '01234567890123456789012345678901||1234|',0
+                endp ; ShowBuf
+
+

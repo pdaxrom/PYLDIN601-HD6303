@@ -1,0 +1,26 @@
+ÉÍ×
+Ç Ç
+Ç Ç                 UniED
+Ç Ç
+Ç Ç     UniDOS System Editor Ver. 1.11
+Ç Ç
+ÈÍØ
+
+ Ö Copyright Software R&D Lab.  1989-90
+
+
+
+
+
+1. DoBox
+2. Tabulate
+3. EndOfFile
+
+
+                 UniED
+
+     UniDOS System Editor Ver. 1.11
+
+ Ö Copyright Software R&D Lab. 1989-90
+
+

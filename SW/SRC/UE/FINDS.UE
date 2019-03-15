@@ -1,0 +1,357 @@
+
+_PatternLen     =       30
+_DownOpt        =       0
+_TopOpt         =       1
+_BlockOpt       =       2
+_FindOpts       =       2*_BlockOpt-1
+
+_NoConfirm      =       0
+_ConfirmOpt     =       4
+_ChangeOpts     =       2*_ConfirmOpt-1 -_FindOpts
+
+Options         db      _DownOpt +_ConfirmOpt
+OptTable        db      'D',_DownOpt
+                db      'T',_TopOpt
+                db      'B',_BlockOpt
+                db      'N',_NoConfirm
+                db      'C',_ConfirmOpt
+                db      0
+ChangeFlg       ds      1
+FindSize        ds      1
+ChngSize        ds      1
+FindPattern     ds      _PatternLen+1
+ChngPattern     ds      _PatternLen+1
+
+; --- Specify pattern and find it ---
+FindCmd         proc
+                clr     ChangeFlg
+                lda     #34
+                ldb     #3
+                jsr     FindWindow
+                jsr     DefWindow
+                jsr     OpenWindow
+                ldx     #msg
+                lda     #27
+                jsr     GetPattern
+                beq     exit
+                jsr     HomeWindow
+                incb
+                inca
+                int     GotoXY
+                jsr     GetOptions
+                beq     exit
+                bsr     FindAgain
+exit            jsr     CloseWindow
+                jmp     Refresh
+msg             db      ' Find',0
+                endp ; FindCmd
+
+; --- Specify pattern, find and replace it ---
+ChangeCmd       proc
+                lda     #$ff
+                sta     ChangeFlg
+                lda     #34
+                ldb     #4
+                jsr     FindWindow
+                jsr     DefWindow
+                jsr     OpenWindow
+                ldx     #Msg
+                lda     #25
+                jsr     GetPattern
+                beq     exit
+                jsr     HomeWindow
+                inca
+                incb
+                incb
+                int     GotoXY
+                jsr     GetOptions
+                beq     exit
+                tst     FindSize
+                beq     exit
+                jsr     LookForPatt
+                beq     exit
+                jsr     CloseWindow
+                jsr     Refresh
+                bra     ChangeIt
+exit            jsr     CloseWindow
+                jmp     Refresh
+msg             db      ' Change',0
+                endp ; ChangeCmd
+
+; --- Repeat last Find/Change ---
+FindAgain       proc
+                tst     FindSize
+                beq     NotPattern
+                jsr     LookForPatt
+                beq     exit
+                tst     ChangeFlg
+                bne     ChangeIt
+                rts
+NotPattern      ldx     #msg
+                jsr     SayMsg
+exit            rts
+msg             db      'Pattern not specified',0
+                endp ; FindAgain
+
+ChangeIt        proc
+                lda     Options
+                anda    #_ConfirmOpt
+                beq     DoIt
+                jsr     PhyRefresh
+                ldx     #Confirm
+                jsr     SayMsg
+                jsr     ShowMargins
+                jsr     SetCrsrXY
+                jsr     GetYes
+                bne     exit
+DoIt            lda     FindSize
+                sta     cnt
+lpdel           tst     cnt
+                beq     deleted
+                jsr     Delete
+                dec     cnt
+                bra     lpdel
+deleted         lda     ChngSize
+                ldx     #ChngPattern
+                jsr     WriteBuf
+exit            rts
+Confirm         db      'Confirm change (Y/N) ?',0
+cnt             ds      1
+                endp ; ChangeIt
+
+GetPattern      proc
+                sta     WindSize
+                int     Wstr
+                ldx     #FindPattern
+                ldb     #_PatternLen
+                lda     WindSize
+                jsr     GetMyStr
+                beq     exit
+                ldx     #FindPattern
+                clrb
+lp2             lda     x
+                beq     endlp2
+                jsr     Upcase
+                sta     x
+                inx
+                incb
+                bra     lp2
+endlp2          stb     FindSize
+                tstb
+                beq     exit
+                tst     ChangeFlg
+                beq     exit1
+                jsr     HomeWindow
+                incb
+                int     GotoXY
+                ldx     #WithMsg
+                int     Wstr
+                ldx     #ChngPattern
+                ldb     #_PatternLen
+                lda     WindSize
+                jsr     GetMyStr
+                beq     exit
+                ldx     #ChngPattern
+                clrb
+lp1             lda     x
+                beq     endlp1
+                inx
+                incb
+                bra     lp1
+endlp1          stb     ChngSize
+exit1           lda     #1
+exit            rts
+withmsg         db      ' With  ',0
+WindSize        ds      1
+                endp ; GetPattern
+
+GetOptions      proc
+                ldx     #OptMsg
+                int     Wstr
+                tst     ChangeFlg
+                beq     fnd1
+                ldx     #Opt2Msg
+                int     Wstr
+fnd1            lda     #':'
+                int     Wchar
+                ldb     Options
+                andb    #_FindOpts
+                jsr     FindMnemo
+                int     Wchar
+                tst     ChangeFlg
+                beq     fnd2
+                ldb     Options
+                andb    #_ChangeOpts
+                jsr     FindMnemo
+                int     Wchar
+                lda     #8
+                int     Wchar
+fnd2            lda     #8
+                int     Wchar
+                jsr     SetCrsrOn
+                jsr     GetStream
+                cmpa    ConfirmKey
+                beq     exitok
+                jsr     Upcase
+                jsr     FindOpt
+                beq     exit
+                int     Wchar
+                lda     Options
+                anda    #_ChangeOpts
+                sta     Options
+                orab    Options
+                stb     Options
+                tst     ChangeFlg
+                beq     exitok
+                jsr     SetCrsrOn
+                jsr     GetStream
+                cmpa    ConfirmKey
+                beq     exitok
+                jsr     Upcase
+                jsr     FindOpt
+                beq     exit
+                int     Wchar
+                lda     Options
+                anda    #_FindOpts
+                sta     Options
+                orab    Options
+                stb     Options
+exitok          lda     #1
+exit            rts
+OptMsg          db      'Options (D,T,B)',0
+Opt2Msg         db      '(C, N)',0
+                endp ; GetOptins
+
+FindOpt         proc
+                ldx     #OptTable
+loop            ldb     x
+                beq     exit
+                cba
+                beq     found
+                inx
+                inx
+                bra     loop
+found           ldb     x,1
+                tsta
+exit            rts
+                endp ; Findpt
+
+FindMnemo       proc
+                ldx     #OptTable
+loop            lda     x
+                beq     exit
+                cmpb    1,x
+                beq     exit
+                inx
+                inx
+                bra     loop
+exit            tsta
+                rts
+                endp ; FindMnemo
+
+LookForPatt     proc
+                ldx     #OldCrsrMark
+                jsr     SetMark
+                ldx     #SourceMark
+                jsr     SetMark
+rep
+                ldx     LineNo
+                stx     SourceMark +_LineNo
+                lda     SourceMark +_ColNo
+                jsr     LookFor
+                bne     OkFound
+                clr     SourceMark +_ColNo
+                jsr     HasOtherLine
+                bne     rep
+EndSearch       ldx     #NotFound
+                jsr     SayMsg
+                ldx     #SourceMark
+                jsr     KillMark
+                ldx     #OldCrsrMark
+                jsr     GoToMark
+                clra
+                rts
+OkFound         ldb     Options
+                andb    #_BlockOpt
+                beq     noblkopt
+                ldx     SourceMark +_ColNo
+                cpx     ChrEndMark +_ColNo
+                bne     noblkopt
+                cmpa    ChrEndMark +_ColNo
+                bhi     EndSearch
+noblkopt        sta     SourceMark +_ColNo
+                jsr     GoToCol
+                lda     #1
+exit            rts
+NotFound        db      'Not found',0
+                endp ; LookForPatt
+
+HasOtherLine    proc
+                ldb     Options
+                tba
+                anda    #_BlockOpt
+                beq     NoBlock
+                ldx     #ChrBegMark
+                lda     LineNo+1
+                ldb     Lineno
+                adda    #1
+                adcb    #0
+                jsr     LineIsInBlock
+                bne     exitNo
+                bra     GoNextLine
+NoBlock         tba
+                anda    #_TopOpt
+                beq     GoNextLine
+                jsr     MoveUpCmd
+                bne     exitNo
+                bra     exitYes
+GoNextLine      jsr     MoveDownCmd
+                bne     exitNo
+exitYes         jsr     PrepareLine
+                lda     #1
+                rts
+exitNo          clra
+                rts
+                endp ; HasOtherLine
+
+; --- Looks for pattern in line ---
+; a- start position, result   bne - if found, beq - if not
+LookFor         proc
+                adda    CurLine1+1
+                sta     x1+1
+                lda     CurLine1
+                adca    #0
+                sta     x1
+                ldx     x1
+                dex
+                stx     xtmp
+find            ldx     x1
+                cpx     MaxX
+                beq     exit
+                ldx     xtmp
+                inx
+                stx     xtmp
+                stx     x1
+                ldx     #FindPattern
+                stx     x2              ; x1 - line
+                ldb     FindSize        ; x2 - pattern
+next            ldx     x1
+                lda     x
+                jsr     Upcase
+                inx
+                stx     x1
+                ldx     x2
+                cmpa    x
+                bne     find
+                inx
+                stx     x2
+                decb
+                bne     next
+Found           lda     xtmp+1
+                suba    CurLine1+1
+                ldb     #1
+exit            rts
+xtmp            ds      2
+                endp ; LookFor
+
+

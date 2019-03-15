@@ -1,0 +1,464 @@
+
+_INV_PATH       =       $B
+_FnameLen       =       $80
+
+; --- File handling variables ---
+FileName        ds      _FnameLen
+TempName        ds      _FnameLen
+Hndl            ds      1               ; file handler
+Table           ds      4
+CrLf            db      13, 10
+NameChanged     db      $ff
+FileModifyed    db      $ff
+BackExt         db      '.bak',0
+ErrMsg          db      'Disk error : ', 0
+InsertDisk      db      12,'Insert disk',0
+WithFile        db      ' with file ',0
+ToSave          db      ' to save ',0
+TypeCr          db      13,10,'then press [RETURN]',7,0
+
+FileExist       proc
+                stx     Tble
+                ldx     #0
+                stx     Tble+2
+                ldx     #Tble
+                lda     #1              ;For Read
+                int     OpenFile
+                tsta
+                beq     FileOk
+                cmpa    #_INV_PATH
+                beq     exit1
+                jmp     DosError
+FileOk          tba
+                int     CloseFile
+                clra
+                rts
+exit1           lda     #1
+exit            rts
+Tble            ds      4
+                endp ; FileExist
+
+SaveFile        proc
+                ldx     #FileName
+                jsr     FileExist
+                beq     Exist
+NotExist        tst     NameChanged
+                beq     SaveIt
+ChkDisk         ldx     #InsertDisk
+                int     Wstr
+                ldx     #WithFile
+                int     Wstr
+                ldx     #FileName
+                int     Wstr
+                jsr     WaitCr
+                ldx     #FileName
+                jsr     FileExist
+                bne     ChkDisk
+DiskInserted    jsr     NameBack
+                ldx     #InsertDisk
+                int     Wstr
+                ldx     #ToSave
+                int     Wstr
+                ldx     #FileName
+                int     Wstr
+                jsr     WaitCr
+                jsr     Init_Scr
+                bra     SaveIt
+Exist           jsr     NameBack
+SaveIt          ldx     #FileName
+                stx     table
+                ldx     #0              ; unidos buffer used
+                stx     table+2
+                clra                    ;normal file
+                ldx     #table
+                int     CreateFile
+                tsta
+                beq     NoError
+                jmp     DosError
+NoError         stab    Hndl
+                ldx     TopFile
+                stx     X1
+
+MainLoop        ldx     X1
+                cpx     BottomFile
+                beq     EndFile
+                cpx     CurLine1
+                bne     Search
+                ldx     CurLine2
+                stx     X1
+Search          ldx     X1
+                stx     table
+                clra
+SearchLp        tst     x
+                beq     ExitSL
+                inx
+                inca
+                bra     SearchLp
+ExitSL
+                inx
+                stx     X1              ;pointer to the next line
+                staa    Table+3         ; bytes to be written
+                clr     Table+2
+                ldaa    Hndl
+                ldx     #Table
+                int     WriteFile
+                tsta
+                bne     ErrorClose
+                ldx     #2              ; write CrLf
+                stx     Table+2
+                ldx     #CrLf
+                stx     Table
+                ldaa    Hndl
+                ldx     #Table
+                int     WriteFile
+                tsta
+                bne     ErrorClose
+                bra     MainLoop
+
+EndFile         ldaa    Hndl
+                int     CloseFile
+                tsta
+                bne     DosError
+                ldb     #$ff
+                stb     FileModifyed
+                stb     NameChanged
+                rts
+                endp    ; SaveFile
+
+ErrorClose      proc
+                psha
+                ldaa    Hndl
+                int     CloseFile
+                pula
+                endp ; ErrorClose
+DosError        proc
+                ldx     #ErrMsg
+                jsr     SayMsg
+
+                ldx     CurLine1
+                int     GetErrorText
+                ldx     CurLine1
+                int     Wstr
+                ldaa    #1
+                staa    HasMsg
+exit            rts
+                endp ; DosError
+
+LoadFile        proc
+                ldx     #FileName
+                stx     Table
+                ldx     #0
+                stx     Table+2
+                ldaa    #1
+                ldx     #table
+                int     OpenFile
+                tsta
+                beq     OpenOK
+                cmpa    #_INV_PATH
+                bne     DosError
+                rts
+OpenOK          stab    Hndl
+LineLoop
+                ldaa    BottomFile+1
+                ldab    BottomFile
+                suba    CurLine1+1
+                sbcb    CurLine1
+                tstb
+                beq     MemErr
+                cmpb    #1
+                bne     MemOK
+                cmpa    #7
+                bhi     MemOK
+MemErr          ldx     #NoMem
+                jsr     SayMsg
+                jmp     EOF
+MemOK
+                ldaa    Hndl
+                ldab    #1
+                int     CheckEof
+                tsta
+                bne     ErrorClose
+                tstb
+                bne     EOF
+                ldx     CurLine1
+                lda     Hndl
+                ldb     MaxLineLen
+                int     ReadLine
+                tsta
+                bne     ErrorClose
+                ldx     CurLine1
+                stx     x1              ; preserve start line position (YGP)
+		
+		db	$81		; cmpa (trick to jump over inx)
+loop		inx			; YGP correction for speed up
+		lda	x, 0
+		bne	loop
+
+;loop            tst     x
+;                beq     exitl
+;                inx
+;                bra     loop
+
+exitl           inx
+                stx     CurLine1
+                bra     LineLoop
+EOF
+                ldaa    Hndl
+                int     CloseFile
+                tsta
+                bne     DosError
+                ldb     #$ff
+                stb     FileModifyed
+                stb     NameChanged
+                ldx     x1
+                  stx     CurLine1        ; restore start line position (YGP)
+                rts
+                endp    ; LoadFile
+
+PrintFile       proc
+                ldb     #11
+                ldx     #Printing
+                jsr     SayOption
+                jsr     MoveToTopCmd
+lineloop        ldx     CurLine2
+loop            lda     x
+                beq     endline
+                bsr     print
+                bcs     Prerror
+                inx
+                bra     loop
+endline         ldaa    #13
+                bsr     print
+                bcs     Prerror
+                ldaa    #10
+                bsr     print
+                bcs     Prerror
+                jsr     MoveDownCmd
+                beq     lineloop
+exit            jsr     CloseWindow
+                jmp     Refresh
+print           clrb
+                int     WprnChar
+                lsra
+                rts
+PrError         ldx     #TimeOutMsg
+                jsr     SayMsg
+                bra     exit
+Printing        db      ' Printing ',0
+                endp    ; PrintFile
+TimeOutMsg      db      'Printer timeout error',7,0
+
+LoadCmd         proc
+                tst     FileModifyed
+                bne     LoadIt
+
+LoadIt          jsr     LoadFile
+                psha
+                jsr     MoveToTop
+                ldx     #0
+                stx     LineNo
+                jsr     Show_XY
+                pula
+                tsta
+                beq     exit
+                ldx     #NewFile
+                jsr     SayMsg
+                clr     NameChanged
+                ldaa    #1
+                staa    HasMsg
+exit            jmp     MoveToTopCmd
+NewFile         db      'New file', $18, 0
+                endp ; LoadCmd
+
+FirstLoad       proc
+                int     ParmCnt
+                cmpa    #2
+                beq     GetFname
+                clr     FileName
+                bra     exit
+GetFname        ldx     #FileName
+                ldaa    #1
+                int     ParmStr
+                jsr     DoDfltName
+                jsr     DoBackName
+                jsr     LoadCmd
+exit            jmp     ShowFname
+                endp   ; first load
+
+QuitCmd         proc
+                tst     FileModifyed
+                bne     quit
+                ldx     #message
+                jsr     SayMsg
+                jsr     GetYes
+                beq     quit
+                rts
+quit            ldaa    #12
+                int     Wchar
+                com     RunDown
+                rts
+message         db      'Abandon Changes (Y/N) ?', $18, 0
+                endp
+
+NameSaveCmd     proc
+                lda     #22
+                ldx     #msg
+                jsr     GetName
+                beq     exit
+                bra     SaveCmd
+exit            rts
+msg             db      ' Save file',0
+                endp ; NameSaveCmd
+
+SaveCmd         proc
+                tst     FileName
+                beq     NameSaveCmd
+                tst     FileModifyed
+                beq     SaveIt
+NotModifyed     ldx     #ModyfMsg
+                jsr     SayMsg
+                jsr     GetYes
+                beq     SaveIt
+                ldx     #ClrEol
+                jsr     SayMsg
+                rts
+SaveIt
+                ldb     #9
+                ldx     #Saving
+                jsr     SayOption
+                jsr     SaveFile
+                jsr     CloseWindow
+                jsr     Refresh
+exit            rts
+ModyfMsg        db      'File not modifyed. Save anyway (Y/N) ?', $18, 0
+Saving          db      ' Saving ',0
+                endp    ;savecmd
+
+NameCmd         proc
+                lda     #23
+                ldx     #msg
+                bra     GetName
+Msg             db      ' New name',0
+                endp   ; NameCmd
+
+GetName         proc
+                stx     xx
+                psha
+                lda     #34
+                ldb     #2
+                jsr     FindWindow
+                jsr     DefWindow
+                jsr     OpenWindow
+                ldx     xx
+                int     Wstr
+                ldx     #FileName
+                ldb     #_FnameLen
+                pula
+                jsr     GetMyStr
+                beq     exit
+                jsr     DoDfltName
+                jsr     DoBackName
+                clr     NameChanged
+                clr     FileModifyed
+                jsr     ShowFname
+                lda     #1
+exit            psha
+                jsr     CloseWindow
+                jsr     Refresh
+                pula
+                tsta
+                rts
+xx              ds      2
+                endp ; GetName
+
+DoDfltName      proc
+                ldx     #FileName
+loop            lda     x
+                beq     DoIt
+                cmpa    #'.'
+                beq     exit
+                inx
+                bra     loop
+DoIt            lda     #'.'
+                sta     x
+                lda     Extension
+                sta     1,x
+                lda     Extension+1
+                sta     2,x
+                lda     Extension+2
+                sta     3,x
+                clr     4,x
+exit            rts
+                endp ; DoDfltName
+
+WaitCr          proc
+                ldx     #TypeCr
+                int     Wstr
+key             int     GetChar
+                cmpa    #13
+                beq     Exit
+                cmpa    #$c0
+                beq     exit
+                bra     key
+exit            rts
+                endp ; WaitCr
+
+NameBack        proc
+                tst     MakeBacks
+                beq     exit
+                ldx     #TempName
+                int     DeleteFile
+                tsta
+                beq     RenIt
+                cmpa    #_INV_PATH
+                beq     RenIt
+                jmp     DosError
+RenIt           ldx     #Tbl
+                int     RenameFile
+                tsta
+                beq     exit
+                jmp     DosError
+exit            rts
+Tbl             dw      FileName
+                dw      TempName
+                endp ; NameBack
+
+Critical        proc
+                ldaa    #3
+                staa    swia
+                rts
+                endp
+
+Break           proc
+                rts
+                endp ; break
+
+DoBackName      proc
+                ldx     #FileName
+                stx     X1
+                ldx     #TempName
+                stx     X2
+                ldx     #X1
+                lda     #_FnameLen
+                clrb
+                int     MoveMem
+                ldx     #TempName
+lp              lda     x
+                beq     exitlp
+                cmpa    #' '
+                beq     exitlp
+                cmpa    #'.'
+                beq     exitlp
+                inx
+                bra     lp
+exitlp          stx     x2
+                ldx     #BackExt
+                stx     x1
+                ldx     #x1
+                lda     #5
+                clrb
+                int     MoveMem
+exit            rts
+                endp ; DoBackName
+
+

@@ -1,0 +1,450 @@
+
+_MarkType       =       0
+_LineNo         =       1
+_ColNo          =       3
+_NextMark       =       4
+
+_CharMark       =       1
+_BlockMark      =       2
+_SimpBlkMark    =       3
+_CharBlock      =       $20
+_BeginMark      =       $40
+_Active         =       $80
+_NotActive      =       $ff -_Active
+_InsFlg         =       1
+_LineFlg        =       2
+_JoinFlg        =       4
+_NotJoinFlg     =       $ff -_JoinFlg
+_Skip_2         =       $7d
+
+MarkList
+OldCrsrMark     db      _CharMark +_Active
+                dw      0
+                db      0
+ChrBegMark      db      _BlockMark +_BeginMark +_CharBlock
+                dw      0
+                db      0
+ChrEndMark      db      _BlockMark +_CharBlock
+                dw      0
+                db      0
+BlkBegMark      db      _BlockMark +_BeginMark
+                dw      0
+                db      0
+BlkEndMark      db      _BlockMark
+                dw      0
+                db      0
+SourceMark      db      _BlockMark +_BeginMark +_CharBlock
+                dw      0
+                db      0
+DestMark        db      _CharMark
+                dw      0
+                db      0
+EndMarkList
+
+; --- Fix if space is inserted --
+MarkInsSpace    proc
+                ldb     #_InsFlg
+                bra     FixAtCursor
+                endp ; MarkInsSpace
+
+; --- Fix if char is deleted ---
+MarkDelSpace    proc
+                ldb     #0
+                bra     FixAtCursor
+                endp ; MarkDelSpace
+
+; --- Fix if line is inserted ---
+MarkInsLine     proc
+                ldb     #_InsFlg +_LineFlg
+                bra     FixAtCursor
+                endp ; MarkInsLine
+
+; --- Fix if line is inserted ---
+MarkDelLine     proc
+                ldb     #_LineFlg
+                bra     FixAtCursor
+                endp ; MarkDelLine
+
+; --- Fix if lines are joined  ---
+MarkJoinLine    proc
+                sta     JoinLen
+                ldb     #_LineFlg +_JoinFlg
+                bra     FixAtCursor
+exit            rts
+                endp ; MarkJoinLine
+JoinLen         ds      1
+
+
+;;fixmsg          db      ':>Fix marks',0
+;;chfixmsg        db      ':>Fix char ins/del',0
+;;lnfixmsg        db      ':>Fix line ins/del',0
+FixAtCursor
+;;                jsr     savregs
+;;                ldx     #fixmsg
+;;                ldb     LineNo+1
+;;                lda     position
+;;                jsr     Msg1
+;;                jsr     lodregs
+                ldx     LineNo
+                lda     position
+                jsr     fixmarks
+                ldx     #ChrBegMark
+                jsr     BlkMarkCheck
+                ldx     #BlkBegMark
+                jsr     BlkMarkCheck
+                rts
+
+; --- Update marks dwhen something is happend ---
+;   x- lineno, a- column, b- code of operation
+FixMarks        proc
+                stx     LineFixed
+                sta     ColFixed
+                tba
+                anda    #_LineFlg
+                sta     LineLoc
+                tba
+                anda    #_JoinFlg
+                sta     JoinLoc
+                andb    #_InsFlg
+                ldx     #MarkList
+loop            stx     xloc
+                cpx     #EndMarkList
+                beq     exit
+                tst     LineLoc
+                beq     CallChr
+                jsr     FixLneOne
+                bra     next
+CallChr         jsr     FixChrOne
+next            ldx     xloc
+                inx
+                inx
+                inx
+                inx
+                bra     loop
+
+LineLoc         ds      1
+JoinLoc         ds      1
+LineFixed       ds      2
+ColFixed        ds      1
+xloc            ds      2
+
+; When space is inserted or character was deleted
+FixChrOne
+;;                jsr     savregs
+;;                ldx     #chfixmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                lda     x,_MarkType
+                cmpa    #_CharMark +_Active
+                beq     DoFix
+                anda    #_CharBlock
+                beq     exit
+DoFix           ldx     x,_LineNo
+                cpx     LineFixed
+                bne     exit
+                ldx     xloc
+                lda     x,_ColNo
+                cmpa    ColFixed
+                bcs     exit
+                tstb
+                beq     ChrDec
+ChrInc          inca
+                cmpa    MaxLineLen
+                bne     exitstore
+KilMark         jmp     KillMark
+ChrDec          cmpa    ColFixed
+                bne     nosame
+                lda     x,_MarkType
+                cmpa    #_CharMark +_Active
+                beq     KilMark
+                anda    #_BeginMark
+                bne     exit
+                lda     x,_ColNo
+nosame          tsta
+                beq     EndOfPrevLine
+                deca
+exitstore       sta     x,_ColNo
+exit            rts
+EndOfPrevLine   ldx     CurLine1
+                dex
+                clra
+lpback          dex
+                tst     x
+                beq    endlpback
+                inca
+                bra     lpback
+endlpback       ldx     xloc
+                sta     x,_ColNo
+                ldx     x,_LineNo
+                bra     LneDec
+
+;  When line is inserted or deleted
+FixLneOne
+;;                jsr     savregs
+;;                ldx     #lnfixmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                lda     x,_LineNo
+                cmpa    LineFixed
+                bcs     exit
+                bne     compok
+                lda     x,_LineNo+1
+                cmpa    LineFixed+1
+compok          bcs     exit
+                ldx     x,_LineNo
+                cpx     LineFixed
+                beq     ThisLine
+                tst     JoinLoc
+                beq     LneDecInc
+                dex
+                cpx     LineFixed
+                bne     upjoin
+                ldx     xloc
+                lda     x,_ColNo
+                adda    JoinLen
+                sta     x,_ColNo
+                ldx     x,_LineNo
+                dex
+upjoin          inx
+lnedecinc       tstb
+                beq     LneDec
+LneInc          inx
+                inx
+LneDec          cpx     #0
+                bne     DecrIt
+                ldx     xloc
+_KilMark        jmp     KillMark
+DecrIt          dex
+                stx     x2
+                ldx     xloc
+                lda     x2
+                sta     x,_LineNo
+                lda     x2+1
+                sta     x,_LineNo+1
+                rts
+ThisLine
+                tst     JoinLoc
+                bne     exit2
+                ldx     xloc
+                tstb
+                bne     IncThis
+DecThis         lda     x,_MarkType
+                cmpa    #_CharMark +_Active
+                beq     _KilMark
+                anda    #_BeginMark
+                bne     BegType
+                jmp     EndOfPrevLine
+BegType         clr     x,_ColNo
+                rts
+IncThis         lda     x,_ColNo
+                cmpa    ColFixed
+                bcs     exit2
+                lda     x,_MarkType
+                cmpa    #_CharMark +_Active
+                beq     ischr
+                anda    #_CharBlock
+                beq     exit2
+ischr           lda     x,_ColNo
+                suba    ColFixed
+                sta     x,_ColNo
+                ldx     x,_LineNo
+                bra     LneInc
+exit2           rts
+                endp ; FixMarks
+
+KillMark        proc
+                lda     x,_MarkType
+                anda    #_NotActive
+                sta     x,_MarkType
+exit            rts
+                endp ; KillMark
+
+; --- Aling block mark ---
+; x- pointer to blk mark
+BlkMarkAlign    proc
+                lda     x,_MarkType
+                anda    x,_MarkType +_NextMark
+                anda    #_Active
+                beq     copy
+                jsr     MarkOrd
+                bcc     exit
+                bsr     swap
+                inx
+                bsr     swap
+                inx
+swap            lda     x,_LineNo
+                ldb     x,_LineNo +_NextMark
+                sta     x,_LineNo +_NextMark
+                stb     x,_LineNo
+exit            rts
+copy            lda     x,_MarkType
+                ldb     #_NextMark-1
+                anda    #_Active
+                bne     cp1
+                lda     x,_MarkType +_NextMark
+                anda    #_Active
+                bne     cp2
+                rts
+cp1             jsr     SetOn
+lcp1            lda     x, _LineNo
+                sta     x,_NextMark +_LineNo
+                inx
+                decb
+                bne     lcp1
+                rts
+cp2             jsr     SetOn
+lcp2            lda     x,_NextMark +_LineNo
+                sta     x, _LineNo
+                inx
+                decb
+                bne     lcp2
+                rts
+SetOn           lda     x,_MarkType
+                oraa    #_Active
+                sta     x,_MarkType
+                lda     x,_MarkType +_NextMark
+                oraa    #_Active
+                sta     x,_MarkType +_NextMark
+                rts
+                endp ; BlkMarkAlign
+
+; --- Check is the value of block mark correct ? ---
+; x- pointer to blk mark
+BlkMarkCheck    proc
+                lda     x,_MarkType
+                anda    x,_MarkType +_NextMark
+                anda    #_Active
+                beq     KillBlkMark
+                jsr     MarkOrd
+                bcs     KillBlkMark
+exit            rts
+                endp ; BlkMarkCheck
+
+KillBlkMark     proc
+                lda     x,_MarkType
+                anda    #_NotActive
+                sta     x,_MarkType
+                lda     x,_MarkType +_NextMark
+                anda    #_NotActive
+                sta     x,_MarkType +_NextMark
+exit            rts
+                endp ; KillBlkMark
+
+MarkOrd         proc
+                lda     x,_LineNo +_NextMark
+                cmpa    x,_LineNo
+                bcs     exit
+                bne     exit
+                lda     x,_LineNo+1 +_NextMark
+                cmpa    x,_LineNo+1
+                bcs     exit
+                bne     exit
+                lda     x,_ColNo +_NextMark
+                cmpa    x,_ColNo
+                bcs     exit
+exit            rts
+                endp ; MarkOrd
+
+; --- Sets curent cursor position into mark ---
+; x- mark addres
+SetMark         proc
+                lda     x,_MarkType
+                oraa    #_Active
+                sta     x,_MarkType
+                lda     position
+                sta     x,_ColNo
+                lda     LineNo
+                sta     x,_LineNo
+                lda     LineNo+1
+                sta     x,_LineNo+1
+exit            rts
+                endp ; SetMark
+
+; --- Move cursor to Mark position ---
+GoToMark        proc
+                lda     x,_MarkType
+                anda    #_Active
+                beq     exit
+                stx     tmpx
+                ldx     x,_LineNo
+                jsr     GoToLine
+                ldx     tmpx
+                lda     x,_ColNo
+                jsr     GoToCol
+exit            rts
+tmpx            ds      2
+                endp ; GoToMark
+
+; --- Go to previous cursor position ---
+LastCursorCmd   proc
+                ldx     #OldCrsrMark
+                bra     GoToMark
+                endp ; LastCurcorCmd
+
+; --- Is the line in selected block ? ---
+; x- block addr, ba - line number
+LineIsInBlock   proc
+                cmpb    x,_LineNo
+                bcs     exitNo
+                bne     cmp1
+                cmpa    x,_LineNo+1
+                bcs     exitNo
+cmp1            cmpb    x,_LineNo +_NextMark
+                bhi     exitNo
+                bne     exitYes
+                cmpa    x,_LineNo+1 +_NextMark
+                bhi     exitNo
+exitYes         clra
+                rts
+exitNo          lda     #1
+                tsta
+                rts
+                endp ; LineIsInBlock
+
+; --- Checks if mark is in current block
+; ba - mark addr, x - block addr
+MarkIsInBlock   proc
+                sta     mrk+1
+                stb     mrk
+                stx     blk
+
+                ldx     mrk
+                lda     x,_LineNo+1     ;ba:= M.Line
+                ldb     x,_LineNo
+                ldx     blk             ;x:= Blk
+                jsr     LineIsInBlock
+                bne     exitNo
+
+                ldx     mrk             ;ba:= M.Line
+                lda     x,_LineNo+1
+                ldb     x,_LineNo
+                ldx     blk             ;x:= Blk
+
+                cmpa    x,_LineNo+1
+                bne     cmpend
+                cmpb    x,_LineNo
+                bne     cmpend
+                lda     x,_ColNo       ; if M.Line = B.Line then
+                ldx     mrk            ;   if B.Col >= M.Col then ExitNo
+                cmpa    x,_ColNo
+                bcc     exitNo
+cmpend          ldx     mrk
+                lda     x,_LineNo+1
+                ldx     blk
+                cmpa    x,_LineNo+1 +_NextMark
+                bne     exitYes
+                cmpb    x,_LineNo +_NextMark
+                bne     exitYes
+                lda     x,_ColNo +_NextMark  ; if M.Line = E.Line then
+                ldx     mrk                  ;    if E.Col >= M.Col then ExitYes
+                cmpa    x,_ColNo
+                bcc     exitYes
+exitNo          lda     #1
+                rts
+exitYes         clra
+exit            rts
+mrk             ds      2
+blk             ds      2
+                endp ; MarkIsInBlock
+
+

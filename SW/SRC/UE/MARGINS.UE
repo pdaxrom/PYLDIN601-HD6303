@@ -1,0 +1,219 @@
+
+AutoMargin      db      $ff
+Margin          proc
+                tst     AutoMargin
+                beq     exitnow
+                lda     ActiveMode
+                bne     MarginIt
+ExitNow         rts
+MarginIt        clr     ActiveMode
+;   1.Ини╢иализа╢и┐ -
+;     ActiveMode:= true, cursor:= position, GoBack:= false
+                lda     position
+                sta     cursor
+                clr     GoBack
+;   2.П░ове░┐ва ▒е дали има ▒имвол на пози╢и┐ X >Rmarg.
+;     Ако н┐ма - к░ай.
+                jsr     EndLineCmd
+                lda     position
+                deca
+                cmpa    Rmarg
+                bhi     end2
+                jmp     exitproc
+end2
+;   3.Нами░а ▒е п║░ва▓а _ о▓ Rmarg к║м на╖ало▓о.
+;     Ако н┐ма - splitpos:= Rmarg+1
+;     Ако има (x) - splitpos:= x+1
+                lda     Rmarg
+                jsr     GoToCol
+findsp          ldb     position
+                beq     nospace
+                lda     x
+                cmpa    #' '
+                beq     spfound
+                jsr     LeftKey
+                bra     findsp
+nospace         ldb     Rmarg
+spfound         incb
+                stb     splitpos
+;   4.Из▓░ива▓ ▒е в▒и╖ки _ о▓ Rmarg+1 до п║░ви┐ ░азли╖ен ▒имвол.
+                lda     Rmarg
+                inca
+                jsr     GoToCol
+clrsp           ldx     curx
+                lda     x
+                cmpa    #' '
+                bne     noclr
+                jsr     Delete
+                lda     cursor
+                cmpa    Rmarg
+                bls     clrsp
+                dec     cursor
+                bra     clrsp
+noclr
+;   5.Ако cursor > Rmarg ▓о cursor:= cursor - splitpos  + Lmarg
+;     Ина╖е ▒и о▓бел┐звам да ▒е в║░на  - GoBack:= true
+                lda     cursor
+                cmpa    Rmarg
+                bhi     calccur
+                com     goback
+                bra     end5
+calccur         suba    SplitPos
+                adda    Lmarg
+                sta     cursor
+end5
+;   6.П░ек║▒ва ▒е лини┐▓а на пози╢и┐ SplitPos.
+;     Слиза ▒е в на╖ало▓о на долна▓а лини┐.
+;     Вм║ква▓ ▒е Lmarg-1 _ .
+;     См┐▓а ▒е о▒▓ава╣о▓о м┐▒▓о = Rmarg - EndLine + 1
+                lda     SplitPos
+                jsr     GoToCol
+                jsr     UpdatePtrs
+                jsr     SplitLineCmd
+                jsr     MoveDownCmd
+                jsr     PrepareLine
+                lda     Lmarg
+                jsr     LeftJustIns
+calcfree        jsr     EndLineCmd
+                jsr     CalcLenght
+                lda     Rmarg
+                cmpa    position
+                bcs     Mainexit
+                suba    LenOfLine
+                inca
+                sta     free
+;   7.Слиза ▒е на долна▓а лини┐.
+;     См┐▓а ▒е д║лжина▓а и (ка▓о ▒е п░оп│▒ка▓ в▒и╖ки _ на пози╢и┐ < Lmarg)(Line2)
+;     Ако о▓ к░а┐ на лини┐▓а до Rmarg има м┐▒▓о за долна▓а лини┐ ▓о
+;        - │▒▓анов┐ва join flag(free<>0)
+;        - из▓░ива в▒и╖ки п░оп│▒на▓и _
+                jsr     UpdatePtrs
+                jsr     MoveDownCmd
+		bne	exitproc
+                jsr     PrepareLine
+                jsr     BeginLIneCmd
+skp             lda     position
+                cmpa    Lmarg
+                beq     noskp
+                lda     x
+                cmpa    #' '
+                beq     noskp
+                jsr     RightKey
+                bra     skp
+noskp           lda     position
+                sta     tmpmarg
+                jsr     CalcLenght
+                cmpa    tmpmarg
+                bls     fits
+                suba    tmpmarg
+                cmpa    free
+                bls     fits
+                clr     free
+                bra     end7
+fits            sta     free
+                jsr     BeginLineCmd
+delspc          lda     tmpmarg
+                beq     end7
+                jsr     Delete
+                dec     tmpmarg
+                bra     delspc
+end7
+;   8.В░║╣а ▒е об░а▓но на го░ни┐ ░ед.
+;     Ако е необ╡одимо - Join.
+                jsr     UpdatePtrs
+                jsr     MoveUpCmd
+                lda     free
+                beq     no_join
+                jsr     JoinLines
+no_join         jsr     PrepareLine
+;   9.Ако е нео╡одимо ▒е ка╖вам една лини┐ наго░е.
+;     Пози╢иони░ам к│░▒о░а.
+;     О▓ва░┐м в░а▓а▓а на ▓ази п░о╢ед│░а.
+Mainexit
+                lda     GoBack
+                beq     exitproc
+                jsr     UpdatePtrs
+                jsr     MoveUpCmd
+                jsr     PrepareLine
+exitproc
+                jsr     Refresh
+                lda     cursor
+                jsr     GoToCol
+                com     ActiveMode
+exit            rts
+ActiveMode      db      $ff
+GoBack          ds      1
+Cursor          ds      1
+SplitPos        ds      1
+Free            ds      1
+                endp ; Margin
+
+tmpmarg         ds      1
+
+LeftJustIns     proc
+                jsr     exit
+                sta     tmpmarg
+                jsr     LineIsEmpty
+                beq     exit
+                jsr     BeginLineCmd
+lpdel           ldx     curx
+                lda     x
+                cmpa    #' '
+                bne     inssp
+                jsr     Delete
+                bra     lpdel
+inssp           lda     tmpmarg
+                beq     exit
+                dec     tmpmarg
+                jsr     InsSpace
+                bra     inssp
+exit
+;;                jsr     savregs
+;;                ldx     #ljustmsg
+;;                jsr     Msg
+;;                jsr     lodregs
+                rts
+;;ljustmsg        db      ':>LJustIns',0
+                endp ; LeftJustIns
+
+CenterLine      proc
+                clr     AutoMargin
+                jsr     LineIsEmpty
+                beq     exitt
+
+                ldb     position
+                ldx     CurLine1
+                dex
+                incb
+lpx             inx
+                decb
+                lda     x
+                cmpa    #' '
+                beq     lpx
+                tstb
+                bpl     bok
+                clrb
+bok             pshb
+                clra
+                bsr     LeftJustIns
+                jsr     calclenght
+                tab
+                beq     exit
+                lda     Lmarg
+                adda    Rmarg
+                cba
+                bls     exit
+                sba
+                lsra
+                tab
+                pula
+                aba
+                psha
+                tba
+                bsr     LeftJustIns
+exit            pula
+                jsr     GoToCol
+exitt           com     AutoMargin
+                rts
+                endp ; CenterLine
+

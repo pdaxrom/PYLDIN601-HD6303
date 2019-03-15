@@ -1,0 +1,125 @@
+
+MainEdit        proc
+                jsr     CloseWindow
+		jsr 	prepare_first  ; YGP (preapreline)
+                jsr     Refresh
+                bra     Shedule
+                endp    ; MainEdit
+
+Shedule         proc
+                clr     RunDown        ;Rundown := False;
+while           tst     RunDown
+                bne     exit
+                jsr     StreamEmpty
+                beq     while
+                jsr     ClassifyInp    ;    then EdClassifyInput
+                clr     FirstBackGnd
+                bra     while
+exit            rts
+                endp    ;shedule
+
+BackGround      proc
+                tst     FirstBackGnd
+                bne     Ground
+                jsr     Ground
+                com     FirstBackGnd
+                rts
+Ground
+                tst     FirstBackGnd
+                bne     nofirst
+                clr     ScreenOn
+                ldb     #1
+                jsr     ClrCrsr
+                jsr     Hscroll
+                jsr     RefreshLine
+                jsr     ShowMargins
+                jsr     show_xy
+                tst     UpdateScreen
+                bne     endfirst
+                jsr     PhyRefresh
+                com     UpdateScreen
+endfirst        jsr     SetCrsrXY
+                bra     CommonGround
+nofirst
+                com     ScreenOn
+                bne     CommonGround
+                ldb     #2
+                jsr     ClrCrsr
+                jsr     PhyRefresh
+
+                jsr     SetCrsrXY
+CommonGround
+                lda     #20
+                jsr     Pause
+                rts
+                endp    ;background
+
+;;clasmsg         db      ':>Classify input',0
+;;cmdmsg          db      ':>Process Cmd',0
+;;keypmsg         db      ':>KeyPress',0
+;;getinpmsg       db      ':>GetInput',0
+;;cmdscanmsg      db      ':>CmdScan',0
+
+; --- Route keyboard input to text or command handlers ---
+ClassifyInp     proc                    ; procedure EdClassifyInput;
+;;                jsr     showcircbuf
+;;                jsr     savregs
+;;                ldx     #clasmsg
+;;                ldb     UsrCmdInp
+;;                lda     CmdPtr
+;;                jsr     Msg
+;;                jsr     lodregs
+                jsr     GetInput        ; Ch := EdGetInput
+                cmpa    #_CMD_CHAR      ; if Ch = CmdChar then                     { Process the command}
+                bne     NoCmd           ;   begin
+                jsr     GetInput        ;   EdProcessCommand(CommandType(ord(EdGetInput)));
+                jmp     ProcessCmd      ;   exit;
+NoCmd                                   ;   end;
+                tst     CmdPtr          ;
+                bne     PotentCmd       ; if (CmdPtr = 0) and (Ch >= #32) and (Ch <> #127) and (Ch < #$C0 ) then
+                cmpa    #' '            ;   begin
+                bcs     PotentCmd       ;   {A normal character}
+                cmpa    #$c0            ;   {Store previous position}
+                bcc     PotentCmd       ;   end
+                cmpa    #127            ;
+                beq     PotentCmd
+                psha
+                ldx     #OldCrsrMark
+                jsr     SetMark
+                pula
+                jsr     ProcessChr      ; {Process the character}
+                                        ; EdProcesstext(Ch);
+                tst     UsrCmdInp       ;
+                bne     rtn             ; if EditUsercommandInput = 0
+                jsr     BufferCurLine   ;   then  {Buffer line if it changed}
+rtn             rts
+PotentCmd                               ;   else begin {Potentially a command}
+                inc     CmdPtr          ;     Inc(CmdPtr);
+
+                ldb     CmdPtr          ;     if (CmdPtr > 1)
+                cmpb    #1              ;        then  ch:= chfilter(ch);
+                bls     nofilt
+                jsr     ChrFilter
+nofilt
+                ldb     CmdPtr
+                stb     x1+1
+                clr     x1
+                ldx     x1
+                sta     CmdBuf-1,x      ;     CmdBuf[cmdptr]:= ch
+                jsr     ScanCmdList     ;     case EdScanCmdList(CmdPtr) of
+                cmpb    #_PART_MATCH    ;       PartMatch :
+                bne     other           ;         {Leave char in cmdbuf to complete match}EdDisplayCommandBuffer;
+                jmp     DisplayCmdBuf   ;
+                                        ;       Match , NoMatch :
+other                                   ;         {Reset and ignore} EdResetPromptLine;
+                                        ;         {Do nothing. Command definition is already pushed into circ buff};
+                jmp     ResetPrompt     ;     end; {Case}
+                                        ;     end; {Potential command}
+exit            rts
+                endp    ;ClassifyInp
+
+BufferCurLine   proc
+                rts
+                endp ; BufferCurLine
+
+

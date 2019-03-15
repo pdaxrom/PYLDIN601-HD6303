@@ -1,0 +1,334 @@
+
+; --- Move to block top ---
+MoveToBlkTop    proc
+                ldx     #ChrBegMark
+                jsr     BlkMarkCheck
+                jmp     GoToMark
+                endp ; MoveToBlkTop
+
+; --- Move to block bottom ---
+MoveToBlkEnd    proc
+                ldx     #ChrBegMark
+                jsr     BlkMarkCheck
+                ldx     #ChrEndMark
+                jmp     GoToMark
+                endp ; MoveToBlockEnd
+
+; --- Mark block begin ---
+MarkBlkBegin    proc
+                jsr     Refresh
+                ldx     #ChrBegMark
+                jsr     SetMark
+                jmp     BlkMarkAlign
+                endp ; MarkBlkBegin
+
+; --- Mark block end ---
+MarkBlkEnd      proc
+                jsr     Refresh
+                ldx     #ChrEndMark
+                jsr     SetMark
+                jmp     BlkMarkAlign
+                endp ; MarkBlkEnd
+
+; --- Mark word ---
+MarkBlkWord     proc
+                jsr     Refresh
+                ldx     curx
+                lda     x
+                jsr     InAlphas
+                bne     exit
+                jsr     GoToWordBegin
+                ldx     #ChrBegMark
+                jsr     SetMark
+                jsr     GoToWordEnd
+                ldx     #ChrEndMark
+                jsr     SetMark
+                jsr     GoToWordBegin
+                jmp     BlkMarkAlign
+exit            rts
+                endp ; MarkBlkWord
+
+LBufSize        db      0
+LineBuf         db      0
+                ds      MaxLineSize-1
+
+; --- Copy block ---
+CopyBlk         proc
+                lda     #1
+                ldb     #0
+                bra     BlkOps
+                endp ; CopyBlk
+
+; --- Move block ---
+MoveBlk         proc
+                lda     #1
+                ldb     #1
+                bra     BlkOps
+                endp ; MoveBlk
+;;opsmsg          db      ':>BlkOps',0
+
+; --- Delete block ---
+DeleteBlk       proc
+                lda     #0
+                ldb     #1
+                endp ; DeleteBlk
+BlkOps          proc
+;;                jsr     savregs
+;;                ldx     #opsmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                jsr     Refresh
+                sta     WrFlg
+                stb     DelFlg
+                ldx     #ChrBegMark
+                jsr     BlkExist
+                beq     exit
+                ldx     #DestMark
+                jsr     SetMark
+                ldx     #OldCrsrMark
+                jsr     SetMark
+                jsr     MoveToBlkTop
+                ldx     #SourceMark
+                jsr     SetMark
+                tst     WrFlg
+                beq     Point1
+                lda     #DestMark
+                ldb     #/DestMark
+                ldx     #ChrBegMark
+                jsr     MarkInBlock
+                bne     Point1
+exit            rts
+;1. Ако SourceMark.Line <> BlkEndMark.Line ▓о
+Point1          ldx     #SourceMark
+                jsr     GoToMark
+                ldx     #SourceMark
+                lda     x,_LIneNo+1
+                ldb     x,_LIneNo
+                ldx     #ChrBegMark
+                cmpa    x,_LineNo+1 +_NextMark
+                bne     Do1
+                cmpb    x,_LineNo +_NextMark
+Do1             beq     end1
+;     - вземам в▒и╖ко о▓ SM.Col до к░а┐ на лини┐▓а в б│┤е░а
+                jsr     PrepareLine
+                jsr     EndLineCmd
+                lda     position
+                jsr     FillBuf
+;     - ако ▒║м в Copy п░еме▒▓вам SM в на╖ало▓о на ▒ледва╣и┐ ░ед
+                tst     PrBlkMode
+                bne     GoBeginNext
+                tst     DelFlg
+                bne     DelIt
+GoBeginNext     ldx     SourceMark +_LineNo
+                inx
+                stx     SourceMark +_LineNo
+                clr     SourceMark +_ColNo
+                bra     GoStore
+;     - ако ▒║м в Move/Delete - Join
+DelIt           jsr     JoinLines
+;     - о▓ивам на м┐▒▓о DM
+;     - напи▒вам б│┤е░а, ка▓о го ин▒║░▓вам п░ед DM
+GoStore         jsr     WriteDest
+;     - ако ▒║м в Copy/Move - Split до к║де▓о ▒║м ▒▓игнал
+                tst     WrFlg
+                beq     Point1
+                jsr     SplitLineCmd
+                bra     Point1
+end1
+;2. П░авене на по▒ледна▓а лини┐
+;     - копи░ам о▓ SM.Col до EM.Col в б│┤е░а
+                jsr     PrepareLine
+                ldx     #ChrBegMark
+                lda     x,_ColNo +_NextMark
+                inca
+                jsr     FillBuf
+;     - о▓ивам на м┐▒▓о DM
+;     - напив▒ам б│┤е░а, ка▓о го ин▒║░▓вам п░ед DM
+                jsr     WriteDest
+;3. О▓ивам на LastCursorPosition
+                clr     LineBuf
+                jmp     LastCursorCmd
+WrFlg           ds      1
+DelFlg          ds      1
+
+;;fillbmsg        db      ':>FillBuf',0
+FillBuf         proc
+;;                jsr     savregs
+;;                ldx     #fillbmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                sta     mypos
+                lda     SourceMark +_ColNo
+                jsr     GoToCol
+                clr     LBufSize
+copy            lda     position
+                cmpa    mypos
+                bcc     exit
+                ldx     curx
+                lda     #LineBuf
+                adda    LbufSize
+                sta     x1+1
+                lda     #/LineBuf
+                adca    #0
+                sta     x1
+                lda     x
+                ldx     x1
+                sta     x
+                inc     LBufSize
+                tst     DelFlg
+                beq     nodel
+                tst     PrBlkMode
+                bne     NoDel
+                jsr     Delete
+                dec     mypos
+                bra     copy
+NoDel           jsr     RightKey
+                bra     copy
+exit            jsr     PrBlkLine
+                jsr     UpdatePtrs
+;;                jsr     savregs
+;;                ldx     #fillbmsg
+;;                lda     LbufSize
+;;                jsr     Msg
+;;                jsr     lodregs
+                rts
+MyPos           ds      1
+                endp ; FillBuf
+
+; --- Напи▒вам б│┤е░а на Destination position ---
+WriteDest       proc
+                tst     wrflg
+                bne     WriteIt
+                rts
+WriteIt         ldx     #DestMark
+                jsr     GoToMark
+                jsr     PrepareLine
+                lda     LBufSize
+                ldx     #LineBuf
+                bra     WriteBuf
+                endp ; WriteDest
+                endp ; BlkOps
+
+; --- Writes specifyed buffer at cursor position ---
+;     x- buffPointer , a- number of chars
+WriteBuf        proc
+                stx     Srce
+                sta     SizeOfBuf
+                clr     CharsWritten
+loop            lda     CharsWritten
+                cmpa    SizeOfBuf
+                beq     exit
+                inc     CharsWritten
+;;                jsr     savregs
+;;                ldx     #wrtbmsg
+;;                ldb     SizeOfBuf
+;;                jsr     Msg1
+;;                jsr     lodregs
+                adda    Srce+1
+                sta     x1+1
+                lda     Srce
+                adca    #0
+                sta     x1
+                ldx     x1
+                lda     x
+                jsr     InsChar
+                jsr     RightKey
+                bra     loop
+exit            jmp     UpdatePtrs
+CharsWritten    ds      1
+SizeOfBuf       ds      1
+Srce            ds      2
+;;wrtbmsg         db      ':>WriteBuf',0
+                endp ; WriteBuf
+
+PrBlkMode       db      0
+; --- Print block ---
+PrintBlk        proc
+                com     PrBlkMode
+                jsr     DeleteBlk
+                clr     PrBlkMode
+exit            rts
+                endp ; PrintBlk
+PrBlkLine       proc
+;;                lda     #1
+;;                tab
+;;                int     GotoXY
+;;                lda     #24
+;;                int     Wchar
+
+                tst     PrBlkMode
+                beq     exit
+                lda     LBufSize
+                sta     cnt
+                ldx     #LineBuf
+loop            lda     cnt
+                beq     endline
+                dec     cnt
+                lda     x
+                inx
+                bsr     print
+                bcs     error
+                bra     loop
+endline         ldaa    #13
+                bsr     print
+                bcs     error
+                ldaa    #10
+                bsr     print
+                bcs     error
+;;                ldx     #LineBuf
+;;                jsr     savregs
+;;                ldb     LbufSize
+;;                ldx     #msg
+;;                jsr     Msg1
+;;                jsr     lodregs
+exit            rts
+print
+                clrb
+                int     WprnChar
+                lsra
+;                 int     Wchar
+;                 lda     #'_'
+;                 int     Wchar
+;                 clc
+                rts
+error           ldx     #TimeOutMsg
+                jsr     SayMsg
+                pla
+                pla
+                pla
+                pla
+                rts
+cnt             db      0
+;;msg             db      ':>PrintLine',0
+                endp ; PrBlkLine
+
+; --- Unmark block ---
+UnmarkBlk       proc
+                jsr     refresh
+                ldx     #ChrBegMark
+                jmp     KillBlkMark
+                endp ; UnmarkBlk
+
+BlkExist        proc
+                lda     x,_MarkType
+                anda    x,_MarkType +_NextMark
+                anda    #_Active
+                bne     exit
+                ldx     #BlkMsg
+                jsr     SayMsg
+                clra
+exit            rts
+BlkMsg          db      'Not marked block.',0
+                endp ; BlkExist
+
+MarkInBlock     proc
+                jsr     MarkIsInBlock
+                bne     exit
+                ldx     #ErrMsg
+                jsr     SayMsg
+                clra
+exit            rts
+ErrMsg          db      'Source and target conflict',0
+                endp ; MarkInBlock
+
+

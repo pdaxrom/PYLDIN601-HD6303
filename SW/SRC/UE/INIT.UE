@@ -1,0 +1,202 @@
+
+HardVersion     =       $fff7
+
+MainInit        proc
+                bra     Continue
+                db      'UniEd', 1, 11
+                dw      CmdListSize - MainInit
+Continue        int     DosVersion
+                cmpb    #2
+                bcc     InitVideo
+                ldx     #BadVersion
+                int     Wstr
+                rts
+InitVideo
+                lda     #$0c
+                int     Wchar
+                jsr     LookMode
+                ldb     HardVersion
+                bmi     Py601a
+                lda     #40
+                clr     NormAttr
+Py601a          sta     ScreenCols
+                lda     #21
+                sta     ScreenLines
+                inca
+                inca
+                sta     MsgLine
+                lda     #MaxLineSize
+                sta     MaxLineLen
+                deca
+                sta     MaxLineLen1
+
+                lda     ScreenCols
+                deca
+                deca
+                deca
+                deca
+                ldb     #8
+                jsr     FindWindow
+                ldb     #5
+                jsr     DefWindow
+                jsr     OpenWindow
+                jsr     Header
+                jmp     MainEdit
+
+LookMode        proc
+                int     GetVideoMode
+                ldx     #InitProcs
+loop            tsta
+                beq     ToProc
+                tst     x
+                beq     NoValid
+                deca
+                inx
+                inx
+                bne     loop
+NoValid         clrb
+                clra
+                int     SetVideoMode
+                clrb
+Txt40           stb     NormAttr
+                eorb    #$3f
+                stb     MarkAttr
+                lda     #40
+rtn             rts
+txt80           lda     #80
+                rts
+ToProc          ldx     x
+                jmp     x
+InitProcs       dw      Txt40
+                dw      NoValid
+                dw      Gr40
+                dw      Gr80
+                dw      Txt80
+                db      0
+Gr40            lda     #40
+                bra     SetGr
+Gr80            lda     #80
+SetGr           ldx     #$3f22           ;int   Wchar
+                stx     WsysChar
+                ldb     rtn
+                stb     WsysChar+2      ;rts
+exit            rts
+                endp ; LookMode
+
+BadVersion      db      13,10,'UniDos 2.00 and later expected.',7,0
+                endp    ; MainInit
+
+GetVectors      proc
+                ldx     #Critical
+                ldab    #0
+                ldaa    #7
+                int     SetIntVec
+                ldx     #break
+                ldab    #0
+                ldaa    #4
+                int     SetIntVec
+                rts
+                endp
+
+TopReach        db      'อออ Top of File อออ', 0
+BottomReach     db      'อออ Bottom of File อออ', 0
+BottomEnd
+
+init_buff       proc
+                int     MemAvail
+                decb
+                stab    x1
+                staa    x1+1
+                ldx     x1
+                clrb
+                int     Allocate
+                cpx     #0
+                bne     alloc_ok
+                int     Terminate
+alloc_ok
+                stx     TopMsg
+                stx     Table+2
+                ldx     #TopReach
+                stx     Table
+                ldx     #Table
+                clrb
+                lda     #BottomReach-TopReach
+                int     MoveMem
+                lda     TopMsg+1
+                ldb     TopMsg
+                adda    #BottomREach-TopReach
+                adcb    #0
+                sta     TopFile+1
+                stb     TopFile
+
+                lda     TopMsg+1
+                ldb     TopMsg
+                adda    x1+1
+                adcb    x1
+                sta     BottomMsg+1
+                stb     BottomMsg
+                suba    #BottomEnd-BottomReach
+                sbcb    #0
+                sta     BottomFile+1
+                stb     BottomFile
+
+                sta     Table+3
+                stb     Table+2
+                ldx     #BottomReach
+                stx     Table
+                ldx     #Table
+                clrb
+                lda     #BottomEnd-BottomReach
+                int     MoveMem
+
+                ldx     TopFile
+                stx     ScrStart
+                stx     CurLine1
+                clr     x
+                ldx     BottomFile
+                dex
+                stx     CurLine2
+                clr     x
+
+                lda     CmdListSize
+                ldb     CmdListSize+1
+                adda    #CmdList
+                adcb    #/CmdList
+                sta     x1+1
+                stb     x1
+                adda    #EnvironEnd-Environment
+                adcb    #0
+                sta     TabsArray+1
+                stb     TabsArray
+                ldx     #Environment
+                stx     x2
+                ldx     #x1
+                clrb
+                lda     #EnvironEnd-Environment
+                int     MoveMem
+
+                ldx     #0
+                stx     LineNo
+
+                clra
+                coma
+                sta     ScreenOn
+                sta     UpdateScreen
+                clr     CmdPtr
+                clr     position
+                clr     Yposition
+                clr     min_pos
+                clr     HasMsg
+                clr     FirstBackGnd
+                lda     ScreenCols
+                sta     max_pos
+                rts
+                endp ; Init Buf
+
+Init_scr        proc
+                jsr     ShowMargins
+                jsr     Show_XY
+exit            rts
+                endp ; Init_scr
+
+

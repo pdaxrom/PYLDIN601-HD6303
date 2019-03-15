@@ -1,0 +1,117 @@
+
+; --- Prepare line for editing ---
+PrepareLine     proc                    ;expand current line
+                ldx     CurLine2
+                endp    ; PrepareLine
+PrepareThis     proc
+                stx     x1
+                ldx     CurLine1
+                stx     x2
+                jsr     StrCopy
+prepare_first	=	*		; YGP
+                ldx     CurLine1
+                clra
+loop1           tst     x               ; find eoln
+                beq     ExitL1
+                inx
+                inca
+                bra     loop1
+ExitL1          ldb     #' '
+loop2           cmpa    MaxLineLen    ; fillchar with ' '
+                beq     ExitL2
+                stb     x
+                inca
+                inx
+                bra     loop2
+ExitL2                                  ; put 0 after end of line
+                clr     x
+                ldx     CurLine1
+PrepareLnVars   stx     minx
+                ldaa    minx+1
+                ldb     minx
+                adda    MaxLineLen
+                adcb    #0
+                stab    maxx
+                staa    maxx+1
+                ldaa    minx+1
+                ldb     minx
+                adda    position
+                adcb    #0
+                stab    curx
+                staa    curx+1
+exit            rts
+                endp ; PrepareThis
+
+; --- StrCopy - String Copy ---
+; X1 - src; X2 - dest
+StrCopy         proc
+                sei
+                sts     tmps
+                ldx     x1
+                txs
+                ldx     x2
+loop
+                pula
+                sta     x
+                inx
+                tsta
+                bne     loop
+                lds     tmps
+                cli
+                rts
+                endp
+
+; --- Update Pointers ---
+UpdatePtrs      proc
+                lda     MaxLineLen
+                clrb
+                adda    CurLine1+1
+                adcb    CurLine1
+                sta     X1+1            ; address of last byte (+1)
+                stb     X1
+
+                ldx     X1
+loop            dex
+                lda     x
+                cmpa    #' '
+                bne     EndLoop
+                cpx     CurLine1
+                beq     ExitLoop
+                bra     loop
+EndLoop         inx
+ExitLoop        clr     x
+                ldx     CurLine2
+loop2           lda     x
+                beq     ExitLoop2
+                inx
+                bra     loop2
+ExitLoop2
+                inx
+                stx     CurLine2
+                clra
+                ldx     CurLine1
+loop3           tst     x
+                beq     EndL3
+                inca
+                inx
+                bra     loop3
+EndL3           inca
+                sta     a1
+                lda     CurLine2+1
+                ldb     CurLine2
+                suba    a1
+                sbcb    #0
+                sta     X2+1
+                sta     CurLine2+1
+                stb     X2
+                stb     CurLine2
+                ldx     CurLine1
+                stx     X1
+                ldx     #X1
+                lda     a1
+                clrb
+                int     MoveMem
+                rts
+                endp    ; UpdatePtrs
+
+

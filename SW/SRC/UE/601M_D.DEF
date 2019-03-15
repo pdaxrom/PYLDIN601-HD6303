@@ -1,0 +1,116 @@
+def c-F9 = [toggle debug]
+ ; UniED Version 1.11
+ ; де┤ини╢и┐ на клави╕и▓е за мик░окомп╛▓║░ "П║лдин 601М"
+
+ ;  1. Па░аме▓░и:
+
+ Set Make Backups = Yes
+ Set Confirm Char = Enter
+ Set Margins      = 1 66 5
+ Set Tabs         = 1 9 17 25 33 41 49 57 65 73
+ Set Dflt Ext     = 'txt'
+
+ ;  2. Команди:
+
+ ;  2.1. Команди за движение на к│░▒о░а
+
+ def left      = [left]
+ def c-left    = [block top]
+ def right     = [right]
+ def c-right   = [block bottom]
+ def up        = [up]
+ def c-up      = [top edge]
+ def down      = [down]
+ def c-down    = [bottom edge]
+ def home      = [begin line]
+ def end       = [end line]
+ def PgUp      = [page up]
+ def PgDn      = [page down]
+ def c-PgUp    = [top file]
+ def c-PgDn    = [bottom file]
+ def c-L       = [last cursor]
+ def s-F8      = [reflow]
+ ;-----------------------------------
+
+ def tab       = [tab]
+ def s-tab     = [tab back]
+
+ ;-----------------------------------
+ def c-F11     = [top edge][begin line]
+ def c-F12     = [bottom edge][end line]
+
+ ;
+ ;    2.2. Команди за вм║кване/из▓░иване
+ def insert    = [toggle ins]
+ def enter     = [new line]
+ def F9        = [ins line]
+ def rub       = [rubout]
+ def c-rub     = [delete line]
+ def delete    = [delete char]
+ def s-F6      = [delete word]
+
+ ;-------------------------------------
+ def s-F9      = [ins line][tab]
+ def F10       = [new line]
+ def s-F10     = [new line][tab]
+ def c-F10     = [new line][new line]'UniEd v1.11 (c) 1989 НИПЛ"П░ог░амно о▒иг│░┐ване", Со┤и┐'
+ def c-F5      = [unmark][left][mark end block][begin line][mark begin block][delete block]
+ def c-F6      = [unmark][right][mark begin block][end line][mark end block][delete block]
+
+ ;
+ ;    2.3. Команди за об░або▓ка на блок
+ def c-b       = [mark begin block]
+ def c-e       = [mark end block]
+ def c-w       = [mark word]
+ def c-c       = [copy block]
+ def c-m       = [move block]
+ def c-d       = [delete block]
+ def c-F8      = [print block]
+ def c-u       = [unmark]
+
+ ;
+ ;    2.4. Спе╢иал╝н╗е команд╗
+ def c-f       = [find]
+ def c-r       = [change]
+ def c-a       = [find again]
+ def c-p       = [ctrl char]
+ def s-F7      = [split]
+ def c-F7      = [join]
+ def F8        = [print file]
+ def F2        = [save file]
+ def F4        = [exit]
+ ;-------------------------------
+ def F3        = [save][exit]
+ def F7        = [reflow]
+ ;
+ ;    2.5. Команди за оп░едел┐не на │п░авл┐ва╣и ▒имволи за
+ ;         Star Geminy 15
+ def {Pica}               = $12
+ def {Condensed}          = $0F
+ def {Expanded Start}     = $1B$57$31
+ def {Expanded Stop}      = $1B$57$30
+ def {Emphasized Start}   = $1B$45
+ def {Emphasized Stop}    = $1B$46
+ def {Underlined Start}   = $1B$2D$31
+ def {Underlined Stop}    = $1B$2D$30
+ def {SubScript Start}    = $1B$53$31
+ def {SuperScript Start}  = $1B$53$30
+ def {SuperScript Stop}   = $1B$54
+ def {Line Feed}          = $1B$33$24
+ def {Form Feed}          = $0C
+ ;
+ ;    2.6. Команди за │п░авление на ┤о░ма▓а на пе╖а▓а
+ def c-JP      = [pica]
+ def c-JC      = [condensed]
+ def c-JX      = [expanded start]
+ def c-JZ      = [expanded stop]
+ def c-JE      = [emphasized start]
+ def c-JS      = [emphasized stop]
+ def c-JU      = [underlined start]
+ def c-JQ      = [underlined stop]
+ def c-JB      = [sub script start]
+ def c-JT      = [super script start]
+ def c-JN      = [super script stop]
+ def c-JL      = [line feed]
+ def c-JF      = [form feed]
+

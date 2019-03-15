@@ -1,0 +1,139 @@
+
+ScanCmdList     proc
+;  See if current command buffer matches any installed commands
+;  Return Match if so, PartMatch if possible match, NoMatch if a loser
+;
+;   Output:  b- MatchType ;(_MATCH, _NO_MATCH, _PART_MATCH)
+;
+;var
+;  Cpos, Cofs, CmdLen : Integer;
+;  Done : Boolean;
+;  MatchResult : CmdMatchType;
+;
+;;                jsr     showcircbuf
+;;                jsr     savregs
+;;                ldx     #cmdscanmsg
+;;                ldb     UsrCmdInp
+;;                lda     CmdPtr
+;;                jsr     Msg
+;;                jsr     lodregs
+
+                clr     Cpos           ;Cpos := 0;
+                clr     Cpos+1         ;
+                clr     CofsHi
+                ldx     #CmdList       ;
+                ldb     0,x            ;
+                stb     CmdLen         ;
+                                       ;CmdLen := Ord(CmdList^[0]);
+                                       ;
+rep                                    ;repeat
+                ldb     #_PART_MATCH   ;
+                stb     MatchRes       ;MatchResult := PartMatch;
+                ldb     #1             ;Cofs := 1;
+                stb     Cofs
+
+;while (MatchResult = PartMatch) and (Cofs <= CmdPtr) and (Cofs <= CmdLen) do
+;  if CmdBuf[Cofs] <> CmdList^[Cpos+Cofs]
+;    then MatchResult := NoMatch
+;    else Inc(Cofs);
+while
+                ldb     MatchRes       ;
+                cmpb    #_PART_MATCH   ;
+                bne     endwhile       ;
+                                       ;
+                ldb     Cofs           ;
+                cmpb    CmdPtr         ;
+                bhi     endwhile       ;
+                cmpb    CmdLen         ;
+                bhi     endwhile       ;
+                                       ;
+                clra                   ; b = Cofs
+                addb    Cpos+1         ;
+                adca    Cpos           ;
+                addb    #CmdList
+                adca    #/CmdList
+                sta     x1             ;
+                stb     x1+1           ;
+                ldx     x1             ;
+                lda     0,x            ;
+                ldx     CofsHi         ;
+                cmpa    CmdBuf-1,x     ;
+                                       ;
+                bne     partwhile      ;
+                                       ;
+                inc     Cofs           ;
+                bra     while          ;
+partwhile                              ;
+                ldb     #_NO_MATCH     ;
+                stb     MatchRes       ;
+endwhile                               ;
+                                       ;
+                lda     CmdLen         ;
+                inca                   ;
+                ldb     #0             ;
+                adda    Cpos+1         ;
+                adcb    Cpos           ;
+                sta     Cpos+1         ;
+                stb     Cpos           ;
+                                       ;inc(Cpos,Succ(CmdLen));
+                ldb     #_PART_MATCH   ;
+                cmpb    MatchRes       ;
+                                       ;done:= (MatchResult = PartMatch);
+                beq     done           ;
+                                       ;if not(Done) then begin
+                lda     cpos+1
+                adda    #Cmdlist
+                sta     x1+1
+                lda     cpos
+                adca    #/CmdList
+                sta     x1
+                ldx     x1
+                lda     0,x
+                inca
+                clrb
+                adda    Cpos+1
+                adcb    Cpos
+                sta     Cpos+1
+                stb     Cpos
+                                       ;inc(Cpos,Succ(ord(CmdList^[cpos]))));
+                                       ;{Bytes in next command}
+                lda     #cmdlist
+                adda    Cpos+1
+                sta     x1+1
+                lda     #/cmdlist
+                adca    Cpos
+                sta     x1
+                ldx     x1
+                lda     0,x            ;
+                sta     CmdLen         ;
+                                       ;CmdLen := Ord(CmdList^[Cpos]);
+
+                tst     CmdLen         ;
+                bne     rep            ;
+                bra     endrep         ;
+done                                   ;end
+                ldb     CmdPtr
+                cmpb    CmdLen         ;
+                bne     endrep         ;else if (CmdPtr = CmdLen)
+                ldb     #_MATCH        ;  then begin
+                stb     MatchRes       ;  {The whole command matched}
+                                       ;     MatchResult := Match;
+
+                ldb     #cmdlist
+                addb    Cpos+1
+                stb     x1+1
+                ldb     #/cmdlist
+                adcb    Cpos
+                stb     x1
+                ldx     x1
+                ldb     0,x
+                jsr     PushStr        ;     PushStr; x- beg of str
+                                       ;  end;
+endrep                                 ;
+                                       ;until Done or (CmdLen = 0);
+                ldb     MatchRes       ;
+                                       ;EdScanCmdList := MatchResult;
+                rts
+                endp    ;ScanCmdList
+
+

@@ -1,0 +1,437 @@
+
+LineCmds        proc
+                ldx     #ChrTable
+Search          ldb     x
+                beq     Return
+                cba
+                beq     ChFound
+                inx
+                inx
+                inx
+                bra     Search
+ChFound
+                inx
+                ldx     x
+                jsr     x
+                ldb     #1
+Return          rts
+
+ChrTable        db      T_ToggleIns       ; <Ins>
+                dw      InsRep
+                db      T_LeftLine
+                dw      BeginLineCmd
+                db      T_RightLine       ; <End>
+                dw      EndLineCmd
+                db      T_LeftChar        ; <-
+                dw      LeftKey
+                db      T_RightChar       ; ->
+                dw      RightKey
+                db      T_DelLeftChar     ; BackSpace
+                dw      RubOut
+                db      T_DelRightChar    ; <Del>
+                dw      Delete
+                db      T_ClrEol
+                dw      ClrEolCmd
+                db      T_LeftWord
+                dw      WordLeftCmd
+                db      T_RightWord
+                dw      WordRightCmd
+                db      T_DeleteWord
+                dw      DeleteWordCmd
+                db      T_Tab
+                dw      TabCmd
+                db      T_TabBack
+                dw      BackTabCmd
+
+                db      T_CenterLine
+                dw      CenterLine
+                db      T_InsCtrlChar
+                dw      InsCharCmd
+
+                db      0               ; end of table
+                endp    ; LineCmds
+
+; --- Toggle insert ---
+InsRep          proc
+                com     InsState
+exit            rts
+                endp; InsRep
+
+; --- Begin of line ---
+BeginLineCmd    proc
+                clr     position
+                ldx     minx
+                stx     curx
+exit            rts
+                endp ; BeginLineCmd
+
+; --- End of line ---
+EndLineCmd      proc
+                lda     MaxLineLen1
+                ldx     maxx
+DownLp          dex
+                ldb     x
+                cmpb    #' '
+                bne     ExitDownLp
+                deca
+                bne     DownLp
+                dex
+ExitDownLp      inx
+                inca
+                cmpa    MaxLineLen
+                bcs     OK
+                deca
+                dex
+OK              sta     position
+                stx     curx
+exit            rts
+                endp ; EndLineCmd
+
+; --- Move one char left ---
+LeftKey         proc
+                lda     position
+                beq     exit
+                dec     position
+                ldx     curx
+                dex
+                stx     curx
+exit            rts
+                endp ; LeftKey
+
+; --- Move one char right ---
+RightKey        proc
+                lda     position
+                cmpa    MaxLineLen1
+                beq     exit
+                inc     position
+                ldx     curx
+                inx
+                stx     curx
+exit            rts
+                endp ; RightKey
+
+; --- RubOut an Delete Char ---
+RubOut          proc
+                jsr     LeftKey
+                endp ; RubOut
+Delete          proc
+                lda     MaxLineLen
+                suba    position
+                deca
+                clrb
+                ldx     curx
+                stx     X2
+                inx
+                stx     X1
+                ldx     #X1
+                int     MoveMem
+                ldx     maxx
+                dex
+                lda     #' '
+                sta     x
+                clr     FileModifyed
+exit            jmp     MarkDelSpace
+                endp ; Delete
+
+; --- Word left ---
+WordLeftCmd     proc
+                lda     position
+                beq     exit
+                jsr     LeftKey      ; x points to curren character
+                lda     x
+                jsr     InAlphas
+                beq     InWord
+findleft        lda     position
+                beq     exit
+                jsr     LeftKey
+                lda     x
+                jsr     InAlphas
+                bne     findleft
+InWord          lda     position
+                beq     exit
+                jsr     LeftKey
+                lda     x
+                jsr     InAlphas
+                beq     InWord
+                jsr     RightKey
+exit            rts
+                endp ; WordLeftCmd
+
+; --- Word right ---
+WordRightCmd    proc
+                ldx     curx
+                lda     x
+                jsr     InAlphas
+                bne     OutSide
+findright       lda     position
+                cmpa    MaxLineLen1
+                beq     ToEndLine
+                jsr     RightKey
+                lda     x
+                jsr     InAlphas
+                beq     findright
+OutSide
+                lda     position
+                cmpa    MaxLineLen1
+                beq     ToEndLine
+                jsr     RightKey
+                lda     x
+                jsr     InAlphas
+                bne     OutSide
+exit            rts
+ToEndLine       jmp     EndLineCmd
+                endp ; WordRightCmd
+
+GoToWordBegin   proc
+                ldx     curx
+loop            lda     x
+                jsr     InAlphas
+                bne     oneback
+                lda     position
+                beq     exit
+                jsr     LeftKey
+                bra     loop
+oneback         jsr     RightKey
+exit            rts
+                endp ; GoToWordBegin
+
+GoToWordEnd     proc
+                ldx     curx
+                lda     x
+                jsr     InAlphas
+                bne     exit
+lp              lda     x
+                jsr     InAlphas
+                bne     oneback
+                jsr     RightKey
+                bra     lp
+oneback         jsr     LeftKey
+exit            rts
+                endp ; GotoWordEnd
+
+;  --- Delete cursor word ---
+DeleteWordCmd   proc
+                ldx     curx
+                lda     x
+                jsr     InAlphas
+                bne     exit
+                bsr     GoToWordBegin
+delloop         ldx     curx
+                lda     x
+                jsr     InAlphas
+                bne     exit
+                jsr     Delete
+                bra     delloop
+exit            rts
+                endp ; DeleteWordCmd
+
+InAlphas        proc
+                cmpa    #'?'
+                bcs     lab1
+                cmpa    #'Z'
+                bls     in
+lab1            cmpa    #'a'
+                bcs     lab2
+                cmpa    #'z'
+                bls     in
+lab2            cmpa    #$80
+                bcs     lab3
+                cmpa    #$fe
+                bls     in
+lab3            cmpa    #'0'
+                bcs     lab4
+                cmpa    #'9'
+                bls     in
+lab4
+                cmpa    #'%'
+                beq     in
+                cmpa    #'_'
+                beq     in
+                cmpa    #'|'
+                beq     in
+                cmpa    #'"'
+                beq     in
+                cmpa    #';'
+                beq     in
+Out             lda     #1
+                rts
+In              clra
+exit            rts
+                endp ; InAlphas
+
+; --- Go to next tab position ---
+TabCmd          proc
+                lda     position
+                ldx     TabsArray
+loop1           cmpa    x
+                bcs     found
+                inx
+                bra     loop1
+found           lda     x
+                cmpa    #$ff
+                bne     GoToCol
+exit            rts
+                endp ; TabCmd
+
+;  --- Go to column ( in a) ---
+GoToCol         proc
+                sta     tabpos
+                cmpa    MaxLIneLen1
+                bcs     go
+                jmp     EndLineCmd
+go              jsr     BeginLineCmd
+loop            lda     position
+                cmpa    TabPos
+                beq     exit
+                jsr     RightKey
+                bra     loop
+exit            rts
+TabPos          db      0
+                endp; GoToCol
+
+; --- Go to previous tab position ---
+BackTabCmd      proc
+                lda     #$ff
+                sta     res
+                ldx     TabsArray
+                ldb     #16
+loop            lda     x
+                cmpa    position
+                bcc     next
+                sta     res
+next            inx
+                decb
+                bne     loop
+                lda     res
+                cmpa    #$ff
+                bne     GoToCol
+exit            rts
+res             ds      1
+                endp ; BackTabCmd
+
+; --- Character input processing routine ---
+ProcessChr      proc
+                ldb     InsState
+                beq     StoreChar
+                pha
+                jsr     InsSpace
+                pla
+StoreChar       ldx     curx
+                sta     x
+                inx                     ; bump pointer and position
+                cpx     maxx
+                beq     exit
+                stx     curx
+                inc     position
+                clr     FileModifyed
+                ldb     InsState
+                bne     Marg
+                lda     position
+                cmpa    Rmarg
+                bls     exit
+Marg            jmp     Margin
+exit            rts
+                endp    ;ProcessChr
+
+InsSpace        proc
+                lda     #' '
+                endp    ; InsSpace
+InsChar         proc
+                psha
+                jsr     InsSp
+                pula
+                sta     x
+exit            rts
+                endp ; InsChar
+
+; --- Insert space for one character in line ---
+; curx - address of space
+; position - position in line
+InsSp           proc
+                lda     MaxLineLen
+                suba    position
+                deca
+                clrb
+                ldx     curx
+                stx     X1
+                inx
+                stx     X2
+                ldx     #X1
+                int     MoveMem
+                jsr     MarkInsSpace
+                ldx     curx
+exit            rts
+                endp ; InsSp
+
+LineIsEmpty     proc
+                ldx     CurLine1
+                clrb
+                dex
+loop
+                incb
+                inx
+                lda     x
+                cmpa    #' '
+                beq     loop
+                cmpb    MaxLineLen1
+                bcc     exityes
+exitno          lda     #1
+                bra     exit
+exityes         clra
+exit
+;;                jsr     savregs
+;;                ldx     #emptymsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                tsta
+                rts
+;;emptymsg        db      ':>EmptyLine?',0
+                endp ; LineIsEmpty
+
+LenOfLine       ds      1
+CalcLenght      proc
+                jsr     exit
+                clr     LenOfLine
+                jsr     LineIsEmpty
+                beq     exit
+                jsr     EndLineCmd
+                inc     LenOfLine
+                lda     Position
+                deca
+                beq     exit
+                sta     LenOfLine
+exit            lda     LenOfLine
+;;                jsr     savregs
+;;                ldx     #calcmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                rts
+;;calcmsg         db      ':>LineLen',0
+                endp ; CalcLenght
+
+; --- Clear to end of line ---
+ClrEolCmd       proc
+                ldx     CurX
+                lda     #' '
+loop            cpx     maxx
+                beq     exit
+                sta     x
+                inx
+                bra     loop
+exit            rts
+                endp ; ClrEolCmd
+
+InsCharCmd      proc
+                jsr     KeyPressed
+                cmpa    #$ff
+                bne     GetIt
+                ldx     #msg
+                jsr     SayMsg
+GetIt           jsr     GetStream
+                jmp     ProcessChr
+msg             db      'Type a key',0
+                endp ; InsCharCmd
+
+
+
+

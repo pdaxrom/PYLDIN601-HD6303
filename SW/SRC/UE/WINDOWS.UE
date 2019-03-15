@@ -1,0 +1,221 @@
+
+; --- Finds start coordinate of window  ---
+; a- xsize, b- ysize
+FindWindow      proc
+                sta     atmp
+                lda     ScreenCols
+                suba    atmp
+                lsra
+                deca
+                stb     btmp
+                ldb     ScreenLines
+                subb    btmp
+                lsrb
+                decb
+                int     GotoXY
+                lda     atmp
+                ldb     btmp
+exit            rts
+atmp            ds      1
+btmp            ds      1
+                endp ; FindWindow
+
+; --- Defines window at cusWnd_Ror position ---
+; a- xsize, b- y size
+DefWindow       proc
+                sta     Wnd_xx
+                stb     Wnd_yy
+                int     GetCrsr
+                sta     Wnd_xo
+                stb     Wnd_yo
+                lda     Wnd_yy
+exit            rts
+                endp ; DefWindow
+
+; --- Cursor Home position ---
+HomeWindow      proc
+                lda     Wnd_xo
+                inca
+                ldb     Wnd_yo
+                incb
+                int     GotoXY
+exit            rts
+                endp ; HomeWindow
+
+; --- Opens window defined ---
+OpenWindow      proc
+                lda     Wnd_xx
+                lsra
+                adda    Wnd_xo
+                sta     Wnd_Lo
+                inca
+                sta     Wnd_Ro
+Wnd_Loop
+                clra
+                ldb     Wnd_xo
+                cmpb    Wnd_Lo
+                bhi     NoL
+                dec     Wnd_Lo
+                jsr     Lpart
+NoL
+                sta     Lend
+                clra
+                ldb     Wnd_xo
+                addb    Wnd_xx
+                cmpb    Wnd_Ro
+                bcs     NoR
+                jsr     Rpart
+                inc     Wnd_Ro
+NoR
+                oraa    Lend
+                bne     Wnd_Loop
+exit            bra     HomeWindow
+Lend            ds      1
+                endp ; OpenWindow
+
+; --- CWnd_Loses window defined ---
+CloseWindow     proc
+                ldb     Wnd_xo
+                decb
+                stb     Wnd_Lo
+                addb    Wnd_xx
+                incb
+                stb     Wnd_Ro
+Wnd_Loop
+                clra
+                ldb     Wnd_Lo
+                cmpb    Wnd_Ro
+                beq     NoL
+                jsr     Lpart
+                inc     Wnd_Lo
+NoL
+                sta     Lend
+                clra
+                ldb     Wnd_Lo
+                cmpb    Wnd_Ro
+                beq     NoR
+                jsr     Rpart
+                dec     Wnd_Ro
+NoR
+                oraa    Lend
+                bne     Wnd_Loop
+
+                ldb     Wnd_yy
+                incb
+                incb
+                stb     Wnd_cntr
+                ldb     Wnd_yo
+lpclr           lda     Wnd_Lo
+                jsr     GoXY
+                lda     #' '
+                jsr     WsysChar
+                jsr     WsysChar
+                jsr     WsysChar
+                incb
+                dec     Wnd_cntr
+                bne     lpclr
+exit            rts
+Lend            ds      1
+                endp ; CloseWindow
+
+Wnd_xo              ds      1
+Wnd_yo              ds      1
+Wnd_xx              ds      1
+Wnd_yy              ds      1
+Wnd_Lo              ds      1
+Wnd_Ro              ds      1
+Wnd_cntr            ds      1
+
+Lpart           proc
+                ldx     #frames
+                lda     Wnd_yy
+                sta     Wnd_cntr
+                ldb     Wnd_yo
+                lda     Wnd_Lo
+                bsr     GoXy
+                lda     #' '
+                jsr     WsysChar
+                lda     x,10
+                jsr     WsysChar
+                lda     x,1
+                jsr     WsysChar
+                lda     Wnd_cntr
+                beq     downline
+Wnd_Loop        incb
+                lda     Wnd_Lo
+                bsr     GoXY
+                lda     #' '
+                jsr     WsysChar
+                lda     x,11
+                jsr     WsysChar
+                lda     #' '
+                jsr     WsysChar
+                dec     Wnd_cntr
+                bne     Wnd_Loop
+downline        incb
+                lda     Wnd_Lo
+                bsr     GoXy
+                lda     #' '
+                jsr     WsysChar
+                lda     x,0
+                jsr     WsysChar
+                lda     x,1
+                jmp     WsysChar
+                endp ; Lpart
+
+GoXY            proc
+                int     GotoXY
+                rts
+                psha
+                psha
+                lda     #$1e
+                jsr     WsysChar
+                pula
+                adda    #$20
+                jsr     WsysChar
+                tba
+                adda    #$20
+                jsr     WsysChar
+                pula
+exit            rts
+                endp ; GoXY
+
+Rpart           proc
+                ldx     #frames
+                lda     Wnd_yy
+                sta     Wnd_cntr
+                ldb     Wnd_yo
+                lda     Wnd_Ro
+                bsr     GoXy
+                lda     x,1
+                jsr     WsysChar
+                lda     x,13
+                jsr     WsysChar
+                lda     #' '
+                jsr     WsysChar
+                lda     Wnd_cntr
+                beq     downline
+Wnd_Loop        incb
+                lda     Wnd_Ro
+                bsr     GoXY
+                lda     #' '
+                jsr     WsysChar
+                lda     x,11
+                jsr     WsysChar
+                lda     #' '
+                jsr     WsysChar
+                dec     Wnd_cntr
+                bne     Wnd_Loop
+downline
+                incb
+                lda     Wnd_Ro
+                bsr     GoXy
+                lda     x,1
+                jsr     WsysChar
+                lda     x,3
+                jsr     WsysChar
+                lda     #' '
+                jmp     WsysChar
+                endp ; Rpart
+
+

@@ -1,0 +1,363 @@
+
+RightJustify    ds      1
+
+; --- Justify marked block ---
+Justify         proc
+                lda     #$ff
+                sta     RightJustify
+                bra     ReflowIt
+                endp ; Justify
+
+; --- Reflow marked block ---
+Reflow          proc
+                clr     RightJustify
+                endp ; Reflow
+ReflowIt        proc
+                ldx     #ChrBegMark
+                lda     x,_MarkType
+                anda    #_Active
+                bne     DoIt
+                rts
+;;refmsg          db      ':>Reflow',0
+;;downlnmsg        db      ':>DownLine',0
+DoIt
+;;                jsr     savregs
+;;                ldx     #refmsg
+;;                lda     RightJustify
+;;                clrb
+;;                jsr     Msg1
+;;                jsr     lodregs
+;Reflow =
+;0. Ини╢иализа╢и┐
+;     FirstLine:= True
+                lda     #$ff
+                sta     FirstLine
+;1. Ако на╖ало▓о на блока не ▒║впада ▒ на╖ало▓о на ░еда ▓о - Split
+;   в на╖ало▓о на блока
+                jsr     MoveToBlkTop
+                jsr     PrepareLine
+                jsr     InsSpace
+                jsr     UpdatePtrs
+                lda     position
+                beq     end1
+                jsr     SplitLineCmd
+end1
+;2. Ако к░а┐ на блока не ▒║впада ▒ к░а┐ на лини┐▓а ▓о - Split - една
+;   пози╢и┐ ▒лед к░а┐ на блока.
+                jsr     MoveToBlkEnd
+                jsr     PrepareLine
+                lda     position
+                psha
+                jsr     EndLineCmd
+                pula
+                inca
+                cmpa    position
+                bcc     end2
+                sta     position
+                jsr     SplitLineCmd
+end2
+                clr     AutoMargin
+                jsr     MoveToBlkTop
+;3. За п║░ва▓а лини┐ StartPos:= Pmarg, за о▒▓анали▓е StartPos:= Lmarg,
+;      AlignSpaces;
+;      CalcLength;
+;      FreeLen:= MaxLineLenght - LenOfLine - StartPos -10;
+Point3
+                ldb     Pmarg
+                lda     FirstLine
+                bne     nofirst
+                ldb     Lmarg
+nofirst         stb     StartPos
+                jsr     PrepareLine
+                jsr     AlignSpaces
+                jsr     CalcLenght
+                lda     MaxLineLen
+                suba    #10
+                suba    LenOfLine
+                suba    StartPos
+                sta     FreeLen
+                jsr     UpdatePtrs
+;4. Ако LenOfLine < Rmarg  и  NextLineInBlock
+;     Слизам на долна▓а лини┐;
+;     AlignSpaces;
+;     CalcLenght;
+;     Ako LenOfLine > FreeLen ▓о Split на пози╢и┐ FreeLen
+;     В░║╣ам ▒е об░а▓но на го░на▓а лини┐;
+;     Join;
+;     Об░а▓но на ▓о╖ка 3.
+                lda     LenOfLine
+                cmpa    Rmarg
+                bcc     end4
+                ldx     #ChrBegMark
+                lda     LineNo+1
+                ldb     Lineno
+                adda    #1
+                adcb    #0
+                jsr     LineIsInBlock
+                bne     end4
+                jsr     MoveDownCmd
+                jsr     PrepareLine
+                jsr     AlignSpaces
+                jsr     CalcLenght
+                lda     FreeLen
+                jsr     GoToCol
+                jsr     GoToWordBegin
+                jsr     LeftKey
+                ldx     curx
+                cpx     minx
+                bne     ins_sp
+                lda     FreeLen
+                jsr     GoToCol
+                jsr     Updat
+ins_sp          jsr     InsSpace
+updat           jsr     UpdatePtrs
+                lda     LenOfLine
+                cmpa    FreeLen
+                bls     nosplt
+                jsr     PrepareLine
+                jsr     SplitLineCmd
+                jsr     UpdatePtrs
+nosplt          jsr     MoveUpCmd
+                jsr     JoinLines
+                jmp     Point3
+end4
+;5. О┤о░м┐не на лини┐▓а
+;     FirstLine:= false
+;     AlignSpaces;
+;     Под░авн┐вам ▒║▒ _ до StartPos
+;       Из▓░ивам в▒и╖ки _ о▓ на╖ало▓о на ░еда
+;       Вм║квам StartPos _
+;     CalcLenght;
+                clr     FirstLine
+                jsr     PrepareLine
+                jsr     AlignSpaces
+                jsr     LineIsEmpty
+                beq     end5
+                lda     StartPos
+                jsr     LeftJustIns
+                jsr     CalcLenght
+                jsr     UpdatePtrs
+end5
+;6. Ako LenOfLine => Rmarg ▓о
+;     SplitAtEnd;
+;     Ако има под░авн┐ване о▓ д┐▒но викам JustRight;
+;     ▒лизам на долна▓а лини┐;
+;     В░║╣ам ▒е на ▓о╖ка 3.
+;;                jsr     savregs
+;;                ldx     #downlnmsg
+;;                lda     LenOfLine
+;;                ldb     Rmarg
+;;                jsr     Msg
+;;                jsr     lodregs
+                lda     LenOfLine
+                cmpa    Rmarg
+                bcs     end6
+                jsr     SplitAtEnd
+                tst     RightJustify
+                beq     nojust
+                jsr     JustRight
+nojust          jsr     MoveDownCmd
+To_p3           jmp     Point3
+end6            ldx     #ChrBegMark
+                lda     LineNo+1
+                ldb     Lineno
+                adda    #1
+                adcb    #0
+                jsr     LineIsInBlock
+                beq     To_p3
+;7. К░ай на Reflow
+;     О▓ивам в к░а┐ на блока;
+;     Слизам в на╖ало▓о на долна▓а лини┐;
+ExitReflow
+                jsr     MoveToBlkTop
+                jsr     BeginLineCmd
+                jsr     MarkBlkBegin
+                jsr     MoveToBlkEnd
+                clr     position
+                jsr     MoveDownCmd
+                lda     #$ff
+                sta     AutoMargin
+;End; {Reflow}
+exit            rts
+FirstLine       ds      1
+StartPos        ds      1
+FreeLen         ds      1
+
+;;alignmsg        db      ':>Align',0
+AlignSpaces     proc
+;AlignSpaces=
+;   За ╢ели┐ ░ед :
+;     Нав▒┐к║де к║де▓о има две ▒║▒едни _ ги п░ав┐ на една
+;       ▓║░▒┐ _
+;       ако п░еди╕ни┐ ▒имвол е . вм║квам една _ и ▒е п░еме▒▓вам нап░ед
+;       из▓░ивам дока▓о ▒ледва╣и┐ ▒имвол е _ , или излизам о▓ ░еда
+                jsr     BeginLineCmd
+                lda     x
+                cmpa    #' '
+                bne     scansp
+                jsr     RightKey
+scansp          lda     position
+                dex
+                deca
+fndend          inx
+                inca
+                ldb     x
+                cmpb    #' '
+                beq     fndend
+                cmpa    MaxLineLen1
+                bcc     exit
+                ldx     curx
+                lda     x
+                cmpa    #' '
+                beq     spfound
+                jsr     RightKey
+                bra     scansp
+spfound         dex
+                lda     x
+                cmpa    #'.'
+                bne     no_point
+                inx
+                jsr     InsSpace
+                jsr     RightKey
+no_point        jsr     RightKey
+lpdel           ldx     curx
+                lda     x
+                cmpa    #' '
+                bne     scansp
+                jsr     Delete
+                bra     lpdel
+exit
+;;                jsr     savregs
+;;                ldx     #alignmsg
+;;                jsr     Msg1
+;;                jsr lodregs
+                rts
+;end;{alignspaces}
+                endp ; AlignSpaces
+
+SplitAtEnd      proc
+;SplitAtEnd =
+;   Ако имаме под░авн┐ване на ░амки▓е на д│ма
+;     ▓║░▒┐ п║░ва▓а _ о▓ Rmarg до StartPos
+;     ако има ▓ова е м┐▒▓о▓о
+;     ако н┐ма м┐▒▓о▓о е Rmarg+1
+;   Ако под░авн┐ване▓о е ▒ п░ено▒
+;     За ▒ега не ▒е знае какво да ▒е п░ави
+;   о▓ивам на м┐▒▓о▓о;
+;   Split на ▒ме▓на▓о▓о м┐▒▓о;
+                jsr     PrepareLine
+                tst     WordJustify
+                bne     wordfind
+                lda     Rmarg
+                inca
+                jsr     GoToCol
+                lda     x
+                cmpa    #' '
+                beq     fndsp
+                jsr     LeftKey
+fndsp           lda     position
+                cmpa    StartPos
+                bhi     nostart
+                lda     Rmarg
+                bra     CommonEnd
+nostart         lda     x
+                cmpa    #' '
+                beq     spok
+                jsr     LeftKey
+                bra     fndsp
+spok            jsr     RightKey
+                lda     position
+CommonEnd       psha
+                jsr     UpdatePtrs
+                pula
+                jsr     GoToCol
+                jmp     SplitLineCmd
+wordfind
+                bra     CommonEnd
+;end;{SplitAtEnd}
+WordJustify     db      0
+                endp ; SplitAtEnd
+
+JustRight       proc
+;JustRigth=
+;   CalcLenght;
+;   Nspaces:= Rmarg - LenOfLine;
+                com     LeftBegin
+                jsr     PrepareLine
+                jsr     CalcLenght
+                lda     StartPos
+                jsr     GoToCol
+lpfirst         lda     x
+                cmpa    #' '
+                beq     firstsp
+                jsr     RightKey
+                bra     lpfirst
+firstsp         ldb     LenOfLine
+                beq     CommonEnd
+                incb
+                cmpb    position
+                beq     CommonEnd
+
+                lda     Rmarg
+                suba    LenOfLine
+                bmi     CommonEnd
+                sta     Nspaces
+                lda     LenOfLine
+                sta     RmargLoc
+;     за▒▓авам на пози╢и┐ StartPos
+;     for i:=1 to nspaces do
+;       нами░ам ▒ледва╣а▓а _
+;       вм║кван една _
+;       нами░ам ▒имвол ░азл о▓ _
+                lda     StartPos
+                jsr     GoToCol
+                jsr     NextPos
+loop            lda     Nspaces
+                beq     CommonEnd
+                dec     nspaces
+fndsp           lda     x
+                cmpa    #' '
+                beq     nextsp
+                jsr     NextPos
+                bra     fndsp
+nextsp          jsr     InsSpace
+                inc     RmargLoc
+fnosp           jsr     NextPos
+                lda     x
+                cmpa    #' '
+                beq     fnosp
+                bra     loop
+;   ако LeftBegin ▓о
+;       движа ▒е нап░ед
+;       ако ▒║м на пози╢и┐ > Rmarg за▒▓авам на пози╢и┐ StartPos
+;   ако RightBegin ▓о
+;       движа ▒е назад
+;       ако ▒║м на пози╢и┐ <= StartPos  за▒▓авам на пози╢и┐ Rmarg
+NextPos
+                tst     LeftBegin
+                beq     decrot
+incrot          jsr     RightKey
+                lda     position
+                ldb     StartPos
+                cmpa    RmargLoc
+                bhi     ToBpos
+                rts
+decrot          jsr     LeftKey
+                ldb     RmargLoc
+                lda     position
+                cmpa    StartPos
+                bls     ToBpos
+                rts
+ToBpos          tba
+                jmp     GoToCol
+RmargLoc        ds      1
+CommonEnd
+                jmp     UpdatePtrs
+;end; {justright}
+LeftBegin       db      0
+Nspaces         ds      1
+                endp ; JustRight
+
+                endp ; ReflowIt
+
+

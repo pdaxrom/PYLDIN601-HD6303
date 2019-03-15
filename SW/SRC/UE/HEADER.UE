@@ -1,0 +1,127 @@
+
+Header          proc
+                clra
+                clrb
+                int     GotoXy
+                ldx     ScreenCols
+                stx     screenx
+                ldx     #HeaderMsg
+                ldb     x
+                lda     screeny
+                sba
+                bpl     subok
+                clra
+subok           lsra
+                adda    Screenyo
+                tab
+                lda     #10
+lppos           tstb
+                beq     endlpp
+                jsr     WsysChar
+                decb
+                bpl     lppos
+endlpp
+                ldb     1,x
+                inx
+                inx
+                stx     nextx
+                lda     screenx
+                sba
+                bpl     subok1
+                clra
+subok1          lsra
+                adda    Screenxo
+                sta     ScreenXo
+loop
+wrtline_        jsr     WrtLine
+                bne     loop
+exit            rts
+WrtLine         jsr     GetNext
+                beq     exit
+                jsr     DoIt
+                bra     wrtline
+DoIt            ldx     #tble-1
+find            inx
+                ldb     x
+                beq     okk
+                cba
+                beq     okk
+                inx
+                inx
+                bra     find
+okk             ldx     1,x
+                jmp     x
+Tble
+                db      _User1_T
+                dw      GetVectors
+                db      _Box_T
+                dw      DoBox
+                db      _User2_T
+                dw      Init_Buff
+                db      _Tab_T
+                dw      TabIt
+                db      _User3_T
+                dw      Init_Scr
+                db      _Rep_T
+                dw      RepIt
+                db      _User4_T
+                dw      FirstLoad
+                db      0
+                dw      WsysChar
+
+TabIt           lda     #' '
+                ldb     screenxo
+while           beq     endtabit
+                jsr     WsysChar
+                decb
+                bra     while
+endtabit        rts
+
+DoBox           ldb     screenx
+                decb
+                jsr     GetNext
+                psha
+                jsr     WsysChar
+                decb
+                jsr     GetNext
+lpbox           jsr     WsysChar
+                decb
+                bne     lpbox
+                jsr     GetNext
+                jsr     WsysChar
+                lda     #13
+                jsr     WsysChar
+                pla
+                jmp     WsysChar
+RepIt           jsr     GetNext
+                tab
+                jsr     GetNext
+lrep            jsr     WsysChar
+                decb
+                bne     lrep
+                rts
+GetNext
+                ldx     nextx
+                lda     x
+                eora    XorValue
+                inx
+                stx     nextx
+                tsta
+                rts
+NextX           ds      2
+ScreenX         db      40
+ScreenY         db      20
+ScreenXo        db      0
+ScreenYo        db      0
+                endp ; Header
+HeaderMsg
+                db      10              ;Lines in header
+                db      40              ;maxscreen
+                include header.hdr
+                db      _User1
+                db      _User2
+                db      _User3
+                db      _User4
+XorValue        db      _XorVal
+
+

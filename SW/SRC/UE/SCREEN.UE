@@ -1,0 +1,478 @@
+
+WsysChar        proc
+                jmp     $f003
+                endp ; WsysChar
+Frames
+                db      'ÈÍÊØÜ'
+                db      'ÀÄÁÙÛ'
+                db      'ÉÇË× '
+                db      'ÚÓÂÏ '
+
+; --- Request for refresh ---
+Refresh         proc
+                clr     UpdateScreen
+exit            rts
+                endp ; Refresh
+
+; --- Horizontal scroll if neaded ---
+Hscroll         proc
+                ldaa    position
+                cmpa    min_pos
+                bcc     MayOKpos
+                jsr     AdjLeft
+                bra     PosOK
+MayOKpos        cmpa    max_pos
+                bcs     PosOK
+                jsr     AdjRight
+PosOK           rts
+                endp;   Hscroll
+
+; --- Refresh Line ---
+RefreshLine     proc
+                clra
+                ldb     Yposition
+                stb     WrkLine
+                int     GotoXY
+                ldx     CurLine1
+                jmp     RefrLine
+                endp   ;RefreshLine
+
+; --- Refresh Screen ---
+PhyRefresh      proc
+;;                jsr     savregs
+;;                ldx     #msge
+;;                jsr     Msg1
+;;                jsr     lodregs
+                ldx     CurLine1
+                dex                     ;find end of curline1
+llpcur          inx
+                lda     x
+                bne     llpcur
+lpback          dex
+                lda     x
+                cmpa    #' '
+                beq     lpback
+                inx
+                clr     x
+                inx
+endcur1         stx     CurLine11
+                clr     WrkLine
+                clra
+                clrb
+                int     GotoXY
+                ldx     ScrStart
+                lda     ScreenLines
+                sta     x1
+                bra     NextLine
+NewLine1        inx
+NewLine         cmpb    max_pos
+                bcc     DownLine
+                lda     #$18             ;clreol
+                jsr     WsysChar
+DownLine        dec     x1
+                beq     exit
+                jsr     KeyPressed
+                cmpa    #$ff
+                bne     exit
+                lda     #13
+                jsr     WsysChar
+                lda     #10
+                jsr     WsysChar
+                inc     WrkLine
+NextLine
+                cpx     curline11
+                bne     TstEof
+                ldx     CurLine2
+                dex
+lpcur           inx
+                lda     x
+                bne     lpcur
+                inx
+TstEof          clrb
+                cpx     BottomMsg
+                beq     NewLine
+
+                lda     UpdateScreen
+                beq     RefrIt
+                stx     x2
+                jsr     IsBlockLine
+                beq     skipit
+                ldx     x2
+                jsr     FlashOne
+                ldx     x2
+                jsr     FlashTwo
+                bra     NewLine1
+RefrIt          bsr     RefrLine
+                bra     NewLine1
+skipit          ldx     x2
+                dex
+lpcur1          inx
+                lda     x
+                bne     lpcur1
+                inx
+                bra     DownLine
+exit            ldx     CurLine11
+                dex
+                lda     #' '
+                sta     x
+                rts
+CurLine11       ds      2
+;;msge            db      ':>Refresh',0
+                endp ; PhyRefresh
+
+RefrLine        proc
+                clrb
+loop            lda     x
+                beq     exit
+
+                cmpb    min_pos
+                bcs     clip
+                cmpb    max_pos
+                bcc     clip
+
+                cmpa    #$1f
+                bls     ctrl
+                cmpa    #$7f
+                beq     ctrl
+                jsr     WsysChar
+clip            incb
+                inx
+                bra     loop
+ctrl            psha
+                lda     #27
+                jsr     WsysChar
+                pula
+                jsr     WsysChar
+                bra     clip
+exit            rts
+                endp ; RefrLine
+
+IsBlockLine     proc
+                ldx     #ChrBegMark
+                lda     x,_MarkType
+                anda    #_Active
+                beq     ExitNo
+                clr     Min_Blk
+                clr     Max_Blk
+                lda     LineNo+1
+                ldb     LineNo
+                suba    Yposition
+                sbcb    #0
+                adda    WrkLine
+                adcb    #0
+
+                sta     tmpa
+                stb     tmpb
+                suba    x,_LineNo+1
+                sbcb    x,_LineNo
+                bcs     ExitNo
+                tsta
+                bne     no1
+                tstb
+                beq     setbeg
+no1             ldb     x,_MarkType
+                andb    #_CharBlock
+                bne     Chkend
+setBeg          ldb     x,_ColNo
+                stb     min_blk
+chkend
+                lda     x,_LineNo+1 +_NextMark
+                ldb     x,_LineNo +_NextMark
+                suba    tmpa
+                sbcb    tmpb
+                bcs     ExitNo
+                tsta
+                bne     no2
+                tstb
+                beq     setend
+no2
+                ldb     x,_MarkType
+                andb    #_CharBlock
+                beq     setend
+                ldb     MaxLineLen
+                bra     stend
+setend          ldb     x,_ColNo +_NextMark
+                incb
+stend           stb     max_blk
+ExitYes         ldb     #1
+                rts
+ExitNo          clrb
+                rts
+tmpa            ds      1
+tmpb            ds      1
+                endp ; IsBlockLine
+
+NormAttr        db      0
+MarkAttr        db      0
+WrkLine         ds      1
+max_blk         ds      1
+min_blk         ds      1
+;;                db      'flchar>'
+flashchar       db      'ÑÑ'
+flashchar2      db      ' Ñ'
+FillChar        db      'ÑÑ '
+
+FlashTwo        proc
+                clrb
+                bra     FlashIt
+                endp ; FlashTwo
+FlashOne        proc
+                ldb     #1
+                endp ; FlashOne
+FlashIt         proc
+                stb     flmode
+                stx     x2
+;               ldx     x2
+                clrb
+loop            lda     x
+                beq     exit
+
+                cmpb    min_pos
+                bcs     clip
+                cmpb    max_pos
+                bcc     exit1
+                cmpb    min_blk
+                bcs     out
+                cmpb    max_blk
+                bcc     out
+                tst     flmode
+                beq     flmode2
+flmode1         cmpa    #' '
+                bne     fl1
+                lda     flashchar+1
+                bra     out
+fl1             lda     flashchar
+                bra     out
+flmode2         cmpa    #' '
+                bne     fl2
+                lda     flashchar2+1
+                bra     out
+fl2 ;­¥ ±¥ ¤¥ª®¤¨° 
+
+out             cmpa    #$1f
+                bls     ctrl
+                cmpa    #$7f
+                beq     ctrl
+                jsr     WsysChar
+clip            incb
+                inx
+                bra     loop
+ctrl            psha
+                lda     #27
+                jsr     WsysChar
+                pula
+                jsr     WsysChar
+                bra     clip
+
+exit            lda     fillchar
+                bra     entry
+exitlp
+                lda     fillchar+1
+entry           cmpb    Max_pos
+                bcc     exit1
+                cmpb    min_pos
+                bcs     clip1
+                cmpb    min_blk
+                bcs     out2
+                cmpb    max_blk
+                bcs     out1
+out2            lda     fillchar+2
+out1            jsr     WsysChar
+clip1           incb
+                bra     exitlp
+exit1
+                lda     x
+                beq     cont1
+                inx
+                bra     exit1
+cont1           lda     #13
+                jsr     WsysChar
+                lda     flmode
+                beq     ohne_p
+                lda     #14
+                jsr     Pause
+ohne_p          rts
+flmode          db      0
+                endp ; FlashIt
+
+; --- Show margins and bottm line --
+ShowMargins     proc
+                tst     FirstBackGnd
+                bne     exit
+                clra
+                ldb     ScreenLines
+                int     GotoXY
+                ldb     min_pos
+loop            ldx     #Frames
+                cmpb    position
+                bne     no_pos
+                ldx     #Frames+5
+no_pos          cmpb    Lmarg
+                bcs     Wspc
+                beq     WLeft
+                cmpb    Rmarg
+                bhi     Wspc
+                beq     WRight
+                cmpb    Pmarg
+                beq     WPara
+                bra     Wnomarg
+Wspc            lda     4,x
+                db      _Skip_2
+WLeft           lda     0,x
+                db      _Skip_2
+WRight          lda     3,x
+                db      _Skip_2
+WPara           lda     2,x
+                db      _Skip_2
+Wnomarg         lda     1,x
+                jsr     WsysChar
+                incb
+                cmpb    max_pos
+                bne     loop
+exit            rts
+                endp ; ShowMargins
+
+; --- Display Info Line ---
+Show_XY         proc
+                tst     FirstBackGnd
+                bne     exit
+                lda     ScreenCols
+                suba    #20
+                ldb     ScreenLines
+                incb
+                int     GotoXY
+                ldx     LineNo
+                inx
+                ldab    #4
+                jsr     pr_dec
+                lda     position
+                inca
+                sta     X1+1
+                clr     X1
+                ldx     X1
+                ldab    #4
+                jsr     pr_dec
+                ldx     #replace
+                tst     InsState
+                beq     show_mode
+                ldx     #insert
+show_mode       int     Wstr
+                tst     FileModifyed
+                bne     notmodyf
+                lda     #'*'
+                bra     wrmodyf
+notmodyf        lda     #' '
+wrmodyf         int     Wchar
+exit            rts
+replace         db      ' Replace ', 0
+insert          db      ' Insert  ', 0
+                endp   ; Show_XY
+
+ShowFname       proc
+                clra
+                ldb     Screenlines
+                incb
+                int     GotoXY
+                ldx     #FileName
+                int     Wstr
+                lda     #$18
+                int     Wchar
+exit            rts
+                endp ; ShowFname
+
+; --- Print Decimal ---
+Pr_Dec          proc                    ;x -
+                stx     x1
+                ldx     #dectbl
+                ldab    #4
+                clr     x2+1
+prdec0
+                ldaa    #'0'
+                staa    x2
+prdec1          ldaa    x1
+                psha
+                ldaa    x1+1
+                psha
+                suba    1,x
+                staa    x1+1
+                ldaa    x1
+                sbca    0,x
+                staa    x1
+                bcc     prdec2
+                pula
+                staa    x1+1
+                pula
+                staa    x1
+                ldaa    x2
+                tst     x2+1
+                bne     prdec3a
+                tstb
+                beq     prdec3
+                ldaa    #' '
+prdec3a         int     Wchar          ;putchar
+prdec3          inx
+                inx
+                decb
+                bpl     prdec0
+                tst     x2+1
+                bne     prdec4
+                ldaa    #'0'
+                int     Wchar
+prdec4          rts
+prdec2          inc     x2
+                inc     x2+1
+                ins
+                ins
+                bra     prdec1
+dectbl          dw      10000,1000,100,10,1
+                endp   ; PrDec
+
+; --- Adjust Screen (Line) left ---
+; Import: A = position
+AdjLeft         proc
+                cmpa    #Step
+                bcc     OK
+                lda     #Step
+OK              suba    #Step
+                sta     min_pos
+                adda    ScreenCols
+                sta     max_pos
+                jmp     Refresh                 ; jsr + rts
+                endp    ; AdjLeft
+
+; --- Adjust Screen (Line) right ---
+; Import: A = position
+AdjRight        proc
+                adda    #Step
+                cmpa    MaxLineLen1
+                bls     OK
+                lda     MaxLineLen
+OK              sta     max_pos
+                suba    ScreenCols
+                sta     min_pos
+                jmp     Refresh                 ; jsr + rts
+                endp    ; AdjRight
+
+;;                db      ':>pause'
+Pause           proc
+                pshb
+                tsta
+                beq     exit
+lupa            ldb     #10
+lupb            psha
+                pshb
+                jsr     KeyPressed
+                cmpa    #$ff
+                pulb
+                pula
+                bne     exitkey
+                decb
+                bne     lupb
+                deca
+                bne     lupa
+exit            clra
+exitkey         pulb
+                rts
+                endp ; Pause
+
+

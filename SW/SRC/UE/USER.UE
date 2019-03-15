@@ -1,0 +1,524 @@
+_TYPE_AHEAD     =       $3f
+UsrCmdInp       db      0
+CircIn          db      0
+CircOut         db      0
+;CircBuf         ds     _TYPE_AHEAD+1
+CircBuf          db   '(C) Copyright Sowtware R&D Lab. 1989'
+                 db   'Written by D. Georgiev -  MAG , 1989'
+
+
+piaadrb         =       $e629
+crtaddr         =       $e604
+crtdata         =       $e605
+
+; --- Cursor control procedures ---
+;
+SetCrsrXY       proc
+                lda     position
+                suba    min_pos
+                ldb     Yposition
+                int     GotoXY
+                endp; SetCrsrXY
+SetCrsrOn       proc
+                lda     piaadrb
+                lsra
+                ldb     #10
+                lda     #102
+                bcs     *+4
+                lda     #6
+                tst     InsState
+                bne     set6845
+                adda    #1
+                endp;  SetCrsrOn
+set6845
+;;                jsr     savregs
+;;                ldx     #msg68
+;;                jsr     Msg1
+;;                jsr     lodregs
+                stb     crtaddr
+                sta     crtdata
+                rts
+;;clrmsg          db      ':>ClrCrsr',0
+;;msg68           db      ':>Set6845',0
+ClrCrsr         proc
+;;                jsr     savregs
+;;                ldx     #clrmsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                pha
+                ldb     #10
+                lda     #$20
+                jsr     set6845
+                pla
+exit            rts
+                endp ; ClrCrsr
+
+; --- Gets next char from the editors queue ---
+;     Output: a - next char
+GetInput        proc
+; begin                      {EdGetinput}
+; if EditUsercommandInput > 0 then
+;   Dec(EditUsercommandInput);
+; EdGetInput := Circbuf[Circout];
+; Circout := Succ(Circout) mod DefTypeahead;
+; end;                       {EdGetinput}
+;
+;;                jsr     showcircbuf
+                tst     UsrCmdInp
+                beq     nodec
+                dec     UsrCmdInp
+nodec
+		lda	HasMsg		; YGP
+		beq	NoMessage	; YGP
+                int     GetCrsr
+                psha
+                pshb
+   	        clr     HasMsg
+                ldx     #ClrEol
+                jsr     SayMsg
+                clr     HasMsg
+                pulb
+                pula
+                int     GotoXY
+NoMessage				; YGP
+                jsr     LookInput
+                ldb     CircOut
+                incb
+                andb    #_TYPE_AHEAD
+                stb     CircOut
+;;                jsr     savregs
+;;                ldx     #GetInpMsg
+;;                jsr     Msg1
+;;                jsr     lodregs
+                rts
+                endp    ;GetInput
+
+LookInput       proc
+                clra
+                ldb     CircOut
+                addb    #circbuf
+                adca    #/circbuf
+                stb     x1+1
+                sta     x1
+                ldx     x1
+                lda     0,x
+exit            rts
+                endp ; LookInput
+
+KeyPressed      proc
+;   Counter := 0;
+;   while (Counter < 6) and (Succ(Circin) mod DefTypeahead <> Circout) and KeyPressed do begin
+;     Inc(Counter);
+;       {}Ch:= ReadKey;
+;       Circbuf[Circin] := Ch;
+;       Circin := Succ(Circin) mod DefTypeahead;
+;   EdKeyPressed := (Circin <> Circout);
+;
+; begin
+                clrb
+while           cmpb    #5
+                bcc     endwhile
+                lda     circin
+                inca
+                anda    #_TYPE_AHEAD
+                cmpa    circout
+                beq     endwhile
+                int     KbdTest
+                cmpa    #$ff
+                beq     EndWhile
+again					; YGP
+                int     KbdRead
+		cmpA	#$ff		; YGP
+		beq	again		; YGP
+		
+;;		cmpa	#27		; YGP ESC?
+;;		bne  	not_esc		; YGP
+;;		int	$30		; YGP
+;;not_esc				; YGP
+
+                pha
+                lda     #circbuf
+                adda    circin
+                sta     x1+1
+                lda     #/circbuf
+                adca    #0
+                sta     x1
+                ldx     x1
+                pla
+                sta     0,x
+                lda     circin
+                inca
+                anda    #_TYPE_AHEAD
+                sta     circin
+                incb
+                bra     while
+endwhile
+                lda     #$ff
+                ldb     circin
+                cmpb    circout
+                beq     nopres
+                jsr     LookInput
+nopres
+                rts
+                endp    ;KeyPressed
+
+;;pushmsg       db      ':>Push str',0
+PushStr         proc
+;  Pushes string onto stack
+;   input:      x - address of first char in the string
+;               b - length of string
+;  for ndx:= length(str) downto 1 do
+;    EdPushTypeahead(str[ndx]);
+;;                jsr     showcircbuf
+;;                jsr     savregs
+;;                ldx     #pushmsg
+;;                lda     x
+;;                jsr     Msg
+;;                jsr     lodregs
+                stx     xx
+                tba
+                adda    xx+1
+                sta     xx+1
+                lda     #0
+                adca    xx
+                sta     xx
+                ldx     xx
+loop            stx     xx
+                lda     0,x
+                jsr     PushTypeAhead
+                ldx     xx
+                dex
+                decb
+                bne     loop
+                rts
+xx              ds      2
+                endp ;PushStr
+
+PushTypeAhead   proc    ; a- char to be pushed
+; procedure EdPushTypeahead(Ch : Char);
+;   {-Push character onto front of typeahead buffer}
+;
+; begin                    {EdPushTypeahead}
+;     if Succ(Circin) mod DefTypeahead = Circout then
+;       EdErrormsg(21)
+;     else begin
+;       Circout := Pred(Circout+DefTypeahead) mod DefTypeahead;
+;       Circbuf[Circout] := Ch;
+;     end;
+;    inc(EditUsercommandInput);
+; end;                     {EdPushTypeahead}
+
+                phb
+                ldb     CircIn
+                incb
+                andb    #_TYPE_AHEAD
+                cmpb    CircOut
+                beq     err
+                ldb     CircOut
+                decb
+                andb    #_TYPE_AHEAD
+                stb     CircOut
+
+                ldb     #circbuf
+                addb    circout
+                stb     x1+1
+                ldb     #/circbuf
+                adcb    #0
+                stb     x1
+                ldx     x1
+                sta     0,x
+exit            plb
+                inc     UsrCmdInp
+                rts
+err
+                ldx     #ErrMesage
+                jmp     SayMsg
+                bra     exit
+ErrMesage       db      'Circular buffer full !',0
+                endp ; PushTypeAhead
+
+; --- Editor control filter for character after leading control ---
+ChrFilter       proc
+                cmpa    #$20
+                bcc     NoCtrl
+                adda    #$40
+NoCtrl          cmpa    #$40
+                bls     Digit
+                anda    #$df
+Digit           rts
+                endp ; ChrFilter
+
+; --- ResetsPrompt when no valid command or command is allready executed ---
+ResetPrompt     proc
+                clr     CmdPtr
+                endp ; ResetPrompt
+DisplayCmdBuf   proc
+                clra
+                ldb     MsgLine
+                incb
+                int     GotoXY
+                lda     #$18
+                int     Wchar
+                ldx     #cmdbuf
+                stx     myx
+                ldb     CmdPtr
+                stb     cntr
+loop            ldb     cntr
+                beq     exit
+                ldx     myx
+                lda     x
+                inx
+                stx     myx
+                cmpa    #$20
+                bcc     NoCtrl
+                adda    #$40
+                psha
+                lda     #'^'
+                int     Wchar
+                pula
+NoCtrl          cmpa    #$c0
+                bcs     Char
+                psha
+                lda     #'('
+                int     Wchar
+                pula
+                sta     x1+1
+                clr     x1
+                ldx     x1
+                ldb     #2
+                jsr     pr_dec
+                lda     #')'
+Char            jsr     Upcase
+                int     Wchar
+                dec     cntr
+                bra     loop
+exit            rts
+cntr            ds      1
+myx             ds      2
+                endp ; DisplayCmdBuf
+
+ClrEol          db      0
+SayMsg          proc
+                psha
+                lda     HasMsg
+                bne     Return
+                clra
+                ldb     MsgLine
+                int     GotoXY
+                int     Wstr
+                lda     #$18
+                int     Wchar
+                com     HasMsg
+return          pula
+exit            rts
+                endp ; SayMsg
+
+Upcase          proc
+                cmpa    #'a'
+                bcs     cyr
+                cmpa    #'z'
+                bhi     cyr
+                suba    #$20
+                rts
+cyr             cmpa    #' '
+                bcs     exit
+                cmpa    #'¿'
+                bhi     exit
+                suba    #$20
+exit            rts
+                endp ; Upcase
+
+GetYes          proc
+                int     GetChar
+                int     Wchar
+                jsr     Upcase
+                cmpa    #'Y'
+                beq     exit
+                cmpa    #'™'
+exit            rts
+                endp ; GetYes
+
+; --- Checks whether the command stream is empty ---
+StreamEmpty     proc
+                jsr     KeyPressed
+                cmpa    #$ff
+                bne     exit
+                jsr     BackGround
+                clra
+exit            rts
+                endp ; StreamEmpty
+
+; --- Get next Char from circular stream ---
+GetStream       proc
+                jsr     KeyPressed
+                cmpa    #$ff
+                beq     GetStream
+                jmp     GetInput
+                endp ; GetStream
+
+; --- Gets the string in margins ---
+GetMyStr        proc
+                psha
+                lda     #':'
+                int     Wchar
+                pula
+                bra     EditLine
+exit            rts
+MyX             ds      2
+StrLen          ds      1
+                endp ; GetMyStr
+
+; --- Edit one Line ---
+EditLine        proc
+;;                jsr     savregs
+;;                ldx     #edmsg
+;;                ldb     max
+;;                jsr     Msg1
+;;                jsr     lodregs
+                stx     source
+                sta     LenOfWind
+                clr     min
+                sta     max
+
+                lda     MaxLineLen
+                sta     OldMaxLen
+                stb     MaxLineLen
+                decb
+                stb     MaxLIneLen1
+
+                lda     position
+                sta     oldpos
+                lda     min_pos
+                sta     oldmin
+                lda     max_pos
+                sta     oldmax
+                clr     position
+                clr     AutoMargin
+                lda     #$ff
+                sta     LineEdOnly
+                jsr     PrepareThis
+                int     GetCrsr
+                sta     xpos
+                stb     ypos
+                bra     DispIt
+edloop
+                jsr     SetCrsrOn
+                lda     xpos
+                adda    position
+                suba    min
+                ldb     ypos
+                int     GotoXY
+waitkey         jsr     KeyPressed
+                cmpa    #$ff
+                beq     WaitKey
+                cmpa    ConfirmKey
+                beq     endedit
+                jsr     ClassifyInp
+                tstb
+                bne     shortcmd
+                cmpa    #T_Undo
+                beq     exit
+shortcmd        lda     position
+                cmpa    min
+                bcc     chkmin
+                sta     min
+                adda    LenOfWind
+                sta     max
+                bra     DispIt
+chkmin          cmpa    max
+                bcs     DispIt
+                inca
+                sta     max
+                suba    LenOfWind
+                sta     min
+DispIt          bsr     Display
+                bra     edloop
+
+Display         lda     xpos
+                ldb     ypos
+                int     GotoXY
+                lda     min
+                sta     min_pos
+                lda     max
+                sta     max_pos
+                ldx     CurLine1
+                jmp     RefrLine
+
+endedit         jsr     GetInput
+                tst     position
+                bne     ClrIt
+                jsr     EndLineCmd
+ClrIt           jsr     ClrEolCmd
+                jsr     Display
+                ldx     curx
+                clr     x
+                ldx     Curline1
+                stx     X1
+                ldx     Source
+                stx     X2
+                ldx     #X1
+                lda     MaxLineLen
+                clrb
+                int     MoveMem
+                jsr     exit
+                lda     #1
+                rts
+exit            com     AutoMargin
+                clr     LineEdOnly
+                lda     oldpos
+                sta     position
+                lda     oldmax
+                sta     max_pos
+                lda     oldmin
+                sta     min_pos
+                lda     OldMaxLen
+                sta     MaxLineLen
+                deca
+                sta     MaxLIneLen1
+;;                jsr     savregs
+;;                ldx     #edmsg
+;;                ldb     #255
+;;                jsr     Msg1
+;;                jsr     lodregs
+                jsr     PrepareLine
+                clra
+                rts
+;;edmsg           db      ':>EditLine',0
+LenOfText       ds      1
+LenOfWind       ds      1
+Source          ds      2
+xpos            ds      1
+ypos            ds      1
+min             ds      1
+max             ds      1
+oldpos          ds      1
+oldmax          ds      1
+oldmin          ds      1
+oldmaxlen       ds      1
+                endp ; EditLine
+
+SayOption       proc
+                stx     xx
+                ldx     #FileName
+                clra
+lp              tst     x
+                beq     lpend
+                inx
+                inca
+                bra     lp
+lpend           aba
+                ldb     #1
+                jsr     FindWindow
+                jsr     DefWindow
+                jsr     OpenWindow
+                ldx     xx
+                int     Wstr
+                ldx     #FileName
+                int     Wstr
+                lda     #'.'
+                int     Wchar
+exit            rts
+xx              ds      2
+                endp ; SayOption
+
+
