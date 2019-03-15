@@ -1,4 +1,4 @@
-all: uniasm unilib unilink
+all: uniasm unilib unilink 6800
 
 .SUFFIXES: .pas .ASM .OBJ .EXP .INC
 
@@ -28,4 +28,4 @@ DEVMAP.H: ../DEVMAP.INC
 	./exporthdr.sh $< > $@
 
 clean:
-	rm -f *.o uniasm unilib unilink unic *.EXP *.OBJ *.LST DEVMAP.H BOOTROM.H
+	rm -f *.o uniasm unilib unilink 6800 *.EXP *.OBJ *.LST DEVMAP.H BOOTROM.H
