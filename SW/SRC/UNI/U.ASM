@@ -11,7 +11,7 @@
 ; ***********************************************************
 ; *							    *
 ; *			  File System			    *
-; *		  Version 3.01 / 03-Mar-1990		    *
+; *		  Version 3.10 / 07-May-1990		    *
 ; *							    *
 ; ***********************************************************
 		list	off
@@ -555,9 +555,9 @@ eol_flag	ds	1
 		db	0
 ;		dw	0
 
-version_no	db	3,01
+version_no	db	3,10
 
-version 	db	10, 'UniDOS (R) kernel  Version 3.01', 0
+version 	db	10, 'UniDOS (R) kernel  Version 3.10', 0
 ;copyright	 db	 10, '(c) Ivo Nenov & Orlin Shopov - Eagle software, 1988-89',10,0
 
 print_version	proc
@@ -4557,10 +4557,17 @@ pos_ok
 		ldaa	new_pos+3
 		staa	x, hndl_file_pos+3
 
+
+
 		ldaa	x, hndl_dir_entry+dir_start_clust
 		staa	x, hndl_cur_clust + 1
-		ldaa	x, hndl_dir_entry+dir_start_clust+1
-		staa	x, hndl_cur_clust
+		ldab	x, hndl_dir_entry+dir_start_clust+1
+		stab	x, hndl_cur_clust
+		tsta
+		bne	valid_clust
+		tstb
+		beq	exit_loop
+valid_clust
 		clr	x, hndl_cur_sec
 
 		ldx	x, hndl_cur_clust

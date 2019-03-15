@@ -11,7 +11,7 @@
 ; ***********************************************************
 ; *							    *
 ; *		      Command Interpreter		    *
-; *		  Version 3.10 / 01-Apr-1990		    *
+; *		  Version 3.11 / 01-Jun-1990		    *
 ; *							    *
 ; ***********************************************************
 ;		list	off
@@ -325,6 +325,8 @@ old5b_a 	ds	2		;expand handles
 old5b_p 	ds	1
 old2D_a 	ds	2		;move mem bug fix
 old2D_p 	ds	1
+old50_a 	ds	2		;move mem bug fix
+old50_p 	ds	1
 savA1		ds	2
 savA2		ds	2
 
@@ -861,6 +863,42 @@ int2D_loop	pula
 		lds	tmps
 		cli
 int_2Dok
+;---------------
+		int	$41			; a bug in LSEEK (int_50)
+		cmpb	#3			; in versions < 3.10
+		bne	clow50
+		cmpa	#10
+clow50		bcc	int_50ok
+
+		ldaa	#$50			; original vector
+		int	$2E
+		stx	old50_a
+		stab	old50_p
+
+		ldx	#int50_-int50
+		clrb
+		int	$2A
+		cpx	#0
+		bne	ok_50
+		jmp	sorry
+
+ok_50		ldab	#0
+		ldaa	#$50
+		int	$2F			;set vector
+		sei
+		sts	tmps
+		lds	#int50
+		des
+		ldab	#int50_-int50
+int50_loop	pula
+		staa	x
+		inx
+		decb
+		bne	int50_loop
+		lds	tmps
+		cli
+int_50ok
+;------------
 		ldx	#81
 		clrb
 		int	$2a
@@ -1075,6 +1113,39 @@ original	int	$37		; chain interrupt
 		rts			; just in case
 		endp
 int2D_
+;-----------------------------------------------------------
+; INT 50 - LSEEK bug fix - collision with empty file
+;-----------------------------------------------------------
+int50		proc
+		cmpa	n_handles
+		bcc	jmp_old50	;A >= n_handles
+
+		ldx	file_handles
+loop		tsta
+		beq	exit_lp
+		ldx	x
+		deca
+		bra	loop
+exit_lp
+		inx
+		inx
+
+		ldx	x, hndl_dir_entry+dir_start_clust
+		bne	jmp_old50
+		ldx	swix
+		ldaa	x
+		oraa	x,1
+		oraa	x,2
+		oraa	x,3
+		bne	jmp_old50
+		clr	swia
+		rts
+jmp_old50
+		ldab	old50_p
+		ldx	old50_a
+		int	$37
+		endp
+int50_
 ;-----------------------------------------------------------
 ; INT 6D - get max screen col & row   in A and B
 ;-----------------------------------------------------------
@@ -1399,11 +1470,11 @@ clock_
 author_text
 		db	13,10,10
 		db	'UniDOS (R) operating system and BIOS were written by',13,10
-		db	'Ivo Nenov and Orlin Shopov - Eagle software at the',13,10
-		db	'SOFTWARE Research & Development Laboratory - Sofia',13,10
+		db	'Ivo Nenov and Orlin Shopov - Eagle software',13,10
+;		db	'at SOFTWARE Research & Development Laboratory - Sofia',13,10
 ;		db	'UniBIOS was written together with Leonid Kalev.',13,10
 ;		db	'UniPascal was written by George Petrov - YGP.',13,10
-		db	10,10,0
+		db	10,0
 
 		ds	10001 - $2000 + $1000 - *, $FF		;make size of
 init_end		; file exactly 10001 bytes
@@ -5988,12 +6059,12 @@ scrmarg 				;screen right & bootom margin
 		list	on
 copyright	dw	$D680
 ver_str 	dw	$E2B0,$A857,$32AB,$0535,$6CD6,$677F,$0BA1,$0000,$5D0D
-		dw	$1E59,$0307,$D5E1,$3D7A,$D480,$24CE,$D14A,$76CE,$66B6  ;**version
+		dw	$1E59,$0307,$D5E1,$3D7A,$D480,$24CE,$D14A,$76CE,$6CF6  ;**version
 
 		dw	$CFF0,$1818,$0189,$342C,$D007,$E150,$69D7,$6486,$5320
 		dw	$0536,$6C95,$7740,$1168,$2148,$0071,$99F9,$9E60,$4390
 		dw	$FF0A
-		       ;10, 'è∫´§®≠ 601/601A   UniDOS (R)  Vers. 3.10'
+		       ;10, 'è∫´§®≠ 601/601A   UniDOS (R)  Vers. 3.11'
 		       ;10, '(C) çàèã "è∞Æ£∞†¨≠Æ Æ±®£≥∞ø¢†≠•" 1988-90', 10, 10
 
 		error	*/$E000
