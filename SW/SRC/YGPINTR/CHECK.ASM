@@ -22,8 +22,8 @@
 
 		ORG	$100		; ² §¨ · ±² ¥ .CMD file
 
-		include interrupts.inc
-		include undocumented.inc
+		include interrup.inc
+		include undocume.inc
 		include globals.Y
 
 ;     ’ §¨ · ±² ®² ¨­²¥°¯°¥² ²®°  ¥ ¯®¬®¹­ , ¨§¯®«§³¢  ±¥ ± ¬® §  ±º§¤ ¢ ­¥²®,

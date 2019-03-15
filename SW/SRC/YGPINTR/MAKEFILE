@@ -1,43 +1,57 @@
-#  Този ми ▓и ┤айл е за make-ване на в▒и╖ки не╣а по Ycode Interpreter
+UNIAS = ../SMALL-C/unias
 
-Y12.ROM: y1.ROM y2.ROM 	  # за да ▒е об░або▓┐▓ в▒и╖ки
+ALL: $(UNIAS) Y1.ROM Y2.ROM Y.CMD Y1.RAM Y2.RAM YCHECK.CMD
 
-  copy y1.rom /b + y2.rom /b y12.rom /b
+$(UNIAS):
+	make -C $(shell dirname $(UNIAS)) $(shell basename $(UNIAS))
 
+Y1.ASM:		ROM_RAM.DEF PCONTROL.DEF			\
+		INTERRUP.INC UNDOCUME.INC 			\
+		GLOBALS.Y SYS_PAGE.Y ERRORNO.Y			\
+		ROMHEAD1.Y1 ERRORS1.Y1 MISC.Y1			\
+		OPCODEAD.Y1 STDLYCRE.Y1 CNSTLOAD.Y1		\
+		VARIABLE.Y1 RECORDAR.Y1 PACKED.Y1		\
+		ARITHMET.Y1 COMPARIS.Y1 JUMPS.Y1		\
+		STRINGS.Y1 POWERSET.Y1 DYNAMICM.Y1		\
+		FPINSTR.Y1 PROCCALL.Y1 PROCEXIT.Y1		\
+		SEGINITF.Y1 MISC_.Y1 RAMCODE.Y1 CRIGHT.Y1
 
-y1.ROM: 	y1.asm					       \
-		interrupts.inc				 	\
-		undocumented.inc			 	 \
-                globals.Y       sys_page.Y      ErrorNo.Y         \
-                RomHead1.Y1     OpCodeAddr.Y1   Errors1.Y1         \
-                CnstLoad.Y1     Variables.Y1    Misc.Y1             \
-                Comparisons.Y1  Jumps.Y1        StdLYCreal.Y1        \
-                Arithmetic.Y1   RecordArray.Y1  Packed.Y1             \
-                Strings.Y1      PowerSets.Y1    DynamicMem.Y1          \
-                FPinstr.Y1      Misc_.Y1        RAMcode.Y1              \
-                ProcCalls.Y1    ProcExits.Y1    SegInitFinit.Y1
+Y2.ASM:		ROM_RAM.DEF PCONTROL.DEF			\
+		INTERRUP.INC UNDOCUME.INC			\
+		GLOBALS.Y SYS_PAGE.Y ERRORNO.Y			\
+		IOERRORN.Y2 ROMHEAD2.Y2 MAIN2SUB.Y2		\
+		LYCODES2.Y2 FILLMOVE.Y2 DATETIME.Y2		\
+		STRINGS2.Y2 SPECIAL2.Y2 STRVAL.Y2		\
+		FILEMGR.Y2 OPENCLOS.Y2 WRITE.Y2			\
+		READ.Y2 OTHERIO.Y2 MISCIO.Y2			\
+		OVERLAY.Y2 LINKUP.Y2 STARTUP.Y2			\
+		EXITYCOD.Y2 ERRORS2.Y2 CRIGHT.Y2
 
-  @ffc rom_ram.def > nul
-  @ffc PControler.def ; > nul
-  @type rom_ram.def
-  @type PControler.def
-  68 y1 nul y1.rom;
+Y.ASM:		INTERRUP.INC  UNDOCUME.INC GLOBALS.Y
 
+CHECK.ASM:	INTERRUP.INC  UNDOCUME.INC GLOBALS.Y
 
-y2.ROM: 	y2.asm					       \
-		interrupts.inc					\
-		undocumented.inc			 	 \
-                globals.Y       sys_page.Y      ErrorNo.Y         \
-                IOerrorNo.Y2    RomHead2.Y2     main2subs.Y2       \
-                StrVal.Y2       LYCodes2.Y2     FillMove.Y2         \
-                DateTime.Y2     strings2.Y2                          \
-                FileMgr.Y2      Read.Y2         Write.Y2              \
-                MiscIO.Y2       OpenClose.Y2    OtherIO.Y2             \
-                Overlay.Y2      LinkUp.Y2       StartUp.Y2              \
-                errors2.Y2      special2.Y2     ExitYcode.Y2
+Y1.ROM:		Y1.ASM
+	$(UNIAS) -D ROMVERSION -l Y1.LST -o Y1.CMD Y1.ASM
+	mv -f Y1.CMD Y1.ROM
 
-  @ffc rom_ram.def > nul
-  @ffc PControler.def ; > nul
-  @type rom_ram.def
-  @type PControler.def
-  68 y2 nul y2.rom;
+Y2.ROM:		Y1.ASM
+	$(UNIAS) -D ROMVERSION -l Y2.LST -o Y2.CMD Y2.ASM
+	mv -f Y2.CMD Y2.ROM
+
+Y1.RAM:		Y1.ASM
+	$(UNIAS) -l Y1RAM.LST -o Y1.CMD Y1.ASM
+	mv -f Y1.CMD Y1.RAM
+
+Y2.RAM:		Y1.ASM
+	$(UNIAS) -l Y2RAM.LST -o Y2.CMD Y2.ASM
+	mv -f Y2.CMD Y2.RAM
+
+Y.CMD:		Y.ASM
+	$(UNIAS) -l Y.LST -o Y.CMD Y.ASM
+
+YCHECK.CMD:	CHECK.ASM
+	$(UNIAS) -l YCHECK.LST -o YCHECK.CMD CHECK.ASM
+
+clean:
+	rm -f *.ROM *.RAM *.LST *.CMD

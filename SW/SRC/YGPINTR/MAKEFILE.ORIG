@@ -1,0 +1,43 @@
+#  Този ми ▓и ┤айл е за make-ване на в▒и╖ки не╣а по Ycode Interpreter
+
+Y12.ROM: y1.ROM y2.ROM 	  # за да ▒е об░або▓┐▓ в▒и╖ки
+
+  copy y1.rom /b + y2.rom /b y12.rom /b
+
+
+y1.ROM: 	y1.asm					       \
+		interrupts.inc				 	\
+		undocumented.inc			 	 \
+                globals.Y       sys_page.Y      ErrorNo.Y         \
+                RomHead1.Y1     OpCodeAddr.Y1   Errors1.Y1         \
+                CnstLoad.Y1     Variables.Y1    Misc.Y1             \
+                Comparisons.Y1  Jumps.Y1        StdLYCreal.Y1        \
+                Arithmetic.Y1   RecordArray.Y1  Packed.Y1             \
+                Strings.Y1      PowerSets.Y1    DynamicMem.Y1          \
+                FPinstr.Y1      Misc_.Y1        RAMcode.Y1              \
+                ProcCalls.Y1    ProcExits.Y1    SegInitFinit.Y1
+
+  @ffc rom_ram.def > nul
+  @ffc PControler.def ; > nul
+  @type rom_ram.def
+  @type PControler.def
+  68 y1 nul y1.rom;
+
+
+y2.ROM: 	y2.asm					       \
+		interrupts.inc					\
+		undocumented.inc			 	 \
+                globals.Y       sys_page.Y      ErrorNo.Y         \
+                IOerrorNo.Y2    RomHead2.Y2     main2subs.Y2       \
+                StrVal.Y2       LYCodes2.Y2     FillMove.Y2         \
+                DateTime.Y2     strings2.Y2                          \
+                FileMgr.Y2      Read.Y2         Write.Y2              \
+                MiscIO.Y2       OpenClose.Y2    OtherIO.Y2             \
+                Overlay.Y2      LinkUp.Y2       StartUp.Y2              \
+                errors2.Y2      special2.Y2     ExitYcode.Y2
+
+  @ffc rom_ram.def > nul
+  @ffc PControler.def ; > nul
+  @type rom_ram.def
+  @type PControler.def
+  68 y2 nul y2.rom;
