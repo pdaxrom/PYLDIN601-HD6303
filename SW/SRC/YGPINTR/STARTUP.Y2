@@ -1,0 +1,223 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Start Up program execution.	    (c) 1989, 1990 YGP.
+
+; Командни┐ ин▓е░п░е▓а▓о░ на UniDOS ▒ка╖а ▓│к за да изп║лн┐ п░ог░ама на Ycode.
+;   Ка▓о в ░еги▒▓░и▓е на MC6800 пол│╖авам ▒ледни▓е па░аме▓░и:
+;     A - FileHandle к║м о▓во░ен за ╖е▓ене ┤айл кой▓о ▓░┐бва да б║де YcodeFile
+;	  за изп║лнение.
+;     B - $ff. И▒кам го ▓олкоз за да не го п░омен┐м ако ┤айла не ми ╡а░е▒а.
+;	  Или ако в║об╣е ▓ози ROM го н┐ма ▓ой ╣е о▒▓ане ▓олкоз ($ff).
+;   П░и зав║░╕ване на ░або▓а▓а на ин▓е░п░е▓а▓о░а ▒е в░║╣а▓ ▒ледни▓е ▒▓ойно▒▓и
+;     B - $ff ┤айла кой▓о ми е п░об│▓ан за изп║лнение не е Ycode file.
+;	      (▓.е. ▒▓ойно▒▓▓а м│ не ▒е п░омен┐)
+;	- $fe ▓ова е наи▒▓ина YcodeFile, но по в░еме на изп║лнение▓о м│ ▒е е
+;	      ▒л│╖ила ┤а▓ална г░е╕ка (на ин▓е░п░е▓а▓о░а) ▓ова не бива да ▒▓ава.
+;	- $fd в▒и╖ко е на░ед п░ог░ама▓а на Ycode е не│▒пе╕но изп║лнена
+;	      по░ади RunTimeError, кой▓о оба╖е е но░мален.
+;	- $00..$fc в▒и╖ко е на░ед п░ог░ама▓а на Ycode е │▒пе╕но изп║лнена
+;		   и ▓ова (reg B) е exit code.
+
+CallYcode	proc
+
+		ldb	#$ff		; ако н┐кой не е ▒ложил в B
+		stb	swi_B		; какво▓о ▓░┐бва
+
+		sta	SaveSWI_AreaA	; ▓а┐ ░або▓а ▒е п░ави за да може
+		stb	SaveSWI_AreaB	; да ▒е exit-не ▒ ке┤ п░и
+		stx	SaveSWI_AreaX	; Run Time Error
+		lda	swi_P
+		sta	SaveSWI_AreaP
+
+		int	_UniDOSversion	; Get UniDOS version (accept 3.00+)
+		int	_UniDOSversion	; Get again to make sure
+		cmpb	#3
+		bcs	quit
+		clrb	;#/YregistersSz
+		stb	IsRunning	; clr IsRunning
+		stb	__NoLibFile	; clr NoLibFile
+                lda     #YregistersSz   ; restore or clear Ymachine Registers
+                .ifNdef PControler
+                 ldx     SaveAreaPtr
+                 beq     ClearRegs
+                 stx     wrk
+                 ldx     #Yregisters
+                 stx     wrk1
+                 ldx     #wrk
+                 int     _MoveMem
+                 bra     Continue
+                .endif
+ClearRegs	ldx	#Yregisters
+ClrRegsLoop	stb	x, 0
+		inx
+		deca
+		bne	ClrRegsLoop
+Continue
+  ; долни▓е два ░еда ▒║м ги пи▒ал н┐кога ама г░║м да ме │бие ако знам за╣о
+  ; и понеже ми ▒е ▒▓░│ва ╖е не ▓░┐бва да ги има ги п░ема╡вам
+		;lda	 Yregisters+YregistersSz ; ? ▓ова п║к за╣о
+		;sta	 LibHandle	 ; restore/clear Library Handle
+					; п░ове░┐ваме дали н┐кой използва
+		lda	LibHandle	; библио▓ека▓а и ┐ за▓ва░┐ме ако не
+		beq	No_Lib_Check
+		jsr	CalcHndlUsers
+		bne	No_Lib_Check	; ползва ▒║ ни ┐ пипами
+		stb	LibHandle	; ако ни ▒║ полз│ва, на╖и ни е │▓во░ен║
+No_Lib_Check				; ╕о▓│ UniDOS-╖│ ┐ е за▓во░ил о▓в║н
+		sts	wrk		; calculate StackDepth
+		lda	HiMemPtr+1	; StackDepth:= HiMemPtr - TOS
+		ldb	HiMemPtr
+		suba	wrk+1		; ▓ова е н│жно на ErrorHandler
+		sbcb	wrk		; за да може ако има FatalError
+		sta	StackDepth+1	; да изг║░ми по под╡од┐╣ на╖ин
+		stb	StackDepth
+
+		ldx	HiMemPtr	; save HeapState before run
+		stx	HeapBeforeRun
+		ldx	#0
+		stx	FreeQueue	; казваме ╖е н┐ма д│пки
+		stx	IOresult	; ╖е н┐ма IO г░е╕ки
+		stx	SegPtr		; и ╖е н┐ма ▓ек│╣ ▒егмен▓
+
+		lda	swi_A		; get FileHandle
+		sta	__ProgHandle
+
+		jsr	CheckCodeFile	; CodeFile ли ми п░об│▓ва▓?
+		bcc	IsCodeFile	; Да, поне на ▓акова п░или╖а!
+quit		rts			; Не, да ми ▒е ма╡а▓ о▓ глава▓а!
+IsCodeFile
+		jsr	MulParaSz	; Calculate Fposition for Main module.
+		jsr	CreateMod	; Create Module info for Main module.
+		lda	x, ModMainSLot	; preserve Slot of Main program
+		sta	ProgramSlot
+
+LinkAll 	ldx	ModQueue	; Link all unlinked modules
+LinkLoop	jsr	IsLinked
+		bcc	Linked
+		jsr	LinkSegments	; Link module
+		bra	LinkAll
+Linked		ldx	x, ModNext
+		bne	LinkLoop
+
+
+                ;ldx     #Yregisters+Yregisters <- боза ▒ ко▒ми
+                ldx     #Yregisters+YregistersSz ; corrected v1.66
+Zloop		dex			; zero Ymachine registers
+		clr	x, 0
+		cpx	#ZeroYRegs
+		bne	Zloop
+
+					; п░ове░┐ваме дали н┐кой използва
+		lda	LibHandle	; библио▓ека▓а и ┐ за▓ва░┐ме ако не
+		beq	NoLibCheck
+		jsr	CalcHndlUsers
+		bne	NoLibCheck	; казваме ╖е е за▓во░ена
+		stb	LibHandle	; ако не ▒е полз│ва
+		int	_Fclose 	; и ┐ за▓ва░┐ме наи▒▓ина
+NoLibCheck
+
+;   Initialize Standard unit. В▒║╣но▒▓ необ╡одима е ини╢иализа╢и┐ ▒амо за
+; ┤илова▓а ╖а▒▓. И да ░е╖ем за RANDOM п▒евдо ▒л│╖айна▓а по▒ледова▓елно▒▓.
+
+InitStandard	proc
+		lda	#StdVarsSize	; get space for standard variables
+		clrb
+		stb	SaveSWI_AreaB	; ако в▒и╖ко п░икл╛╖и доб░е (Acc B)
+		stb	SegLoadFlag	; SegLoad not in progress
+		jsr	GetStackErr
+
+		stx	StdVarsPtr
+
+		lda	#'Y'            ; initialize Random generator
+		sta	x, RandSeed
+		sta	x, RandSeed+1
+		sta	x, RandSeed+2
+		sta	x, RandSeed+3
+
+		; на input ┤иле▓о ▒е ▒лага ┤лаг CR за да ▒е skip-не <lf>
+		; понеже ▒е оказа, ╖е може да п░и▒▓игне ка▓о п║░ви ▒имвол
+		ldx	StdVarsPtr
+		lda	#24		; номе░ на UniDOS г░е╕ка▓а not found
+		sta	x, FileStdMessage  + F_BIOS	; ▓ози ┤айл е п░ез BIOS
+		ldb	#%10000010			; Write Only files
+		stb	x, FileStdOutput   + F_flags	;   Output
+		stb	x, FileStdPrinter  + F_flags	;   Printer
+		ldb	#%11000011			; Read/Write files
+		stb	x, FileStdMessage  + F_flags	;   Message
+		stb	x, FileStdAuxilary + F_flags	;   Auxilary
+		ldb	#%01000101			; Read Only file
+		stb	x, FileStdInput    + F_flags	;   Input
+		ldb	#TextFile			; Text Files
+		stb	x, FileStdInput    + F_type	;   Input
+		stb	x, FileStdOutput   + F_type	;   Output
+		stb	x, FileStdMessage  + F_type	;   Message
+		stb	x, FileStdAuxilary + F_type	;   Auxilary
+		stb	x, FileStdPrinter  + F_type	;   Printer
+
+		clrb					; даваме Handles
+		;stb	x, FileStdInput    + F_handle	;   Input    = 0
+		incb
+		stb	x, FileStdOutput   + F_handle	;   Output   = 1
+		incb
+		stb	x, FileStdMessage  + F_handle	;   Message  = 2
+		incb
+		stb	x, FileStdAuxilary + F_handle	;   Auxilary = 3
+		incb
+		stb	x, FileStdPrinter  + F_handle	;   Printer  = 4
+
+		lda	#FileStdInput
+		clrb
+		adda	StdVarsPtr+1
+		adcb	StdVarsPtr
+		sta	x, DefaultIn+1
+		stb	x, DefaultIn
+
+		lda	#FileStdOutput
+		clrb
+		adda	StdVarsPtr+1
+		adcb	StdVarsPtr
+		sta	x, DefaultOut+1
+		stb	x, DefaultOut
+		endp;	InitStandrad
+
+		ldx	SaveAreaPtr    ; ако не ▒ме за п░║в п║▓ н┐ма да
+		bne	DontFetch      ; ги вземаме (╣о▓ ▒║ взе▓и)
+		lda	#_Terminate
+		int	_GetIntVec
+		stb	OldTerminate
+		stx	OldTerminate+1
+		ldb	Bank2page
+		ldx	#NewTerminate
+		int	_SetIntVec
+
+;		lda	#_Execute
+;		int	_GetIntVec
+;		stb	OldExecute
+;		stx	OldExecute+1
+;		ldb	Bank2page
+;		ldx	#NewExecute
+;		int	_SetIntVec
+;
+;		lda	#_UniDOSshell
+;		int	_GetIntVec
+;		stb	OldOSshell
+;		stx	OldOSshell+1
+;		ldb	Bank2page
+;		ldx	#NewOSshell
+;		int	_SetIntVec
+DontFetch
+		ldb	ProgramSlot	; prepare for Execute Procedure
+		stb	swi_B		; подго▓овка▓а ▒е ▒║▒▓ои най ве╖е в
+		incb			; ▒капване на номе░а на ▒ло▓а
+		stb	SlotNo		; кой▓о е в момен▓а за да ┤о░▒и░аме
+		lda	#1		; за░еждане▓о м│ п░и изп║лнение на
+		sta	swi_A		; п░о╢ед│░а No 1 о▓ него
+
+		inc	IsRunning	; п░ог░ам▓а ▓░║гва
+		int	_DbgActivate	; ин┤о░ми░аме о▒▓анали┐ UniPascal ▒в┐▓
+					; за ▓ова изкл╛╖и▓елно ▒║би▓ие.
+		lda	#_ExecProc	; и п░од║лжаваме ▒ Call Procedure
+		int	_GetIntVec
+		int	_ChainIntrpt	; execute ProgramSlot.Procedure(1)
+		endp;	CallYcode
+
+;------------------------------------------------------------------------------

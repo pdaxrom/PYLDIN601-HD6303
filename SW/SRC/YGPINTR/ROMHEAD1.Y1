@@ -1,0 +1,68 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. ROM Bank 1 header & System Page init.	  (c) 1989 YGP.
+
+		dw	$a55a		; ROM magic constant
+		db	'YGPascal'      ; ROM name
+		jmp	InitBank1	; ROM Cold initialize
+		jmp	DoNothing	; ROM Hot initialize
+
+		db	_ExecProc	; execute slot.procedure
+		dw	CommonCall
+
+		db	_prepareFP
+		dw	prepareFP
+
+		db	_mply10addA
+		dw	mply10addA
+
+		db	_fp_10_pwr
+		dw	fp_10_pwr
+
+		db	_haltpgm
+		dw	haltpgm
+
+		db	0		; end of interrupt table
+		checksum
+
+InitBank1	proc
+
+		lda	EquipmentBYTE	; казваме на н│жно▓о м┐▒▓о ╖е ▒ме
+		ora	#EquipYcode	; има Ycode Interpreter
+		sta	EquipmentBYTE
+
+                ldx     #SystemPage     ; по╖и▒▓ваме SystemPage
+		clrb
+ClearLoop	clr	x, 0		; Така ▒▓ава по-бавно, но по-к░а▓ко.
+		inx			; Ц┐ло▓о │довол▒▓вие ▒▓░│ва 10 бай▓а.
+		decb			; Ако има подобна п░о╢ед│░а да ▒е
+		bne	ClearLoop	; полз│ва ▓┐.
+
+		;clrb			; как▓о е ┐▒но B = 0 о▓ по го░ни┐ ░ед
+		lda	#RAMcodeSize	; и ме▒▓им па░╖е▓о за ме▒▓ене
+                .ifdef  PControler      ; к║де▓о ▓░┐бва (и как▓о ▓░┐бва)
+                 ldx     #MV_to_RAM
+                 stx     Src
+                 ldx     #RAM_code
+                 stx     Dest
+                 jsr     MoveMemory
+                .else
+                 ldx     #MVcode        ; за П║лдини▓е може да ползваме
+                 int     _MoveMem       ; ROM -> RAM move (но ▒амо за П║лдини)
+                .endif
+
+		ldx	#Version*256+Flavour
+		stx	Sys_Ver
+
+		lda	ROMswitch	; запи▒ваме ▒и ┤изи╖е▒ки┐ номе░
+		sta	Bank1page	; на ROM bank
+		sta	MainLoop1+1
+
+DoNothing	=	*		; make it global address
+		rts
+
+                .ifNdef  PControler
+MVcode           dw      MV_to_RAM, RAM_code
+                .endif
+		endp;	InitBank1
+
+;------------------------------------------------------------------------------

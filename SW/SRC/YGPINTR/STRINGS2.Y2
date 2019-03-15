@@ -1,0 +1,353 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. String handling instructions.	    (c) 1989, 1990 YGP.
+
+; ------- standard procedure Pos -------
+; mnemonic: POS
+; stack:    { s2, s1 } -> { i }
+; Action:   s1 & s2 are strings. Return start position of s1 in s2
+;	    return 0 if no match
+
+pos		proc
+		bsr	GetStrAddrWrk	; get address of second operand
+		lda	x, 0		; get size
+		;inx			; виж по надол│ един branch к║де ╡оди
+		stx	Src		; к║де ╣е ▓║░▒им
+		sta	wrk		; ▒лагаме д║лжина▓а на две ме▒▓а
+		sta	wrk+1
+		ins			; pop address of secon operand
+		ins
+		ldx	#WorkBuff+10	; може и два▓а да ▒а б│кви
+		bsr	GetStrAddr
+		lda	x, 0
+		;inx			; не за╣о▓о има по-дол│ има един DES
+		stx	Dest		; какво ╣е ▓║░▒им
+		sta	wrk1
+		beq	Found
+
+		;ldx	 Src		; виж к║де ╡оди branch-а
+		sei
+		sts	tempS
+		bra	CheckEnd	; ▓ози branch оп░ав┐ INX & ldx по-го░е
+loop		lds	Dest
+		;des			; н┐ма н│жда ╣о▓о по-го░е н┐ма INS
+loop1		pla
+		cmpa	x, 0
+		beq	thisMatch
+		dec	wrk
+CheckEnd	ldx	Src		; н┐ма ▒║впадение
+		inx
+		stx	Src
+		ldb	wrk1
+		cmpb	wrk
+		bls	loop
+		lda	#$ff		; не е наме░ено изоб╣о
+		bra	endSearch
+thisMatch	inx			; един ▒имвол ▒║впада
+		decb			; ▒ледва╣и┐
+		bne	loop1
+		lda	wrk+1		; к║де е наме░ено
+		suba	wrk		; A:= size - (wrk - n) = n
+endSearch	lds	tempS
+		cli
+
+Found		inca
+		clrb
+		tsx
+FixX_BA 			      =*; Store BA in (X) and jump to Bank1
+		sta	x, 0		; store in local cell
+		stb	x, 1
+		jmp	MainLoop1
+		endp;	pos
+
+; ------- Get String Address -------
+; Common routine for String handling
+; Import: TOS is string address or char in Bsex+
+; Export: X address of string
+; Action: if TOS is a char (MSByte = 0) => make dummy string
+;	  за ░або▓ен (dummy) string да ▒е използва м┐▒▓о▓о │казано о▓ X
+; Side Effect: uses wrkF, acc A
+
+GetStrAddrWrk	ldx	#WorkBuff	; use WrkStr
+
+GetStrAddr	proc
+		stx	wrkF
+		tsx
+		lda	x, 2		; TOS is return address
+		beq	IsChar
+		ldx	x, 2		; get address of string
+		rts
+IsChar		lda	x, 3		; get character
+		ldx	wrkF
+		sta	x, 1		; make dummy string
+		lda	#1
+		sta	x, 0
+		rts
+		endp;	GetStrAddr
+
+; ------- procedure Delete(var s: string; Index, Count: ShortCard); -------
+; mnemonic: delete
+; stack:    { cnt, ndx, sz, addr } -> { }
+; Action    Delete <cnt> chars starting from <ndx>
+;	    from string pointed at by <addr>. <sz> е в▒║╣но▒▓
+;	    д║лжина▓а на string-а, за╣о▓о е де┤ини░ана ка▓о var parameter
+
+delete		proc
+		pla			; get number of bytes to delete
+		plb			; MSByte must be 0
+		sta	wrk		; cnt
+		pla			; get index
+		tsx			; MSByte must be 0 too
+		orb	x, 0
+		bne	err
+		sta	wrk+1		; ndx
+		bne	OK
+err		jmp	StrIndx 	; delete(s, 0, ..); ? не може ▓ака
+OK		ins			; flush string max size
+		ins
+		ins
+		adda	x, 4		; calc start address
+		adcb	x, 3		; демек ▓ам о▓ де▓о ╣е ма╡аме
+		sta	Dest+1
+		stb	Dest		; ▓░┐бва да п░еме▒▓им cnt бай▓а
+		adda	wrk		; о▓ Src в Dest
+		adcb	#0
+		sta	Src+1
+		stb	Src
+		ldx	x, 3
+		ins			; pop address
+		ins
+		lda	x, 0		; get current string size
+		suba	wrk+1		; дали ndx не ▒о╖и изв║н string-а
+		bcs	rts		; Ами да нав║н е! Ни╣о не п░авим.
+		inca			; ме▒▓им length(s) - (ndx+cnt) + 1
+		suba	wrk		; ами дали ndx + cnt е изв║н?
+		bls	CutString
+		ldb	x, 0
+		subb	wrk		; length(s) - cnt, ▓олкоз о▒▓ава▓
+		stb	x, 0
+                clrb
+                jsr     MoveMemory      ;ldx     #Src           v1.63
+                                        ;int     _MoveMem
+		bra	rts
+
+CutString	lda	wrk+1
+		deca
+		sta	x, 0
+rts		jmp	MainLoop1
+		endp;	delete
+
+; ------- procedure Insert -------
+; procedure Insert(const src: string; var s: string; ndx: ShortCard);
+; stack:    { ndx, sz, addr, src } -> { }
+; Action    insert <src> string starting from <ndx> position
+;	    in string pointed at by <addr>. <sz> е макимална▓а
+;	    д║лжина▓а на string-а в кой▓о вм║кваме.
+; Warning:  Боза▓а е ко▒ма▓а ако ни ▓░┐бва▓ около 20 бай▓а виж в ░азпе╖а▓ка▓а
+;	    на ве░▒и┐ 1.03 оп▓имизи░ана▓а ве░▒и┐ (или ┐ изми▒ли).
+
+insert		proc
+		pla			; get index in string
+		plb			; flush MSByte (must be 0)
+		tstb
+		beq	OK
+errndx		jmp	StrIndx
+OK
+		sta	wrk+1		; index in string
+		beq	errndx
+
+		pla			; string max size
+		ins
+		sta	wrk
+
+		tsx
+		ldx	x		; get address of string
+		stx	wrk1		; to insert in
+		ins
+		ins
+
+		bsr	GetStrAddrWrk	; get address of string
+		ins			; to be inserted
+		ins
+		stx	wrk2
+
+		lda	x, 0		; get length of string to insert
+		ldx	wrk1		; address of string to insert in
+		adda	x, 0		; add length of source string
+		bcs	ErrSize 	; too large
+		cmpa	wrk
+		bls	OKsize
+ErrSize 	jmp	s2long
+OKsize		lda	x, 0		; length of string
+		cmpa	wrk+1		; length < ndx
+		bcc	OKndx
+		inca			; ndx:= length + 1
+		sta	wrk+1
+OKndx
+		ldx	wrk2
+		lda	x, 0		; колко е д║л║г ▓ози кой▓о ╣е вм║кваме
+		inx
+                stx     Src
+		clrb
+		jsr	GetStackErr	; заемаме ▒и ░або▓на паме▓
+		stx	wrk3
+                stx     Dest            ; BA е д║лжина▓а на вм║квани┐
+                bsr     MoveMemory      ; ldx     #Src          v1.63
+                                        ; int     _MoveMem
+
+		lda	wrk+1
+		clrb
+		adda	wrk1+1		; calc src[ndx]
+		adcb	wrk1
+		sta	Src+1
+		stb	Src
+
+                ldx     wrk2
+		adda	x, 0		; calc s[ndx + length(src)]
+		adcb	#0
+		sta	Dest+1
+		stb	Dest
+
+		ldx	wrk1		; calc lenght(s) + 1 - ndx
+		lda	x, 0
+		inca
+		suba	wrk+1
+		clrb
+                ;ldx     #Src            ; Move(src[ndx], s[ndx+length(src),
+                ;int     _MoveMem        ;      length(s) - ndx + 1);
+                bsr     MoveMemory      ; v1.63
+
+		ldx	Src
+		stx	Dest
+		ldx	wrk3
+		stx	Src
+		ldx	wrk2
+		lda	x, 0		; Move(wrk, s[ndx], length(src));
+		clrb
+                bsr     MoveMemory      ;ldx     #Src           v1.63
+                                        ;int     _MoveMem
+
+		ldx	wrk3
+		stx	LoMemPtr	; release work memory
+
+		ldx	wrk2
+		lda	x, 0
+		ldx	wrk1
+		adda	x, 0
+		sta	x, 0		; s[0]:= length(s) + length(src);
+		jmp	MainLoop1
+		endp;	insert
+
+; ------- Move Memory -------   added to v1.63
+; Import:   BA - Size
+;	   Src - source address
+;	  Dest - Destination address
+;   Uses: tempS, IOsize, tempX, all registers
+;   Note: П░о╢ед│░а▓а ▒ама оп░едел┐ нак║де да ме▒▓и
+;	  Рабо▓а▓а е ▓акава: Src > Dest - left
+;			     Src = Dest - в▒е едно нак║де
+;			     Src < Dest - right
+
+MoveMemory	proc
+		sei			; леко, леко по ▓е░ли╢и
+		sts	tempS
+
+                adda    Src+1           ; calc Src + Size = SrcEnd
+		adcb	Src
+                sta     IOsize+1        ; IOsize used as SrcEnd
+                stb     IOsize
+
+		suba	Src+1		; най-ле▒ни┐ на╖ин да пол│╖им BA
+                sbcb    Src             ; какво▓о е било п░еди SrcEnd
+
+		adda	Dest+1		; calc Dest + Size = DestEnd
+		adcb	Dest
+		sta	tempX+1 	; use tempX as DestEnd
+		stb	tempX
+					; ▒░авн┐ваме Src < Dest?, но може
+                cmpb    IOsize          ; да ▒░авн┐ваме SrcEnd < DestEnd
+		bne	CheckHi
+                cmpa    IOsize+1
+CheckHi         bls     MvLeft
+
+MvRight 	lds	tempX		; lds DestEnd = Dest + Size
+		des
+                ldx     IOsize          ; ldx SrcEnd = Src + Size
+		bra	CheckRight
+right_loop
+		dex
+		lda	x, 0
+		pha
+CheckRight	cpx	Src
+		bne	right_loop	; 21 micro seconds per byte
+		bra	endMove
+
+MvLeft		lds	Src
+		des
+		ldx	Dest
+		bra	CheckLeft
+left_loop
+		pla
+		sta	x, 0
+		inx
+CheckLeft	cpx	tempX		; cpx DestEnd
+		bne	left_loop	; 20 micro seconds per byte
+
+endMove 	lds	tempS
+		cli			; ╡а ▒ега може и ка▓о ▒лон
+		rts
+		endp;	MoveMemory
+
+; ------- Up/Lo case -------
+; mnemonic: UpLoCase byte
+; Stack:    { ch } -> { ch } / { addr } -> { }
+; Action:   Up or Lo case character or string
+;	    ако <byte> A.....GH
+;		       ^     ^^-- 0/1 char/string
+;		       |     ---- 0/1 ASCII/ASCII + CYR
+;		       ---------- 0/1 Lo/UpCase
+
+ULcase		proc
+		clrb
+		ldx	ipc
+		lda	x, 0		; get <byte> (instruction parameter)
+		bmi	UpCase
+		ldb	#$20
+UpCase		stb	wrk
+		tab
+		andb	#%10
+		stb	wrk+1
+		ldb	#1
+		tsx
+		bita	#1
+		beq	OneChar
+		ldx	x, 0		; string address
+		ins
+		ins
+		ldb	x, 0
+		beq	endULcase
+loop		inx
+OneChar 	lda	x, 0
+		anda	#$df
+		bpl	Less_80
+		tst	wrk+1
+		beq	dont
+		cmpa	#'Я'
+		bhi	dont
+		bra	OK
+Less_80 	cmpa	#'A'
+		bcs	dont
+		cmpa	#'Z'
+		bhi	dont
+OK		ora	wrk
+		sta	x, 0
+dont		decb
+		bne	loop
+endULcase
+BumpIPC 	=	*
+		ldx	ipc
+		inx
+		stx	ipc
+		jmp	MainLoop1
+		endp;	ULcase
+
+;------------------------------------------------------------------------------

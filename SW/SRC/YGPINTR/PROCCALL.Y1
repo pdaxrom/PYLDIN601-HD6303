@@ -1,0 +1,424 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Procedure calls.			    (c) 1989, 1990 YGP.
+
+; ------- Load Procedure Descriptor --------
+; mnemonic: LPD byte1, byte2
+; Stack:    { } -> { proc, slot}
+; Action:   load slot an procedure number into stack
+
+lpd
+                bsr     GetSegProc
+                jmp     pushBA
+
+; ------- Get Segment and proc number -------
+; Import: ipc - ptr to seg, proc
+; Export: BA  - slot, proc
+;	  ipc incremented by 2
+
+GetSegProc	ldx	ipc
+		ldb	x, 0		; get Segment No
+		inx
+Get___Proc	lda	x, 0		; get ProcNo
+		inx
+		stx	ipc		; bump ipc
+
+; ------- Convert Segment No to Slot No -------
+; Import: B - segment number
+; Export: B - Slot Number
+; Note:   wrk and Xregister destroied
+
+seg2slot	proc
+		ldx	SegPtr
+		tst	x, SegFlags
+		bmi	IsMain
+		ldx	x, SegGbl	; not mian segment (get main)
+IsMain		tstb
+		bne	NotGlobalSeg
+		ldb	x, SegSlotNo
+		bra	rts
+NotGlobalSeg
+		stx	wrk
+		addb	wrk+1		; calc SlotDictionary + Breg
+		stb	wrk+1
+		bcc	no_carry
+		inc	wrk
+no_carry	ldx	wrk
+		ldb	x, SegSlotDict	; get slot No
+rts		rts
+		endp;	seg2slot
+
+; ------- Short Call External Procedure -------
+; mnemonic: SCXPn byte	(n = 1..8)
+; Stack:   {} -> {}
+; Action:   Call external procedur number <byte> from external segment <n>
+
+SCXP		lsra			; recalculate OPcode number
+		suba	#$30-1		; SCXP1 has opcode = $30
+		tab
+		ldx	ipc
+		bsr	Get___Proc
+		bra	CommonCall
+
+; ------- Call eXternal procedure --------
+; mnemonic: CXP byte1, byte2
+; Stack:    { parameters } -> { }
+; Action:   call eXternal procedure number <byte2> from segment <byte1>
+
+cxp		bsr	GetSegProc
+		bra	CommonCall
+
+; ------- Call Formal procedure --------
+; mnemonic: CFP
+; Stack:    { proc, slot, parameters } -> { }
+; Action:   call procedure number <proc> from slot <slot>
+
+cfp		pla			; proc No
+		plb			; slot No
+		bra	CommonCall
+
+; ------- Call Global procedure --------
+; mnemonic: CGP byte
+; Stack:    { parameters } -> { }
+; Action:   call procedure number <byte> from global segment
+
+cgp		proc
+		ldx	SegPtr
+		ldb	x, SegFlags
+		bmi	IsMain
+		ldx	x, SegGbl	; get ptr to global segment
+IsMain		ldb	x, SegSlotNo
+		ldx	ipc
+		lda	x		; get ProcNo
+		inx
+		stx	ipc		; bump ipc (correct value on return)
+		bra	CommonCall
+		endp;	cgp
+
+; ------- Call iNternal procedure --------
+; mnemonic: CNP byte
+; Stack:    { parameters } -> { }
+; Action:   call internal procedure number <byte>
+
+cnp		proc
+		ldx	ipc
+		lda	x		; get ProcNo
+		ldb	SlotNo		; internal procedure (same slot)
+		inx
+		stx	ipc		; bump ipc (correct value on return)
+
+		; п░опадаме в CommonCall
+		endp;	cnp
+
+; ------- Common code for calling procedure/functions -------
+; Import: A - ProcNo,
+;	  B - SlotNo.
+; Warning Д░│га░┐▓ FinitUnit ▒ка╖а на CommonCall_ ка▓о п░еди ▓ова е запи▒ал
+;	  1 (▓.е. <>0) в║в IOfile, в▒и╖ки▓е ни надежди ▒а ╖е не го ░азвал┐
+;	  никой (кое▓о об╣о взе▓о е п░ове░ено).
+
+CommonCall	proc
+		clr	IOfile		; боза▓а ко▒ма▓а за░ади FinitUnit
+CommonCall_	=	*
+		ldx	InterruptAddr + _DbgPFcall*2
+		beq	NoDbg		; ▓ова ▒е п░ави за по-б║░зо
+		int	_DbgPFcall	; да не викаме не╣о кое▓о го н┐ма
+NoDbg
+		sta	NewProc 	; preserve new ProcNo
+		stb	NewSlot 	; preserve new SlotNo
+		cmpb	SlotNo		; о▓ ▒║╣и┐ Slot?
+		beq	SameSlot	; да. -> Викаме без да ▒е ▒м│╣аваме.
+			;------------------------------------------------------
+					; не. П║░во за░еждаме slot-а в паме▓▓а.
+
+		jsr	LoadSlot
+
+		stx	wrk
+		ldx	x, SegPdict
+		bne	HASpdict
+		jmp	NoDictionary
+HASpdict				; и ▓ака ▒ега имаме ProcDictionary
+		; о▒▓ава да п░ове░им дали ╣е викаме а▒ембле░▒ка п░о╢ед│░а
+		; и ако е ▓ака да ┐ викнем ▒ега за╣о▓о по▒ле ╣е е к║▒но
+		; мандало▓о ╕║ лопне (▓.е. ╣е по▒▓авим нови▓е Interpreter Regs
+		; и в║з▒▓анов┐ване▓о им ╣е е ▓░│дна (бавна) ░анбо▓а)
+		; ▓ова важи ░азби░а ▒е ▒амо за external ASM proc, но ▓акива
+		; не мога▓ да б║да▓ и на в▒и╖ко▓о о▓го░е OVERLAY-ни ▓ака ╖е
+		; п░облеми н┐ма (мога▓ да ▒а overlay-ни ако ░аз░е╕им Overlay на
+		; ▓┐ло▓о на UNIT ама поне за▒ега (и ве░о┐▓но завинаги) не може.
+
+		stx	wrk1		; ▒м┐▓аме о▓ к║де запо╖ва п░о╢ед│░а▓а
+		lda	NewProc 	; calc Pdict + ProcNo*2
+		clrb
+		asla
+		rolb
+		adda	wrk1+1
+		adcb	wrk1
+		sta	wrk1+1
+		stb	wrk1
+		ldx	wrk1		; x:= address(Pdict[NewProc]);
+		lda	x, 0		; п░ове░┐ваме ▒▓а░╕и┐ бай▓
+		beq	NotASMp 	; = 0 зна╖и ▓ова е overlay ▓.е <> ASM
+		ldx	x, 0		; fetch ASM address
+		lda	x, 0		; п░ове░┐ваме номе░а на п░о╢ед│░а▓а
+		bne	NotASMp 	; ASM п░о╢ед│░а▓а ▓░┐бва да б║де 0
+		stx	wrk1
+		ldx	wrk
+		ldb	x, SegNloads+1	; п░авим dec(SegNloads)
+		bne	no_borrow
+		dec	x, SegNloads
+no_borrow	dec	x, SegNloads+1
+		ldx	x, SegNloads	; п░ове░┐ваме дали е 0
+		tpa			; preserve processor status
+		ldx	wrk1		; get address of assembly language sub
+		tap			; restore processor status
+		bne	CallASM 	; и ако да зна╖и ▓ок│ ╣о ▒ме казали
+		jmp	OverlayASM	; load а ве╖е ▓░┐бва да казваме free
+NotASMp
+		ldx	wrk
+		jsr	setSLOTinfo	; SegPtr, Pdict, Cpool, GblSegPtr, gbl
+SameSlot
+		lda	NewProc 	; calc Pdict + ProcNo*2
+		clrb
+		asla
+		rolb
+		adda	Pdict+1
+		adcb	Pdict
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk		; x:= address(Pdict[NewProc]);
+		lda	x, 0		; п░ове░┐ваме ▒▓а░╕и┐ бай▓
+		bne	OKinternal	; <> 0 зна╖и ▓ова е ад░е▒а й
+		lda	#1		; ина╖е викаме Proc1 о▓ ▒ло▓а
+		ldb	x, 1		; кой▓о го пи╕е в LSByte
+		jmp	CommonCall_
+OKinternal
+		ldx	x, 0
+
+		lda	x, 0		; п░ове░┐ваме номе░а на п░о╢ед│░а▓а
+		bne	NotASM		; ASM п░о╢ед│░а▓а ▓░┐бва да б║де
+CallASM 	jsr	x, 2		; internal, ка▓о в░║╣ане▓о може да
+                jmp     MainLoop        ; ▒▓ава ╖░ез jmp SystemPage+$FE или rts
+
+NotASM		cmpa	NewProc 	; ▓│ка ▒е п░ави п░ове░ка за
+		beq	ProcNoOK	; в▒еки ▒л│╖ай
+		jmp	ProcNumErr
+ProcNoOK
+		lda	IOfile		; test дали не ▒ме в║в ┤ини▓ Unit
+		beq	NotFinitUnit	; ╢┐ла▓а и▒▓о░и┐ е за╣о▓о не ▓░┐бва
+		stx	ATptr		; да п░е▒м┐▓аме наново MS и да ▒лагаме
+		ldx	gbl		; LoMemPtr а ▓░┐бва да вземем MS
+		stx	NewLcl		; о▓ gbl-#MSsz, и да не вземаме parms
+		stx	wrk1		; ▓ова за да не вадим па░аме▓░и
+		lda	gbl+1		; ▒ега вадим #MSsz
+		ldb	gbl
+		suba	#MSsz		; в║з▒▓анов┐ваме MS какво▓о е било
+		sbcb	#/MSsz		; п░и викане▓о за ини▓
+		sei
+		sta	MS+1
+		stb	MS
+		sts	wrk2
+		bra	fill_MS_info
+NotFinitUnit
+		lda	LoMemPtr+1	; LoMem is new MarkStack
+		ldb	LoMemPtr
+		sta	MS+1		; Bump LoMem(за да не ▒капе н┐кой не╣о)
+		stb	MS		; п░ове░ка за ▒▓ека н┐ма
+		adda	#MSsz		; да не ▒е ╢иганим за н┐какви ▒и
+		adcb	#0		; де▒е▓ина бай▓а, п░ове░ка▓а е по-к║▒но
+
+		sta	NewLcl+1	; NewLcl = Address of Locals
+		stb	NewLcl		; (lcl ни ▓░┐бва о╣е)
+
+		sei	;---------------- В Н И М А В А Й
+
+		; по п░ин╢ип Psize <= 120 но за в▒еки ▒л│╖ай ▒м┐▓аме 16 bit
+		adda	x, AT_psize	; negative byte sex
+		adcb	x, AT_psize+1	; BA = address after Parameters
+		sta	wrk1+1		; save Parameter end address
+		stb	wrk1
+		adda	x, AT_dsize
+		adcb	x, AT_dsize+1	; BA = Address of New LoMem
+		sts	wrk2		; п░ове░┐ваме дали ▒ме под SP
+		incb			; за да ▒ме ▒иг│░ни ╖е има >=$100 бай▓а
+		cmpb	wrk2		; ░азлика (MSBytes check is enough)
+		bcs	MemOK		; има поне $100, ╖е и пове╖е м┐▒▓о
+                cli                     ; ▒▓ека е доб░е, но ние ▒ме ▒е на▒░али,
+                jmp     CallMemFull     ; ▓║й ╖е нека п│▒нем кой▓о ╖ака.
+MemOK
+		decb			; в░║╣аме ▒▓а░о▓о B
+                stb     LoMemPtr        ; │вели╖аване на LoMemPtr 
+                sta     LoMemPtr+1      ; вземаме паме▓ за локални п░оменливи
+
+		stx	ATptr		; ATptr:= address(Atbl(Proc to run))
+fill_MS_info
+		ldx	MS
+		;sts	wrk2		<- виж малко по-наго░е
+		lds	#ipc-1		; write MarkStack info (доб░е е
+		plb			; ░аги▒▓░и▓е и MS... да ▒а под░едени
+		pla			; за да може да ▒е load-на▓ по X и
+		sta	x, MSipc+1	; да ▒е push-на▓)
+		stb	x, MSipc	; или да ▒е pull-на▓ и да ▒е store-на▓
+		pla			; по X (межд│ вп░о╖ем ▓е ▒а под░едени
+		sta	x, MSpno	; но мен ме м║░зи да го нап░ав┐)
+		pla
+		sta	x, MSsno
+		plb
+		pla
+		lds	wrk2
+		CLI	;--------------- ▒п░и да ВНИМАВАШ
+
+		sta	x, MSlcl+1
+		stb	x, MSlcl
+					; о▒▓ава (ка▓о ╖е ли) да ▒е оп░авим
+		ldx	ATptr		; ▒амо ▒║▒ STAT
+		ldb	x, AT_lex
+		lda	LexLev		; current lex
+		stb	LexLev		; new lex
+		bne	NotGlobal	; Ако LexLev = 0 е аб▒ол╛▓но ▒иг│░но,
+					; ╖е ▓ова е proc 1, stat е невалиден и
+		ldx	SegPtr		; о▒вен ▓ова има external call
+		lda	NewLcl+1	; п░и ▓ова не ▒амо е ▒иг│░но ╖е ▒ме в
+		ldb	NewLcl		; п░о╢ед│░а 1 ами е ▒иг│░но ╖е е главна
+		sta	x, SegGbl+1	; п░о╢ед│░а. (unit or program body)
+		stb	x, SegGbl
+		sta	gbl+1
+		stb	gbl
+		ldx	#0
+		bra	StStat		; stat е невалиден
+
+NotGlobal	cmpb	#1		; lex 1 (▓.е. ▓░┐бва да вземем
+		bne	NotLex1 	; stat о▓ gbl)
+		lda	gbl+1
+		ldb	gbl
+		bra	SubMSsz
+NotLex1
+		sba
+		beq	NoChng		; same lex levels no change of stat
+		bpl	trvrs
+
+		lda	lcl+1		; local proc call
+		ldb	lcl		; (stat is MS of a caller)
+SubMSsz 	suba	#MSsz
+		sbcb	#0
+		sta	stat+1
+		stb	stat
+		bra	NoChng
+
+trvrs
+		ldx	stat		; traverse levels
+loop		ldx	x
+		deca
+		bne	loop
+
+StStat		stx	stat
+NoChng		ldx	NewLcl		; set lcl
+		stx	lcl
+		bra	PopParms
+
+; изпомпваме па░аме▓░и▓е о▓ ▒▓ека и ги п░а╣аме в локална▓а обла▒▓
+PopLoop 	pla			; pop one word
+		plb
+		sta	x, 0		; store
+		stb	x, 1
+		inx
+		inx
+PopParms	cpx	wrk1		; wrk1 = address after parms
+		bne	PopLoop
+
+		ldx	NewProc 	; transfer NewProc & NewSlot
+		stx	ProcNo		; to ProcNo & SlotNo
+
+		ldb	IOfile		; ▓ова е в▓о░а▓а ░азлика на Finit и
+		beq	NotFinit	; но░мален call на п░о╢ед│░а, за╣о▓о
+		ldb	SlotNo		; ▒е запо╖ва о▓ Exit: а не о▓ на╖ало▓о
+		jsr	FreeSlot	; negative byte sex
+		ldx	ATptr		; а п║к Free ▒е п░ави за╣о▓о ▓ок│ ╣о м│
+		lda	x, AT_exit	; е казан о╣е един load и load-ове▓е
+		ldb	x, AT_exit+1	; м│ ▒▓ава▓ 2 (а ▓░┐бва да е един)
+		db	_cpx_		; trick to jump over lda
+NotFinit
+		lda	#AT_size
+		adda	ATptr+1
+		adcb	ATptr
+		sta	ipc+1
+		stb	ipc
+
+		tsx
+		stx	wrk		; ▓░┐бва да ▒е запази д║лбо╖ина▓а
+		ldx	MS		; на ▒▓ека ▒лед ка▓о па░аме▓░и▓е
+		lda	HiMemPtr+1	; ▒а изпомпени.
+		ldb	HiMemPtr
+		suba	wrk+1
+		sbcb	wrk
+		sta	x, MSsp+1	; Preserve depth of stack
+		stb	x, MSsp
+		lda	stat+1		; move stat to MSstat
+		ldb	stat
+		sta	x, MSstat+1
+		stb	x, MSstat
+		jmp	MainLoop	; execute code of a procedure
+
+		endp;	CommonCall
+
+; --- Find Slot Descriptor ---
+; input: B - SlotNo to find
+; output: X ptr to SlotDescriptor, nil - not found
+;         bne/beq will work in proper manner (X <> / = 0)  (v1.66)
+
+FindSD		proc
+		ldx	SegQueue
+loop		cmpb	x, SegSlotNo
+		beq	rts
+		ldx	x, SegNext
+		bne	loop
+rts             cpx     #0              ; added v 1.66
+                rts
+		endp;	FindSD
+
+; ------- Load Slot -------
+; Import: B - segment No
+
+LoadSlot	proc
+                jsr     FindSD          ; FindSD do cpx itself v1.66
+                ;stx     wrk             ; test X = 0 (по-к░а▓ко е ▓ака)
+		bne	SlotOK
+		jmp	NoSlot
+SlotOK					;  п░ове░┐ваме дали е в паме▓▓а
+		lda	x, SegNloads+1
+		ora	x, SegNloads
+		bne	InMemory
+		int	_LoadSlot	; да ама не (▓.е. не е в паме▓▓а)
+InMemory
+		inc	x, SegNloads+1
+		bne	NoCarry
+		inc	x, SegNloads
+NoCarry 	rts
+		endp;	LoadSlot
+
+; ------- Memory Full (restore and say RunTimeError) -------
+CallMemFull	proc
+		lda	lcl+1		; за ▒║жаление паме▓▓а не ▒▓ига
+		ldb	lcl		; и ▓░┐бва да кажем RunTimeError
+		suba	#MSsz		; но п░еди ▓ова в║з▒▓анов┐ваме в▒и╖ко
+		sbcb	#/MSsz		; кое▓о ▒ме о▒░али
+		sta	MS+1		; а ▓о е MS
+		stb	MS
+		ldb	NewSLOT 	; и ако ▒ме │▒пели да на▓ова░им
+		cmpb	SLOTno		; нов ▒ло▓ ▒║╣о и gbl, CPool, ...
+		beq	Same
+		lda	ProcNo
+		bne	OKproc
+		jmp	FatalMemory	; не можем да п│▒нем главна▓а п░ог░ама
+OKproc
+		jsr	FreeSlot
+		ldb	SlotNo
+                jsr     FindSD          ; FindSD do cpx itself v1.66
+                ;cpx     #0
+		bne	OKslotfound
+		jmp	BadMemFull
+OKslotfound	jsr	setSLOTinfo
+
+Same		jmp	MemFull
+		endp;	CallMemFull
+
+;------------------------------------------------------------------------------

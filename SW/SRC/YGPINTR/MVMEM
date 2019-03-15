@@ -1,0 +1,5 @@
+*ROMHEAD1.Y1     50                       int     _MoveMem       ; ROM -> RAM move (но ▒амо за П║лдини)
+LINKUP.Y2       176                     int     _MoveMem
+LINKUP.Y2       401                     int     _MoveMem
+*LINKUP.Y2       518                      int     _MoveMem        ; Move library Name
+*STARTUP.Y2      46                       int     _MoveMem

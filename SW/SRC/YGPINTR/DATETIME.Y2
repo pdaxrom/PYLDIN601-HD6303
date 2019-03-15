@@ -1,0 +1,105 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Get Date/Time procedures.		    (c) 1989, 1990 YGP.
+
+; ------- Get Date -------
+; mnemonic: GetDate
+; Stack:   { ^d, ^m, ^y } -> {}
+; Action:  Get date and store in day, month, year
+
+GetDate 	proc
+		int	_GetDate
+		stx	wrk		; preserve Year
+		cpx	#1989		; п░ове░┐ваме дали ▒ме 1989 година
+		bne	DateWasSet	; и ако е ▓ака зна╖и не е
+		clrb			; в░║╣аме ден 0 ▓.е. н┐ма да▓а
+DateWasSet	tsx
+                .ifdef  date_time
+                 ldx     x, 2
+                 bsr     dt_set_byte     ; Month
+                 ldx     x, 0+2
+                 tba
+                 bsr     dt_set_byte     ; Day
+                 ldx     x, 4+2
+                .else
+                 ldx     x, 0            ; get address of DAY
+                 stb     x, 0            ; set DAY
+                 clr     x, 1            ; clear MSByte
+
+                 tsx
+                 ldx     x, 2
+                 sta     x, 0            ; set MONTH
+                 clr     x, 1            ; clear MSByte
+
+                 tsx
+                 ldx     x, 4
+                .endif
+		lda	wrk
+		ldb	wrk+1
+		sta	x, 1		; set YEAR
+		stb	x, 0
+
+		ldb	#6
+PopBbytesML			      =*; Pop B bytes from stack and MainLoop
+		ins
+		decb
+		bne	PopBbytesML
+		jmp	MainLoop1
+		endp;	GetDate
+
+                .ifdef  date_time
+dt_set_byte      sta     x, 0
+                 clr     x, 1
+                 tsx                    ; ▓░┐бва да ▒е има в п░едви ╖е 
+                 rts                    ; ▒▓ека е по д║лбок ▒ 2 бай▓а (rts)
+                .endif
+
+; ------- Get Time -------
+; mnemonic: GetTime
+; Stack:    { ^s100, ^sec, ^min, ^hour } -> {}
+; Action:   Get time and store in parameters
+
+GetTime 	proc
+		int	_GetTime
+		stx	wrk		; preserve sec, sec100
+
+		tsx
+		ldx	x, 4		; get address of Min
+                .ifdef  date_time
+                 bsr     dt_set_byte    ; ▒е▓ MIN
+                 ldx     x, 6+2
+                 tba
+                 bsr     dt_set_byte    ; set HOUR
+                 lda     wrk
+                 ldx     x, 2+2
+                 bsr     dt_set_byte    ; set SEC
+                 lda     wrk+1
+                 ldx     x, 0+2
+                 bsr     dt_set_byte    ; set hundreds
+                .else
+                 sta     x, 0            ; set Min
+                 clr     x, 1            ; clear MSByte
+
+                 tsx
+                 ldx     x, 6
+                 stb     x, 0            ; set HOUR
+                 clr     x, 1            ; clear MSByte
+
+                 lda     wrk             ; get seconds
+                 ldb     wrk+1           ; get hundreds
+
+                 tsx
+                 ldx     x, 2
+                 sta     x, 0            ; set Seconds
+                 clr     x, 1            ; clear MSByte
+
+                 tsx
+                 ldx     x, 0
+                 stb     x, 0            ; set Hundreds
+                 clr     x, 1            ; clear MSByte
+                .endif
+
+		ldb	#8
+		bra	PopBbytesML
+		endp;	GetTime
+
+;------------------------------------------------------------------------------

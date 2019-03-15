@@ -1,0 +1,17 @@
+;--------------------------------- I/O errors ---------------------------------
+
+_IO_NotOpen	=	$80		; file not open at all
+_IO_NotClosed	=	$81		; already open
+_IO_NotWritable =	$82		; file not open for output
+_IO_NotReadable =	$83		; file not open for input
+_IO_Not_RW	=	$84		; file not readable or writable
+_IO_NotUntyped	=	$85		; not an untyped file
+_IO_InvalidKind =	$86		; file not of the appropriate kind
+_IO_NotText	=	$87		; not a text file
+_IO_LessBytes	=	$88		; BlockRW е об░або▓ил по-малко бай▓ове
+_IO_EOF 	=	$89		; try to read past the end of file
+_IO_CantReopen	=	$8f		; виж Fopen
+_IO_BadFormat	=	$90		; Неп░авилен ┤о░ма▓ за Real/Integer
+
+;------------------------------------------------------------------------------
+

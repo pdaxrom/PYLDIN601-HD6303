@@ -1,0 +1,80 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Bank 1 errors.			    (c) 1989, 1990 YGP.
+
+MemFull 	lda	#MemFull_
+		db	_cpx_
+
+IOerror 	lda	#IOerror_
+		db	_cpx_
+
+DivByZero	lda	#DivByZero_
+		db	_cpx_
+
+s2long		lda	#s2long_
+		db	_cpx_
+
+Large255	lda	#Large255_
+		db	_cpx_
+
+ErrLoBound	lda	#ErrLoBound_
+		db	_cpx_
+
+ErrHiBound	lda	#ErrHiBound_
+		db	_cpx_
+
+DisposeError	lda	#DisposeError_
+		db	_cpx_
+
+FP_over 	lda	#FP_over_
+		db	_cpx_
+
+FP_invalid	lda	#FP_invalid_
+		db	_cpx_
+
+FP_divzer	lda	#FP_divzer_
+		db	_cpx_
+
+FP_int_ovr	lda	#FP_int_ovr_
+		db	_cpx_
+
+FP_sqrt_neg     lda     #FP_sqrt_neg_
+		db	_cpx_
+
+FatalMemory	lda	#FatalMemory_
+		db	_cpx_
+
+BadReturn	lda	#BadReturn_
+		db	_cpx_
+
+RecursiveUnits	lda	#RecursiveUnits_
+		db	_cpx_
+
+BADmemfull	lda	#BADmemfull_
+		db	_cpx_
+
+OverlayASM	lda	#OverlayASM_
+		db	_cpx_
+
+NoDictionary	lda	#NoDictionary_
+		db	_cpx_
+
+ProcNumErr	lda	#ProcNumErr_
+		db	_cpx_
+
+StdSegInfo	lda	#StdSegInfo_
+		db	_cpx_
+
+BadIreturn	lda	#BadIreturn_
+		db	_cpx_
+
+NoSlot		lda	#NoSlot_
+		db	_cpx_
+
+BadInterm	lda	#BadInterm_
+		db	_cpx_
+
+UnImp		lda	#UnImp_
+
+		int	_RunTimeError
+
+;------------------------------------------------------------------------------

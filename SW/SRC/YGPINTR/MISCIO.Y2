@@ -1,0 +1,391 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Miscellaneous I/O proc/funcs.	    (c) 1989, 1990 YGP.
+
+; ------- Set IOresult -------
+; mnemonic: SetIO
+; Stack:    { w } -> {}
+; Action:   store TOS's word in IOresult
+
+SetIO		pla
+		plb
+		sta	IOresult+1
+		stb	IOresult
+		jmp	MainLoop1
+
+; ------- IOresult -------
+; function IOresult: word;
+; Stack:    { } -> { w }
+; Action:   Push IOresult
+
+IOrslt		lda	IOresult+1
+		ldb	IOresult
+		jmp	PushBA
+
+; ------- ParamCount -------
+; function ParamCount: Natural
+; Stack:   { } -> { w }
+; Action:  Return number of parameters
+
+Pcount		int	_ParamCount
+		deca
+		db	_cpx_		; п░опадаме в MsgLmt
+
+; ------- Messeage Limit -------
+; function MsgLimit: Natural;
+; Stack:   { } -> { w }
+; Action:  Return Message limit (X positions on screen)
+
+MsgLmt		int	_GetScrSize
+		clrb
+PushBA		phb
+		pha
+		jmp	MainLoop1
+
+; ------- ParamStr -------
+; procedure ParamStr(N: Natural, var s: string);
+; Stack:    { sz, addr, n } -> { }
+; Action:   Return specified parameter <n> in string
+;	    pointed at by <addr> with max size <sz>
+
+Pstrng		proc
+		pla			; get max size of string
+		ins			; pop MSByte (0)
+		sta	wrk		; wrk:= max size of string
+		ldx	LoMemPtr	; wrk2:= LoMem
+		stx	wrk2
+		tsx			; get start of string
+		ldx	x
+		ins
+		ins
+		inx
+		stx	Src		; Src:= addr(s[1]);
+
+		cmpa	#81		; ▒▓ига ли м│ на DOS-╖о
+		bcs	Enough		; >= 81 ▒▓ига м│
+		lda	#81
+		clrb
+		jsr	GetStackErr	; get space for buffer
+Enough
+		pla
+		plb
+		tstb
+		beq	GetParameter
+		clrb			; п░екал┐ва╕ пиле ╕а░ено (B = 0)
+		bra	PutSize
+
+GetParameter
+		int	_ParamStr	; Src^:= ParamStr(n);
+
+		clrb			; ▓░┐бва да п░еб░оим колко ▒а б│кви▓е
+		sei			; и да ги п░еме▒▓им к║де▓о ▓░┐бва
+		sts	wrk1
+		txs
+		ldx	Src
+loop		pla
+		tsta
+		beq	EndLoop
+		cmpb	wrk		; п░ове░┐ваме да не излезем изв║н
+		bcc	ErrLong 	; ░амки▓е на ▒▓░инга
+		sta	x
+		inx
+		incb
+		bne	loop		; ▓ова за в▒еки ▒л│╖ай
+
+ErrLong 	lds	wrk1
+		cli
+		jmp	s2long
+
+EndLoop
+		lds	wrk1
+		cli
+PutSize
+		ldx	Src
+		dex
+		stb	x		; size of parameter
+
+		ldx	wrk2		; cut back memory (if used)
+		stx	LoMemPtr
+		jmp	MainLoop1
+		endp;	Pstrng
+
+; ------- File Seek -------
+; procedure Seek(var f: file, pos: longint);
+; stack:    { l, f } -> { }
+; Action:   Perform Lseek to position RecSize * pos
+
+Seek		proc
+		jsr	PopLongInt
+
+		jsr	TOSinFILE
+
+		lda	x, F_BIOS
+		bne	ErrorSeek
+		lda	x, F_handle
+		ldb	x, F_type
+		beq	DoSeek
+		decb
+		bne	DoSeek		 ; по п░ин╢ип не ▓░┐бва да ▒е п░ави
+NotText 	pha
+		lda	x, F_rsize+1
+		ldb	x, F_rsize
+		jsr	mply_32x16
+		pla
+DoSeek		ldx	#LongWork
+		clrb			; seek from start
+		int	_Fseek
+		tsta
+		beq	Quit
+		cmpa	#24		; bad file position ?
+		beq	TryToFill	; ако да и ако ▒ме в Write Mode
+					; пи╕ем колко▓о ▓░┐бва
+Quit		tsta
+		bne	HasError
+		ldx	IOfile
+		ldb	x, F_flags
+		andb	#%11000011	; clear EOF flag if seek is OK
+		stb	x, F_flags
+		ldb	x, F_type	; ако в▒и╖ко е OK ▒ TEXT ▓о ▓огаз
+		cmpb	#TextFile	; казваме ╖е има г░е╕ка
+		bne	HasError	; н┐ма г░е╕ка (ама ▓ака ▒е казва label)
+ErrorSeek	lda	#_IO_InvalidKind
+		db	_cpx_
+TooFar		lda	#24		; bad file position
+HasError	jmp	SetIOresult
+
+TryToFill
+		ldx	IOfile
+		ldb	x, F_flags
+		bpl	Quit		; не ▒ме в write mode
+		lda	x, f_handle
+		tab			; preserve file handle
+		ldx	#wrkF
+		int	_Fsize		; ▓░┐бва да вземем д║лжина▓а на ┤иле▓о
+		tsta
+		bne	Quit
+
+		tba			; restore file hadle
+		clrb			; from start of file (to filesize pos)
+		int	_Fseek		; jump to end of file
+		tsta
+		bne	Quit
+
+		lda	LongWork+3
+		suba	wrkF+3
+		sta	IOsize+1
+		lda	LongWork+2
+		sbca	wrkF+2
+		sta	IOsize
+		lda	LongWork+1
+		sbca	wrkF+1
+		ldb	LongWork
+		sbcb	wrkF
+		bmi	TooFar
+		asla			; times 2 ╣о▓о ╣е пи╕ем по 32Kbytes
+		rolb
+		sta	wrk+1
+		stb	wrk
+
+		ldx	IOfile
+		ldb	x, f_handle	; preserve File Handle
+		clr	wrkF		; до▒▓а▓║╖но е да замажем ▒амо MSByte
+		ldx	#$8000
+		stx	wrkF+2
+
+		ldx	wrk
+		inx
+		lda	IOsize
+		bpl	Less_8000	; ▒ега в wrk пи╕е колко по 32Kbytes
+		anda	#$7f		; ▓░┐бва да ▒е п░а▒ка а в IOsize
+		sta	IOsize		; о▒▓а▓║ка о▓ 32-▓е кил╢а
+		stx	wrk
+loop
+		tba			; restore File Handle
+		ldx	#wrkF
+		int	_Fwrite
+		tsta
+		bne	Quit
+		ldx	wrk		; dec(32Kbytes counter)
+Less_8000
+		dex
+		stx	wrk
+		bne	loop
+
+Small		clr	IObuff		; clear pointer (write from ZP)
+		tba
+		ldx	#IObuff
+		int	_Fwrite
+		jmp	Quit
+		endp;	Seek
+
+; ------- File Position -------
+; function FilePos(var f: file): LongInt;
+; Stack:   { f } -> { position }
+; Action   return current file postion
+
+Fpos		proc
+		jsr	TOSinFILE
+
+		ldb	x, F_type
+		cmpb	#TextFile
+		bne	notTEXT
+ErrKind 	ldb	#_IO_InvalidKind
+		lda	x, F_BIOS
+		bne	PushSizePos
+		db	_cmpa_
+notTEXT 	clrb
+
+		lda	x, F_handle
+		ldx	#LongWork
+		int	_Fposition
+
+					; BUG in undocumented TextPos
+		tstb			; | must decrement file pos by 1
+		beq	PushSizePos	; | if char avail in char buffer
+		ldx	IOfile		; |
+		pha			; |
+		lda	x, F_flags	; |
+		anda	#%00001000	; |
+		beq	NoCharAvail	; |
+		ldx	LongWork+2	; |
+		bne	LSWnotZero	; |
+		ldx	LongWork+0	; |
+		dex			; |
+		stx	LongWork+0	; |
+		ldx	LongWork+2	; |
+LSWnotZero	dex			; |
+		stx	LongWork+2	; |
+NoCharAvail	pla			; |
+		bra	PushSizePos	; corrected v1.52, 21.Oct.1990
+		endp;	Fpos
+
+; ------- File Size -------
+; function FileSize(var f: file): LongInt;
+; Stack:   { f } -> { filesize }
+; Action   return current file postion
+
+Fsize		proc
+		jsr	TOSinFILE
+
+		ldb	x, F_type
+		cmpb	#TextFile
+		bne	notTEXT
+ErrKind 	ldb	#_IO_InvalidKind
+		lda	x, F_BIOS
+		bne	NotFile
+		db	_cmpa_
+notTEXT 	clrb
+
+		lda	x, F_handle
+		ldx	#LongWork
+		int	_Fsize
+PushSizePos			      =*;
+		tsta
+		bne	IOerror 	;beq BUG (corrected v1.52, 21.Oct.1990)
+NotFile 	tba
+IOerror
+		sta	IOresult+1	;BUG (corrected v1.52, 31.Oct.1990)
+		clr	IOresult	; б╗ло наобо░о▓ (демек ioresult, ...+1)
+
+		ldx	IOfile
+		lda	x, f_type
+		deca
+		bne	NotNormal
+		lda	x, F_rsize+1
+		ldb	x, F_rsize
+
+                bsr     div32xBA
+NotNormal	clra
+		jmp	PushLong
+		endp;	Fsize
+
+;-------------- divide LongWork to BA -------------
+; Import: LongWork = 32 bit, BA = 16 bit
+;  Entry: LongWork = 32 bit, wrk = 16 bit, wrk not modified, result as main.
+; Export: LongWork = LongWork div BA
+;               BA = LongWork mod BA
+;   uses: wrk:= BA, X = 0
+
+div32xBA        proc                    ; п░о╢ед│░а▓а е напи▒ана inline
+		sta	wrk+1		; LongWork:= LongWork div BA;
+                stb     wrk             ;       BA:= LongWork mod BA;
+div_LWxWRK                            =*; Entry point
+		ldx	#33
+		clra
+		clrb ; clc
+loop		rola
+		rolb
+		cmpa	wrk+1
+		phb
+		sbcb	wrk
+		plb
+		clc
+		blt	Label		; blt не полз│ва Carry
+		suba	wrk+1
+		sbcb	wrk
+		sec
+Label
+		rol	LongWork+3
+		rol	LongWork+2
+		rol	LongWork+1
+		rol	LongWork+0
+		dex
+		bne	loop
+                rts
+                endp;   div32xBA
+
+; ------- Remove file with a given name -------
+; procedure REMOVE(const s: string);
+; Stack:   {addr} -> {}
+; Action:   Remove file with a given name. Note that string must be converted
+;	    to ASCIIz format;
+
+rem_ren         proc
+Remove                                =*; global label
+		tsx
+		ldx	x, 0
+		ins
+		ins
+		stx	IObuff		; preserve start address
+		jsr	ToASCIIz
+		ldx	IObuff
+		int	_Fremove	; remove it
+		pha
+
+                bra     tostr_iores     ; v1.65
+                ;jsr     ToString       ; малко (5) бай▓а келепи░ о▓ ╢┐ла▓а ▓а┐
+                ;pla                    ; ░або▓а. (мой ▒║ 5 м║ кой ▓и ги дав║)
+                ;jmp     SetIOresult    ; понеже е ▒║╣а▓а ╣о да не го ползваме
+
+; ------- Rename file -------
+; procedure RENAME(const current, newname: string);
+; Stack:   {addr, addr} -> {}
+; Action:   Rename file with current name. Note that string must be converted
+;	    to ASCIIz format;
+
+Rename                                =*; global label
+		tsx
+		ldx	x, 0
+		ins
+		ins
+		stx	IOsize		; new name
+		jsr	ToASCIIz
+
+		tsx
+		ldx	x, 0
+		ins
+		ins
+		stx	IObuff		; old name
+		jsr	ToASCIIz
+
+		ldx	#IObuff
+		int	_Frename	; rename
+		pha
+		jsr	ToString_       ; = ldx IObuff; bra ToString
+		ldx	IOsize
+tostr_iores
+		jsr	ToString
+		pla
+		jmp	SetIOresult
+                endp;   rem_ren
+
+;------------------------------------------------------------------------------

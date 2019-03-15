@@ -1,0 +1,109 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Instruction address tables.	    (c) 1989, 1990 YGP.
+
+		error	* - LoTable	; ≤Æ¢† ≤∞ø°¢† §† °∫§• ™∫§•≤Æ ≤∞ø°¢†
+		trunc	off
+;LoTable
+		dw	sldc,	sldc,	sldc,	sldc	; 00..03
+		dw	sldc,	sldc,	sldc,	sldc	; 04..07
+		dw	sldc,	sldc,	sldc,	sldc	; 08..0b
+		dw	sldc,	sldc,	sldc,	sldc	; 0c..0f
+
+		dw	sldl,	sldl,	sldl,	sldl	; 10..13
+		dw	sldl,	sldl,	sldl,	sldl	; 14..17
+		dw	sldl,	sldl,	sldl,	sldl	; 18..1b
+		dw	sldl,	sldl,	sldl,	sldl	; 1c..1f
+
+		dw	sldg,	sldg,	sldg,	sldg	; 20..23
+		dw	sldg,	sldg,	sldg,	sldg	; 24..27
+		dw	sldg,	sldg,	sldg,	sldg	; 28..2b
+		dw	sldg,	sldg,	sldg,	sldg	; 2c..2f
+
+		dw	SCXP,	SCXP,	SCXP,	SCXP	; 30..33
+		dw	SCXP,	SCXP,	SCXP,	SCXP	; 34..37
+
+		dw	sind0,	sind,	sind,	sind	; 38..3b
+		dw	sind,	sind,	sind,	sind	; 3c..3f
+
+		dw	addW,	subW,	andW,	orW	; 40..43
+		dw	xorW,	mulI,	divI,	modI	; 44..47
+		dw	_____,	_____,	ItoL,	WtoD	; 48..4b
+		dw	DtoW,	mulC,	divC,	modC	; 4c..4f
+		dw	addL,	subL,	andL,	orL	; 50..53
+		dw	xorL,	mulL,	divL,	modL	; 54..57
+		dw	cnp,	cxp,	cgp,	cfp	; 58..5b
+		dw	_____,	FPinstr,CallStd,LYCode	; 5c..5f
+		dw	equW,	neqW,	lesI,	leqI	; 60..63
+		dw	lesC,	leqC,	equPtr, neqPtr	; 64..67
+		dw	equD,	neqD,	lesL,	leqL	; 68..6b
+		dw	_____,	_____,	NOPcode,bnot	; 6c..6f
+		dw	Ljump,	SFjump, SBjump, LFjump	; 70..73
+		dw	SFFjump,SFBjump,LOjump, SOjump	; 74..77
+		dw	_____,	_____,	_____,	LTjump	; 78..7b
+		dw	STFjump,STBjump,LAjump, SAjump	; 7c..7f
+
+		error	* - HiTable	; ≤Æ¢† ≤∞ø°¢† §† °∫§• ™∫§•≤Æ ≤∞ø°¢†
+;HiTable
+		dw	ldcb,	ldcNb,	ldcw,	ldcdw	; 80..83
+		dw	ldcwD,	ldcbd,	ldcNbd, ldcn	; 84..87
+		dw	ldb,	stb,	ldsb,	_____	; 88..8b
+		dw	lpd,	ldca,	ldgca,	ldxca	; 8c..8f
+		dw	lal,	lag,	lai,	lax	; 90..93
+		dw	slax,	slax,	slax,	slax	; 94..97
+		dw	ldl,	ldg,	ldi,	ldx	; 98..9b
+		dw	sldx,	sldx,	sldx,	sldx	; 9c..9f
+		dw	lddl,	lddg,	lddi,	lddx	; a0..a3
+		dw	slddx,	slddx,	slddx,	slddx	; a4..a7
+		dw	stl,	stg,	sti,	stx	; a8..ab
+		dw	sstx,	sstx,	sstx,	sstx	; ac..af
+		dw	stdl,	stdg,	stdi,	stdx	; b0..b3
+		dw	sstdx,	sstdx,	sstdx,	sstdx	; b4..b7
+		dw	slai1,	slai2,	IncDecW,IncDecD ; b8..bb
+                dw      IncDecB,LoHiCHK,LoHiCHK,IOchk   ; bc..bf
+		dw	sldi1,	sldi2,	ixfa,	ixfpa	; c0..c3
+		dw	sixa1,	sixa2,	ixa,	sixa4	; c4..c7
+		dw	slddi1, slddi2, _____,	_____	; c8..cb
+		dw	indd,	sindd0, incfp,	ind	; cc..cf
+		dw	ssti1,	ssti2,	_____,	_____	; d0..d3
+		dw	_____,	_____,	_____,	pckAddr ; d4..d7
+		dw	sstdi1, sstdi2, MOV,	MOVpck	; d8..db
+		dw	ssto,	sstod,	sto,	stod	; dc..df
+		dw	sas,	sasf,	ch2str, equStr	; e0..e3
+		dw	neqStr, lesStr, leqStr, nullStr ; e4..e7
+		dw	slen,	_____,	_____,	_____	; e8..eb
+		dw	_____,	_____,	_____,	PackCmp ; ec..ef
+		dw	LCset,	Adjust, sgs,	srs	; f0..f3
+		dw	SetUni, SetInt, SetDiff,in	; f4..f7
+		dw	InExcl, StoSET, LdSet,	EqSets	; f8..fb
+		dw	NeqSets,LeqSets,GeqSets,EmptSet ; fc..ff
+
+;     èÆ∞†§® £∞•∏™† ¢ ™Æ¨Ø®´†≤Æ∞† ≤∞ø°¢† ®≠±≤∞≥™∂®ø ± ≠Æ¨•∞ $d2 §† ±•
+; ®≠≤•∞Ø∞•≤®∞† ™†≤Æ MOV. Ç ØÆ-™∫±≠®≤• ¢•∞±®® ≠† Ycode ≤†ß® °Æß† §† ±• ¨†µ≠•.
+; *** í†ß® °Æß† • Ø∞•¨†µ≠†≤† ¢•∑• 30.XII.1989 version 1.10 ***
+
+LoCHK           =       $bd             ; from version 1.65
+HiCHK           =       $be             ; added because of merging Lo/Hi check
+
+;------------------- Long Y code address table ($40..$7f) ---------------------
+
+LYtable_40_7f
+		dw	AbsI,	NegI,	AbsL,	NegL	; 40..43
+		dw	sqrI,	sqrC,	sqrL,	Random	; 44..47
+		dw	______, ______, ______, ______	; 48..4b
+		dw	______, ______, ______, ______	; 4c..4f
+		dw	______, ______, ______, ______	; 50..53
+		dw	______, ______, ______, ______	; 54..57
+		dw	GetWrds,FreeWrd,Mark,	Release ; 58..5b
+		dw	GetW_D, FreeW_D,MaxAvl, MemAvl	; 5c..5f
+		dw	Rtrn0,	Rtrn1,	Rtrn2,	______	; 60..63
+		dw	______, ______, ______, XitFrom ; 64..67
+		dw	SInit,	SFinit, ChkSeg, ______	; 68..6b
+		dw	SegLoad,SegFree,Halt,	Irtrn	; 6c..6f
+		dw	lftjmp, sftjmp, lfdjmp, sfdjmp	; 70..73
+		dw	CjumpT, CjumpT, ______, Cjump	; 74..77
+		dw	______, ______, ______, ______	; 78..7b
+		dw	______, ______, ______, InitFor ; 7c..7f
+
+		trunc	on
+
+;------------------------------------------------------------------------------

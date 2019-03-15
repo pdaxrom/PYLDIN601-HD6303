@@ -1,0 +1,244 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Integer, Cardinal, LongInt comparisons (c) 1989, 1990 YGP.
+
+;---------------------------------- corrected in version 1.65
+;; ------- Check lo bound -------
+;; mnemonic: LoChk
+;; Stack:    {lb, l} -> {l}
+;; Action:   Check that lb < l and leave l in stack if OK,
+;;           force run time error if not
+;
+;LoChk
+;                tsx
+;                pla
+;                suba    x, 4
+;                pla
+;                sbca    x, 5
+;                pla
+;                sbca    x, 6
+;                pla
+;                sbca    x, 7
+;                bmi     near_mloop
+;                jmp     ErrLoBound
+;
+;; ------- Check hi bound -------
+;; mnemonic: HiChk
+;; Stack:    {hb, l} -> {l}
+;; Action:   Check that l <= hb and leave l in stack if OK,
+;;           force run time error if not
+;
+;HiChk
+;                tsx
+;                pla
+;                suba    x, 4
+;                pla
+;                sbca    x, 5
+;                pla
+;                sbca    x, 6
+;                pla
+;                sbca    x, 7
+;                bpl     near_mloop
+;                jmp     ErrHiBound
+
+; ------- Check Lo or Hi bound -------
+; mnemonic: LoChk (HiChk)
+; Stack:    {lb (hb), l} -> {l}
+; Action:   Check that lb < l (l <= hb) and leave l in stack if OK,
+;           force run time error if not
+; Notice:   Acc A = LoChk or HiChk * 2 (according to operation)
+
+LoHiCHK         proc                    ; corrected v 1.65
+                tsx
+                plb
+                subb    x, 4
+                plb
+                sbcb    x, 5
+                plb
+                sbcb    x, 6
+                plb
+                sbcb    x, 7
+                bmi     is_less
+                cmpa    #HiChk*2        ; HiChk?
+                beq     near_mloop      ; Yes! HiChk and (l <= hb) => OK
+                jmp     ErrLoBound
+is_less
+                cmpa    #LoChk*2        ; LoChk?
+                beq     near_mloop      ; Yes! LoChk and (lb <= l) => OK
+                jmp     ErrHiBound
+                endp; LoHiCHK
+
+; ------- Boolean NOT -------
+; mnemonic: BNOT
+; Stack:    { b1 } -> { b2 }
+; Action:   push logical not of TOS (b2:= not b1)
+
+bnot		pla
+		xora	#1
+		pha
+near_mloop      jmp     MainLoop
+
+;------------------------------------------------------------------------------
+; Integer, Cardinal, LongInt comparisons
+
+; ------- LESs than Integers -------
+; mnemonic: lesi
+; Stack:    { i2, i1 } -> { b }
+; Action:   push result of comparison <i1> < <i2>
+
+lesi		lda	#%010
+		db	_cpx_
+
+; ------- Less than or EQual Integers -------
+; mnemonic: leqi
+; Stack:    { i2, i1 } -> { b }
+; Action:   push result of comparison <i1> <= <i2>
+
+leqi		lda	#%011
+		sta	wrk3
+
+		pla			; pull Second operand of operation
+		plb			; i.e. pull <i2>
+		tsx
+		cmpb	x, 1		; ▒░авн┐ваме ▒▓а░╕и▓е бай▓ове
+		bgt	CMP_less	; ако Hi(i2) > Hi(i1) ==> true
+		blt	CMP_great	; ако Hi(i2) < Hi(i1) ==> false
+		cmpa	x, 0		; ако ▒а ░авни ▒░авн┐ваме млад╕и▓е
+		bhi	CMP_less	; аналоги╖ни п░ове░ки и за ▓┐╡
+		bcs	CMP_great
+		bra	CMP_eq		; но ве╖е unsigned п░ове░ка
+
+; ------- Not Equal PoinTeRs -------
+; mnemonic: neqPtr
+; Stack:    { p2, p1 } -> { b }
+; Action:   push result of comparison <p1> <> <p2>
+
+neqPtr		; same as neqW
+
+; ------- Not EQual Words -------
+; mnemonic: neqW
+; Stack:    { w2, w1 } -> { b }
+; Action:   push result of comparison <w1> <> <w2>
+
+neqW		lda	#%110
+		db	_cpx_
+
+; ------- EQual PoinTeRs -------
+; mnemonic: eqPtr
+; Stack:    { p2, p1 } -> { b }
+; Action:   push result of comparison <p1> = <p2>
+
+EquPtr		; same as equW
+
+; ------- EQUal Words -------
+; mnemonic: equW
+; Stack:    { w2, w1 } -> { b }
+; Action:   push result of comparison <w1> = <w2>
+
+equW		lda	#%001
+		db	_cpx_
+
+; ------- LESs than Cardinals -------
+; mnemonic: lesc
+; Stack:    { c2, c1 } -> { b }
+; Action:   push result of comparison <c1> < <c2>
+
+lesC		lda	#%010		; %><=
+		db	_cpx_		; trick to jump over next lda
+
+; ------- Less than or EQual Cardinals -------
+; mnemonic: leqc
+; Stack:    { c2, c1 } -> { b }
+; Action:   push result of comparison <c1> <= <c2>
+
+leqC		lda	#%011
+		sta	wrk3
+
+		pla			; pull Second operand of operation
+		plb			; i.e. pull c2
+		tsx
+		cmpb	x, 1		; ▒░авн┐ваме ▒▓а░╕и▓е бай▓ове
+		bhi	CMP_less	; ако Hi(c2) > Hi(c1)
+		bcs	CMP_great	; ако Hi(c2) < Hi(c1)
+		cmpa	x, 0		; ако ▒а ░авни ▒░авн┐ваме млад╕и▓е
+		bhi	CMP_less	; аналоги╖ни п░ове░ки за и ▓┐╡
+		bcs	CMP_great
+
+CMP_eq		ldb	#%001
+		db	_cpx_
+CMP_less	ldb	#%010
+		db	_cpx_
+CMP_great	ldb	#%100
+
+		clra
+		andb	wrk3
+		beq	CMP_No
+		inca
+		clrb
+CMP_No
+                jmp     FixS_BA
+                ;tsx
+                ;jmp     FixX_BA
+
+; ------- LESs than Long Integers -------
+; mnemonic: lesL
+; Stack:    { l2, l1 } -> { b }
+; Action:   push result of comparison <l1> < <l2>
+
+lesL		lda	#%010
+		db	_cpx_
+
+; ------- Less than or EQual Long Integers -------
+; mnemonic: leqL
+; Stack:    { l2, l1 } -> { b }
+; Action:   push result of comparison <l1> <= <l2>
+
+leqL		lda	#%011
+		db	_cpx_
+
+; ------- Not EQual Double words -------
+; mnemonic: neqD
+; Stack:    { dw2, dw1 } -> { b }
+; Action:   push result of comparison <dw1> <> <dw2>
+
+neqD		lda	#%110
+		db	_cpx_
+
+; ------- EQUal Double words -------
+; mnemonic: equD
+; Stack:    { dw2, dw1 } -> { b }
+; Action:   push result of comparison <dw1> = <dw2>
+
+equD		proc
+		lda	#%001		; %ABC
+		sta	wrk3		;  A: >, B: <, C: =
+
+		ldx	#wrk
+		lda	#6		; pop 6 bytes from stack
+loop		plb
+		stb	x
+		inx
+		deca
+		bne	loop
+
+		tsx
+		lda	x, 1
+		cmpa	wrk+3
+		blt	CMP_less
+		bgt	CMP_great
+		lda	x, 0
+		cmpa	wrk+2
+		bhi	CMP_great
+		bcs	CMP_less
+		lda	wrk2+1
+		cmpa	wrk+1
+		bhi	CMP_great
+		bcs	CMP_less
+		lda	wrk2
+		cmpa	wrk+0
+_unsigned	=	*
+		bhi	CMP_great
+		bcs	CMP_less
+		bra	CMP_eq
+		endp;	equD
+
+;------------------------------------------------------------------------------

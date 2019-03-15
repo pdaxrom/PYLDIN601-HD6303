@@ -1,0 +1,132 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Loading constants. 		    (c) 1989, 1990 YGP.
+
+; ------- LoaD Constant Nil -------
+; mnemonic: ldcn
+; Stack:    { } -> { nil }
+; Action:   push constant nil (16bit zero) onto stack
+
+ldcn		clra			; и п░опадаме в sldc
+
+; ------- Short LoaD Constant -------
+; mnemonic: sldc_x, where x = 0, 1, ..., 15
+; Stack:    { } -> { <x> }
+; Action:   push constant <x> (16bit) onto stack
+
+sldc					; В аком│ла▓о░а A имаме Ycode * 2,
+		lsra			; а п║к Ycode за ▓ези ин▒▓░│к╢ии е
+		clrb			; $00..$0f, а на на▒ ▓ова ни и ▓░┐бва
+		jmp	PushBA
+
+; ------- LoaD Constant Word as Double word -------
+; mnemonic: ldcw  word
+; Stack:    { } -> { LongInt }
+; Action:   push constant <word> (Bsex-) onto stack as 32 bit number
+;	    MSWord is 0
+
+ldcwD		clrb			; push 0 as MSWord
+		phb
+		phb
+
+; ------- LoaD Constant Word -------
+; mnemonic: ldcw  word
+; Stack:    { } -> { word }
+; Action:   push constant <word> (Bsex-) onto stack
+
+ldcw		ldx	ipc
+		lda	x, 1		; за░еждаме го об░а▓но (AB а не BA)
+		ldb	x, 0		; за╣о▓о ╣е полз│ваме PushABml2
+		bra	PushABml2
+
+; ------- LoaD Constant Negative Byte -------
+; mnemonic: ldcNb  byte
+; Stack:    { } -> { w }
+; Action:   push constant $ffxx (where xx = <byte>) onto stack
+
+ldcNb		lda	#$ff
+		db	_ldb_		; trick to jump over clra (ldb #clra)
+
+; ------- LoaD Constant Byte -------
+; mnemonic: ldcb  byte
+; Stack:    { } -> { w }
+; Action:   push constant <byte> (16bit) onto stack
+
+ldcb		clra			; за░еждаме го об░а▓но (AB а не BA)
+		ldx	ipc
+		ldb	x, 0		; за╣о▓о ╣е полз│ваме PushABml1
+		bra	PushABml1
+
+; ------- LoaD Constant Negative Byte as Double word-------
+; mnemonic: ldcNbd  byte
+; Stack:    { } -> { dw }
+; Action:   push constant $ffffffxx (where xx = <byte>) onto stack
+
+ldcNbd		lda	#$ff
+		db	_ldb_		; trick to jump over clra (ldb #clra)
+
+; ------- LoaD Constant Byte as Double word -------
+; mnemonic: ldcbd  byte
+; Stack:    { } -> { dw }
+; Action:   push constant <byte> (32bit) onto stack
+
+ldcbd		clra			; push 0 as HiWord
+		pha
+		pha
+		bra	ldcb+1		; and push byte as LoWord
+					; with MSByte in A
+
+; ------- LoaD eXternal Constant Address -------
+; mnemonic: ldxca byte, word
+; Stack:    { } -> { addr }
+; Action:   push address of a constant from external
+;	    const pool <byte> with offset <word>.
+
+ldxca		jsr	GetSegInfo
+		db	_cpx_
+
+; ------- LoaD Global Constant Address -------
+; mnemonic: ldgca word
+; Stack:    { } -> { addr }
+; Action:   push address of a constant from global
+;	    const pool with offset <word>.
+
+ldgca		ldx	GblSegPtr
+		lda	x, SegCpool+1	; get address of global const pool
+		ldb	x, SegCpool
+		bra	ldca_		; continue processing as in ldca
+
+; ------- LoaD Constant Address -------
+; mnemonic: ldca word
+; Stack:    { } -> { addr }
+; Action:   push address of a constant from current
+;	    const pool with offset <word>.
+
+ldca		lda	CPool+1 	; ад░е▒а на ConstPool (Bsex+)
+		ldb	CPool
+ldca_		ldx	ipc		; X reg ▒о╖и к║м опе░анда
+		adda	x, 0		; ▒║би░аме ▒ дадена▓а д│ма
+		adcb	x, 1
+PushABml2			      =*; push AB (Bsex+), X+2, jump to MLoop
+		inx
+PushABml1			      =*; push AB (Bsex+), X+1, jump to MLoop
+		inx
+		jmp	PushABml
+
+; ------- LoaD Constant Double Word -------
+; mnemonic: LDCDW dw
+; Stack:    { } -> { dw }
+; Action:   Push instruction parameter on stack
+
+ldcdw		ldx	ipc
+		ldb	x, 3
+		lda	x, 2
+		phb
+		pha
+		lda	x, 1		; об░а▓но за░ади pushAB
+		ldb	x, 0
+		inx
+		inx
+		bra	PushABml2
+
+;------------------------------------------------------------------------------
+

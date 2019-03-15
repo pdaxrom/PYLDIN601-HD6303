@@ -1,0 +1,117 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Segment Init/Finit.		    (c) 1989, 1990 YGP.
+
+; ------- Segment Initialize -------
+; mnemonic: SegInit byte
+; Stack:    { } -> { }
+; Action:   Call segment <byte> for initializing.
+;	    Special action is taken if <byte> = $ff (Standard Unit)
+
+SInit		proc
+		ldx	ipc
+		lda	x		; get segment number
+		cmpa	#$ff		; Initialize unit Standard?
+		bne	NotStandard	; не бе н┐как║в д░│г │ни▓
+
+		ldx	StdVarsPtr
+		pla			; в ▒▓ека има нап║╡ана д│ма
+		deca			; ╖ий▓о млад╕и бай▓ е 0..5
+		bmi	NoDfltIn	; и дава номе░а + 1 на default Output
+		clrb
+		asla			; (16*FileNo) + StdVarsPtr = addr(file)
+		asla
+		asla
+		asla
+		adda	StdVarsPtr+1
+		adcb	StdVarsPtr
+		sta	x, DefaultOut+1
+		stb	x, DefaultOut
+NoDfltIn
+		pla			; под млад╕и┐ е ▒▓а░╕и┐ бай▓
+		deca			; кой▓о п║к
+		bmi	NoDfltOut	; дава номе░а + 1 на default Input
+		clrb
+		asla			; (16*FileNo) + StdVarsPtr = addr(file)
+		asla
+		asla
+		asla
+		adda	StdVarsPtr+1
+		adcb	StdVarsPtr
+		sta	x, DefaultIn+1
+		stb	x, DefaultIn
+
+NoDfltOut	; д░│га ини╢иализа╢и┐ не е необ╡одима
+Inited
+		jmp	BumpIPC
+
+NotStandard	jsr	GetSegInfo	; get seg info address
+		inc	x, SegNinits	; increment Number of init requests
+		ldb	x, SegFlags
+                bitb    #%0110_0000     ; test initialized (or in init)?
+		bne	mainloop_near	; Yes, initialized, do nothing.
+                orb     #%0010_0000     ; say in initialize
+		stb	x, SegFlags
+call_1proc_xseg =	*
+		lda	#1		; call proc #1
+		ldb	x, SegSlotNo	; from apropriate slot
+		jmp	CommonCall
+		endp;	SInit
+
+; ------- Segment Finitialize -------
+; mnemonic: SegFinit byte
+; Stack:    { } -> { }
+; Action:   Call segment <byte> for Finitializing.
+
+SFinit		proc
+		ldx	ipc
+		lda	x
+		cmpa	#$ff		; ▒егмен▓ Standard?
+		bne	NotStandard
+		jmp	BumpIPC 	; no finitializing action is taken
+NotStandard	jsr	GetSegInfo
+		dec	x, SegNinits	; decrement number of init requests
+		bne	mainloop_near	; finit segment only if No other inits
+		lda	#1		; call proc #1
+		sta	IOfile		; ▓ака казваме ╖е п░авим Finit Unit
+		ldb	x, SegSlotNo	; from apropriate slot
+		jmp	CommonCall_
+		endp;	SFinit
+
+; ------- SegLoad -------
+; mnemonic: SegLoad
+; Stack:   { i } -> {}
+; Action:  load segment resident
+
+SegLoad         plb
+		ins
+		jsr	seg2slot
+		jsr	LoadSlot
+                bra     mainloop_near
+
+; ------- SegFree -------
+; mnemonic: SegFree
+; Stack:    { i } -> {}
+; Action:   free resident segment
+
+SegFree         plb
+		ins
+		jsr	seg2slot
+		jsr	FreeSlot
+mainloop_near   jmp     MainLoop
+
+;------------------------ п░еме▒▓ено в MISC.Y1, ╖е да позап║лни д│пка▓а v1.65
+;; ------- Check Segment -------
+;; mnemonic: ChkSeg byte
+;; Stack:    {} -> {}
+;; Action:   Force RunTime error if segment is in intialize
+;
+;ChkSeg          proc
+;                jsr     GetSegInfo      ; get segment info address
+;                ldb     x, SegFlags
+;                bitb    #%0010_0000     ; test in init?
+;                beq     OK
+;                jmp     RecursiveUnits
+;OK              jmp     MainLoop
+;                endp;   ChkSeg
+;
+;------------------------------------------------------------------------------

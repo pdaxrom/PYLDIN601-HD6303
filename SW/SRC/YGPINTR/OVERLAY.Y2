@@ -1,0 +1,343 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Segments loading.			    (c) 1989, 1990 YGP.
+
+; --- Segment header description ---
+		section 0
+SH_Name 	ds	8		; name of segment (check only)
+SH_WSize	ds	1		; in bits (must be 16)
+SH_BSex 	ds	1		; 0 - neg byte sex
+SH_Ver		ds	2		; Ycode version (min.maj) (1.00..1.50)
+SH_Tsize	ds	2		; total segment size (без SystemSize)
+SH_Csize	ds	2		;
+		ds	10		; unused
+SH_RlTbl	ds	2		; offset of relocation tables (if any)
+SH_Pdict	ds	2		; offset of Proc Dictionary
+SH_Cpool	ds	2		; offset of Constant Pool
+SystemSize	=	*		; size of system info
+		error	SystemSize - 32 ; д║лго е ▓о╖но 32 бай▓а
+		ends
+
+OvrRead 	proc
+		ldx	#Src
+		int	_Fread
+		jsr	CheckFatalIO
+		cpx	Dest
+		beq	OKreaded
+		jmp	FatalIOerr
+OKreaded        rts
+		endp;	OvrRead
+
+; ------- Load Slot in Memory -------
+; import  X - ptr to Slot Descriptor.
+; uses:   wrkF, ...
+; Забележка: Ако има г░е╕ка по в░еме на ╖е▓ене или не ни ╡а░е▒а п░о╖е▓ено▓о
+;	     ▒е г║░ми ▓о▓ално (Fatal RunTime Error). Жела▓елно е да ▒е нап░ави
+;	     не╣о подобно на ▓ова кое▓о е нап░авено п░и UCSD (YWY version).
+;	     П░еди да го нап░ав┐ на ин▓е░║п▓ ▒е ползва╕е wrk за save на X reg.
+;	     Сега нав▒┐к║де ▒║м ▒менил wrk ▒║▒ swi_X.
+
+LoadSlot	proc
+
+		lda	SegLoadFlag	; Да не би да ▒ме в LoadSlot
+		beq	OKload_it
+		jmp	RecursiveLoad
+OKload_it
+		inc	SegLoadFlag
+                ;stx     swi_X          ; ptr to SlotInfo
+
+                .ifdef  show_segload
+                 ldb     #'·'
+                 jsr     put_on_27
+                 ldx     swi_X
+                .endif
+
+                ;----------------------- v1.66+ variable Block size handling
+                ;clra
+                ;sta     wrkF+3          ; clear wrkF, wrkF+3
+                ;sta     wrkF
+                ;lda     x, SegStart     ; Get start block
+                ;ldb     x, SegStart+1
+                ;asla                    ; * 512 (calc start byte in file)
+                ;rolb
+                ;sta     wrkF+2
+                ;stb     wrkF+1          ; now wrkF = StartBlock * 512 (Bsex+)
+;---------------
+                clra
+                sta     wrkF+0
+                sta     wrkF+1
+                lda     x, SegStart     ; Get start block (Bsex-)
+                ldb     x, SegStart+1
+                stb     wrkF+2
+                ;sta    wrkF+3          ; не запи▒ваме за по-к░а▓ко
+                ldb     x, SegFlags
+                andB    #%0000_1111     ; по▒ледни▓е ╖е▓и░и би▓а казва▓ 2№
+                beq     OK_power
+pwr_loop        aslA   ;wrkF+3          ; │множаваме по 2№
+                rol     wrkF+2
+                rol     wrkF+1
+                rol     wrkF+0
+                decb
+                bne     pwr_loop
+OK_power        sta     wrkF+3          ; store LSByte
+                                        ; now wrkF = StartBlock * 2№ (Bsex+)
+		lda	x, SegFhandle
+		bne	OKhandle	; check FileHandle
+		jmp	ErrorClosed	; ▓ази п░ове░ка може да ▒е ма╡не
+OKhandle				; ка▓о ▒е │бедим ╖е в▒и╖ко ░або▓и
+		pha			; preserve File Handle
+		clrb			; from beginning
+		ldx	#wrkF
+		int	_Fseek
+		jsr	CheckFatalIO	; н┐ма в░║╣ане ако е г░е╕но
+
+		ldx	#SystemSize
+		stx	Dest
+		ldx	#__Ph
+		stx	Src
+		pla			; restore File Handle
+		bsr	OvrRead
+
+OKreaded	; ░азби░а ▒е ▓│к ▓░┐бва да ▒е п░ове░┐▓ ма▒а не╣а
+		ldx	swi_X		; п░ове░┐ваме име▓о
+		stx	Dest
+		lda	#8		; Д║лжина▓а на име▓о
+		clrb
+		jsr	CmpBytes
+		beq	NameOK
+		jmp	SegmentLost
+NameOK
+		ldx	__Ph + SH_Wsize
+		cpx	#$1000		; Check Word size and Byte sex
+		beq	WszBsexOK
+		jmp	WszBsexError
+WszBsexOK
+		lda	__Ph +SH_Ver
+		deca			; Ycode Major version = 1?
+		bne	VerErr          ; не, зна╖и г░е╕ка
+                lda     __Ph +SH_Ver +1 ; Ycode Minor version <= 50?
+                cmpa    #50
+                bls     AllOK
+VerErr		jmp	VersionError
+
+AllOK		ldx	LoMemPtr	; Е в▒и╖ко е на░ед, можем да п░од║лжим
+		stx	Src		; calc and save ProcDictionary
+		lda	__Ph+SH_Pdict	; (Bsex-)
+		ldb	__Ph+SH_Pdict+1
+		adda	Src+1		; добав┐ме Src за╣о▓о ▓ова ╣е б║де
+		adcb	Src		; на╖ало▓о на ▒егмен▓а (Src = LoMemPtr)
+		ldx	swi_X
+		sta	x, SegPdict+1
+		stb	x, SegPdict
+
+		lda	__Ph + SH_Cpool ; calc and save ConstPool (Bsex-)
+		ldb	__Ph + SH_Cpool+1
+		adda	Src+1		; добав┐ме Src за╣о▓о ▓ова ╣е б║де
+		adcb	Src		; на╖ало▓о на ▒егмен▓а
+		ldx	swi_X
+		sta	x, SegCpool+1
+		stb	x, SegCpool
+
+		lda	__Ph + SH_TSize ; total segment size (Bsex-)
+		ldb	__Ph + SH_TSize+1
+		sta	Dest+1
+		stb	Dest
+
+		ldx	swi_X
+		lda	Src+1
+		ldb	Src
+		sta	x, SegLM+1	; save LoMem before loading segment
+		stb	x, SegLM
+
+		adda	Dest+1		; в Dest имаме Total Segment Size
+		adcb	Dest
+		incb
+		sts	wrk1
+		cmpb	wrk1		; ▒░авн┐ваме ▒амо MSBytes
+		bcs	MemOK
+		jmp	MemFull
+
+MemOK		decb
+		stb	LoMemPtr	; Реда на запи▒ е важен за
+		sta	LoMemPtr+1	; да не ▒е оп│лим
+
+		lda	x, SegFhandle
+		jsr	OvrRead
+
+		ldx	swi_X
+		ldx	x, SegPdict
+		;bsr	 RelProcD	; напи▒ана inline
+
+; --- Relocate Procedure Dictionary ---
+; Import: Src - на╖ало на ▒егмен▓а
+;	  X   - Start of ProcDicitionary
+; Uses:   Dest as work
+
+RelProcD	proc
+		lda	x		; get number of procedures
+		sta	Dest		; Dest used as counter
+loop		inx
+		inx
+		lda	x, 0		; negative byte sex
+		ldb	x, 1		; п░ове░┐ваме ▒▓а░╕и┐ бай▓ на offset
+		cmpb	#$ff		; ако имаме $FF => ▒егмен▓на п░о╢ед│░а
+		bne	NormalProc
+		clrb			; A = SegNo, B = 0
+		stb	x, 0
+		stx	wrk3		; preserve Xregister
+		ldx	swi_X		; ptr to Segmnet info
+		tst	x, SegFlags	; ▓ова главен ▒егмен▓ ли е?
+		bmi	IsMainSeg
+		ldx	x, SegGbl	; не, не е главен, вземаме главни┐
+IsMainSeg
+		stx	wrk1		; wrk1 = address of Main SegInfo
+		adda	wrk1+1
+		adcb	wrk1
+		sta	wrk1+1
+		stb	wrk1
+		ldx	wrk1
+		lda	x, SegSlotDict
+		ldx	wrk3		; restore Xregister
+		sta	x, 1		; put in SlotNo
+		bra	NextProc
+NormalProc
+		adda	Src+1
+		adcb	Src
+		sta	x, 1		; positive byte sex
+		stb	x, 0
+NextProc	dec	Dest
+		bne	loop
+                ;rts                    ; ▓ам нейде бе╕е казано, ╖е е inline
+		endp;	RelProcD
+
+; --- Relocate ASM procedures ---
+; Import: Src - на╖ало на ▒егмен▓а
+;	  X   - Start of ProcDicitionary
+; Uses:   Dest, Src
+
+RelocateASM	proc			; напи▒ана inline
+		ldx	__Ph +SH_RlTbl	; п░ове░┐ваме има ли ▓абли╢и
+		beq	NoTables
+		lda	__Ph +SH_RlTbl	; Bsex -
+		ldb	__Ph +SH_RlTbl+1
+		adda	Src+1
+		adcb	Src
+		sta	wrkF+1		; address of first RelTable
+		stb	wrkF
+		ldx	wrkF
+
+loop		lda	x, 0		; get Offset from segment start
+		ldb	x, 1
+		bmi	CutTables
+		adda	Src+1
+		adcb	Src
+		inx
+		inx
+
+RelocateOne	proc			; напи▒ана ▒║╣о InLine
+
+		section 0
+RelType 	ds	1		; E.....ML (if RelType = 0 => end sequ)
+RelValue	ds	2		; add with base address
+RelOffset	ds	2		; offset for patch
+		ends; RelItem
+
+		sta	Dest+1		; presereve Base Address
+		stb	Dest
+RelLoop
+		stx	tempX		; preserve relocation table address
+		adda	x, RelOffset+1	; ▒м┐▓аме м┐▒▓о▓о к║де▓о ▓░┐бва да ▒е
+		adcb	x, RelOffset	; ┤ик▒и░а (поп░ави, relocate-не)
+		sta	wrk+1
+		stb	wrk
+		lda	Dest+1
+		ldb	Dest
+		adda	x, RelValue+1	; ▒м┐▓аме ▒ какво ▓░┐бва да ▒е поп░ави
+		adcb	x, RelValue
+		tst	x, RelType
+		beq	OKrel		; NoMore
+		bmi	ERRrel		; Error! External item (unlinked)
+		lsr	x, 0		; на▒ не ни ин▓е░е▒│ва пове╖е
+		bcc	FixMSByte	; ▓ази ми ▓и ин┤о░ма╢и┐
+		lsr	x, 0		; за▓ова ▒покойно може да ┐ ▒капем
+		bcc	FixLSByte
+		ldx	wrk		; relocate word at calculated address
+		sta	x, 1		; patch LSByte of a word
+		db	_cmpa_
+FixLSByte	tab
+FixMSByte	ldx	wrk
+		stb	x, 0		; patch MSByte of a word
+		ldx	tempX
+		inx			; bump to next Relocation Item
+		inx
+		inx
+		inx
+		inx
+		lda	Dest+1		; get Base address
+		ldb	Dest
+		bra	RelLoop
+ERRrel		jmp	RelocateErr
+OKrel           ;rts                    ; и ▓║з е напи▒║н║ inline
+                endp;   RelocateOne
+
+OK		inx
+		bra	loop
+
+CutTables	ldx	wrkF		; cut memory for tables
+		stx	LoMemPtr
+NoTables        ;rts                    ; н┐к║де, н┐кога, н┐кой бе╕е казал
+                endp;   RelocateASM     ; ╖и ▓║з п░│╢ид│░║ е inline
+
+;      ВНИМАНИЕ!!! ┤айла ▒е за▓ва░┐ ако ▒е окаже, ╖е д░│г ▒егмен▓ не използ│ва
+; ▓ози ┤айл. П║░во ▒е об╡ожда▓ в▒и╖ки ▒егмен▓и и по▒ле ▒е п░ове░┐ва де░едже▓о.
+; Ако ▒егмен▓а не е главен ▓ози ┤айл не ▓░┐бва да ▒е за▓ва░┐.
+
+		ldx	swi_X
+		lda	x, SegFlags
+		bpl	rts		; ▒егмен▓а не е главен => не за▓ва░┐ме
+		lda	x, SegFhandle
+		jsr	CalcHndlUsers
+		decb			; един знаем ╖е го използ│ва
+		bne	unused_handle	; ползва▓ го много ╡о░а
+		cmpa	LibHandle	; а ▓ова ▒л│╖айно да не би да е library
+		bne	NotLibrary	; не е библио▓ека▓а
+		clr	LibHandle	; да ▓┐ е. казваме ╖е е за▓во░ена.
+NotLibrary
+		int	_FClose 	; в A имаме FileHandle
+unused_handle	ldx	swi_X
+		clr	x, SegFhandle	; казваме, ╖е ┤иле▓о е за▓во░ено
+					; или ╖е не ▒е полз│ва
+rts		clr	SegLoadFlag
+                .ifNdef  show_segload
+                 rts
+                .else
+                 clrb
+                 ;bsr     put_on_27     ; п░опадаме ▓ам
+
+put_on_27        proc                   ; ▒капва B и X
+                 ldx     #line_27
+                 lda     scrmode
+                 bne     not_40
+                 stb     x, 77           ; char
+                 lda     x, 74           ; copy
+                 sta     x, 76           ;      attribute
+                 ldx     system_scrbase
+                 pha
+                 lda     ComputerModel
+                 pla
+                 beq     _601
+                 stb     x, 80 +77
+                 sta     x, 80 +76
+                 rts
+_601             stb     x, 42 +38
+                 rts
+not_40           cmpa    #4
+                 bne     quit
+                 stb     x, 78           ; char
+                 ldx     system_scrbase
+                 stb     x, 80 +78       ; char on screen
+quit             rts
+                 endp; put_on_27
+                .endif
+		endp;	LoadSlot
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,51 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. SelfModyfing part. Must be in RAM.     (c) 1989, 1990 YGP.
+
+;---------------------------------- MainLoop ----------------------------------
+;   П░и влизане ▒е взима ╢ода на ин▒▓░│к╢и┐▓а ▒ка╖а ▒е на ▒║о▓ве▓на▓а п░о╢ед│░а
+; ка▓о	ipc  ▒о╖и веднага ▒лед кода на ин▒▓░│к╢и┐▓а,  ▓.е. к║м опе░анда ако има
+; ▓ак║в или к║м ▒ледва╣а▓а ин▒▓░│к╢и┐ ако н┐ма опе░анд.
+
+MV_to_RAM
+		org	RAM_code
+
+		error	MainLoop1 - *
+
+		lda	#0		; Switch to Bank1	       ; 2 | 2
+		sta	ROMswitch	; used by Bank 2	       ; 3 | 5
+NOPcode
+MainLoop	proc						      ;byte Clck
+		ldx	ipc					       ; 2 | 4
+MLoop		=	*
+		lda	x, 0		; get opcode		       ; 2 | 5
+DebuggerPatch	=	*
+		inx			; bump ipc		       ; 1 | 4
+		stx	ipc		; now ipc points to operand    ; 2 | 5
+FPjmp		asla			; times 2 to calc offset       ; 1 | 2
+		bcs	HiCmmds 	; Process commands $80..$ff    ; 2 | 4
+		sta	PatchLo+2	; Patch command LDX	       ; 3 | 5
+PatchLo 	ldx	LoTable 				       ; 3 | 5
+		jmp	x, 0		; Execute Instruction	       ; 2 | 4
+HiCmmds 	sta	PatchHi+2	; Patch command LDX	       ; 3 | .
+PatchHi 	ldx	HiTable 				       ; 3 | .
+		jmp	x, 0		; Execute Instruction	       ; 2 | .
+								       ;---|---
+		endp;	MainLoop				       ;26 |38
+								       ;=======
+								       ;31 |45
+
+InterPageJump	stb	ROMswitch
+		jmp	x, 0
+
+                error   * - (SystemPage +$f6)   ; ▓│й ▓░┐бва да е на $xxF6
+
+UnImpFPcode     dw      0               ; $xxf6
+UnImpYcode      dw      0               ; $xxf8
+UnImpLYcode     dw      0               ; $xxfa
+UnImpSTDproc    dw      0               ; $xxfc
+ASMreturn       bra     MainLoop1       ; $xxfe
+
+RAMcodeSize	=	* - RAM_code
+		error	RAMcodeSize / $31	 ; не пове╖е о▓ $30 бай▓а
+
+;------------------------------------------------------------------------------

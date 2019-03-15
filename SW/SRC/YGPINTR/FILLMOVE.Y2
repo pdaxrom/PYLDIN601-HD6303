@@ -1,0 +1,412 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Fill and Move procedures.		    (c) 1989, 1990 YGP.
+
+; ------- Scan -------
+; mnemonic: Scan byte
+; Stack and Action depends on <byte> parameter:
+;    MSBit - 0/1 Char/PackArray; LSBit - 0/1 not for/for
+; when MSBit = 0: char scan; PackArray not implemented
+; function Scan(ch: char;
+;		const buffer; offset: Cardinal; Limit: integer): integer;
+; Action:  Т║░▒им <Ch> в buffer запо╖вайки о▓ offset пози╢и┐, и ▓║░▒ейки в
+;	   Limit пози╢ии, ако Limit е < 0 ▓║░▒им назад и в░║╣аме
+;	   о▓░и╢а▓елна ▒▓ойно▒▓
+
+Scan		proc
+
+		pla			; pull Limit
+		sta	wrk+1
+		pla
+		sta	wrk
+
+                .ifdef addr_offs
+                 bsr     get_addr_offset
+                .else
+                 pla                     ; offset
+                 plb
+                 tsx
+                 adda    x, 1            ; address is in Bsex+
+                 adcb    x, 0            ; add base
+                 ins
+                 ins                     ; pop base
+                .endif
+		sta	Src+1		; start scan address
+		stb	Src
+
+		adda	wrk+1		; add limit to calculate
+		adcb	wrk		; ending address
+
+		sta	Dest+1		; Scan while Src <> Dest
+		stb	Dest
+
+		ldx	ipc		; get instruction's parameter
+		lda	x, 0
+		bpl	Char
+		jmp	UnImp
+Char
+		anda	#1
+		asla
+		asla			; в A пол│╖аваме 0/4 - notfor/for scan
+		sta	wrk3		; и го ▒па▒┐ваме ▓е ▓│ка (wrk3)
+		plb			; get <Ch> to scan for
+		ins			; pop MSByte
+		ldx	Src
+		lda	wrk		; test Limit (negative or positive)
+		bmi	BackScanTest
+
+		bra	TestX_1
+ChScan		cmpb	x, 0
+		tpa			; ▓░е▓и┐ би▓ е вдигна▓ ако имаме EQ
+		anda	#4
+		cmpa	wrk3		; а ▓│ка ▓░е▓и┐ би▓ е вдигна▓ ако
+		beq	EndScan 	; п░авим Scan FOR
+		inx
+TestX_1 	cpx	Dest
+		bne	ChScan
+
+EndScan 	stx	wrk
+		lda	wrk+1		; offset where found = wrk - Src
+		ldb	wrk
+		suba	Src+1
+		sbcb	Src
+		phb
+		pha
+		jmp	BumpIPC
+
+BackScan	cmpb	x, 0
+		tpa			; ▓░е▓и┐ би▓ е вдигна▓ ако имаме EQ
+		anda	#4
+		cmpa	wrk3		; а ▓│ка ▓░е▓и┐ би▓ е вдигна▓ ако
+		beq	EndScan 	; п░авим Scan FOR
+		dex
+BackScanTest	cpx	Dest
+		bne	BackScan
+		bra	EndScan
+		endp;	Scan
+
+; ------- Fill Char standard procedure -------
+; procedure FillChar(var Src; Times: Cardinal; Ch: char);
+; stack:    { Ch, N, offset, Base } -> { }
+; Action:   Fill <Base> arrea with <Ch> <N> times.
+
+FillCh		proc
+		pla			; get char to fill with
+		ins			; flush MSByte
+
+		plb			; pop count
+		stb	wrk1+1
+		plb
+		stb	wrk1
+
+                .ifdef addr_offs
+                 sta     wrk3
+                 bsr     get_addr_offset
+                 sta     wrk+1
+                 stb     wrk
+                 lda     wrk3
+                .else
+                 tsx                     ; pull & add offset with base
+                 plb
+                 addb    x, 3            ; addresses are in pos bsex
+                 stb     wrk+1
+                 plb
+                 adcb    x, 2
+                 stb     wrk
+                 ins                     ; pop base address
+                 ins
+                .endif
+
+		ldx	wrk
+		ldb	wrk1+1
+		beq	TstMSB
+loop		sta	x
+		inx
+		decb
+		bne	loop
+TstMSB		ldb	wrk1
+		beq	end
+		decb
+		stb	wrk1
+		clrb
+		bra	loop
+end		jmp	MainLoop1
+		endp;	FillCh
+
+                .ifdef addr_offs
+get_addr_offset proc
+                sei
+                tsx
+                ins                     ; pop return address, but with no
+                ins                     ; interrupts it will stay there
+                pla                     ; get offset (in negative Bsex)
+                plb
+                adda    x, 5            ; add to base (in positive Bsex)
+                adcb    x, 4
+                ins                     ; pop base
+                ins
+                ldx     x, 0            ; get return address (already poped)
+                cli
+                jmp     x, 0            ; do RTS
+                endp; get_addr_offset
+                .endif
+
+; ------- Move standarad procedure -------
+; procedure Move(var Src, Dest; Count: Cardinal);
+; stack:    { count, Offs1, Dest, Offs2, Src }
+; Action:   Move <count> bytes from <Src + Offs1> to <Dest + Offs2>
+
+MoveB		proc
+		pla			; get size
+		sta	wrk+1
+		pla
+		sta	wrk
+
+                .ifdef addr_offs
+                 bsr     get_addr_offset
+                 sta     Dest+1
+                 stb     Dest
+                 bsr     get_addr_offset
+                 sta     Src+1
+                 stb     Src
+                .else
+                 pla                     ; get Dest offset
+                 plb
+                 tsx
+                 adda    x, 1            ; add dest address
+                 adcb    x, 0
+                 sta     Dest+1
+                 stb     Dest
+                 ins                     ; pop destination address
+                 ins
+
+                 pla                     ; get src offset
+                 plb
+                 tsx
+                 adda    x, 1            ; add src address
+                 adcb    x, 0
+                 sta     Src+1
+                 stb     Src
+                 ins                     ; pop src address
+                 ins
+                .endif
+
+		jmp	CmmnMove
+		endp;	MoveB
+
+; ------- Compare -------
+; function Compare(limit: natural;
+;		   const Src;  SRCoffset:  natural;
+;		   const Dest; Destoffset: natural): natural;
+; mnemonic Comp
+; Action: С░авн┐ваме Src и Dest и в░║╣аме к║де ▒е ░азли╖ава▓
+
+CompB		proc
+                .ifdef addr_offs
+                 bsr     get_addr_offset
+                .else
+                 pla                     ; offset
+                 plb
+                 tsx
+                 adda    x, 1            ; address is in Bsex+
+                 adcb    x, 0            ; add base
+                 ins
+                 ins                     ; pop base
+                .endif
+		sta	Dest+1
+		stb	Dest
+
+                .ifdef addr_offs
+                 bsr     get_addr_offset
+                .else
+                 pla                     ; offset
+                 plb
+                 tsx
+                 adda    x, 1            ; address is in Bsex+
+                 adcb    x, 0            ; add base
+                 ins
+                 ins                     ; pop base
+                .endif
+		sta	Src+1
+		stb	Src
+
+		pla			; get limit
+		plb
+
+		jsr	CmpBytes
+
+		stx	Src
+		lda	Src+1
+		ldb	Src
+		suba	Dest+1
+		sbcb	Dest
+		jmp	PushBA
+		endp;	CompB
+
+; ------- Fill Word standard procedure -------
+; mnemonic procedure FillWord(var Buff; Count, Word: word);
+; stack:   { word, count, addr } -> { }
+; Action   Fill <count> words starting from <addr> with <word>.
+
+FillW		proc
+		pla			; get word to fill with
+		plb
+		sta	wrk+1
+		stb	wrk
+		pla			; get number of words
+		plb
+		asla			; mply by 2 because of word size
+		rolb
+		tsx
+		adda	x, 1		; add start address
+		adcb	x, 0
+		sta	wrk1+1		; wrk1:= end address
+		stb	wrk1
+		ldx	x, 0		; get start address
+		ins
+		ins
+		lda	wrk+1		; get word to fill with
+		ldb	wrk
+		bra	check
+loop		sta	x, 0
+		stb	x, 1
+		inx
+		inx
+check		cpx	wrk1
+		bne	loop
+		jmp	MainLoop1
+		endp;	FillW
+
+; ------- Duplicate TOS -------
+; mnemonic: dupW
+; stack:    { w } -> { w, w }
+; Action:   Duplicate Top Of Stack word
+
+dupW		pla
+		plb
+		phb
+		pha
+		jmp	PushBA
+
+; ------- Move Words standard procedure -------
+; procedure MoveWords(var Src, Dest; Count: Natural);
+; stack:   { count, Dest, Src }
+; Action:  Move <count> words from <Src> to <Dest>
+
+MoveW		proc
+		pla			; get size
+		plb
+		asla			; *2 за╣о▓о д║лжина▓а е в д│ми
+		rolb
+		sta	wrk+1
+		stb	wrk
+
+		pla			; get destination address
+		sta	Dest
+		pla
+		sta	Dest+1
+
+		pla			; get source address
+		sta	Src
+		pla
+		sta	Src+1
+
+CmmnMove        =       *               ; Common procedure
+		ldx	wrk
+		beq	dont
+		lda	wrk+1
+		ldb	wrk
+                jsr     MoveMemory      ; ldx     #Src          v1.63
+                                        ; int     _MoveMem
+dont		jmp	MainLoop1
+		endp;	MoveW
+
+; ------- Get Bits from word / longword -------
+; mnemonic: Lo_Hi byte
+; stack:    { w/dw } -> { w/dw }
+; Action:   <byte>: ABCDEFGH
+;		    |||\___/
+;		    |||  |____ б░ой би▓ове за п░иби░ане 0..31
+;		    |||_______ 0/1 from start/end of value
+;		    ||________ 0/1 return word/longword (unused now)
+;		    |_________ 0/1 TOS is word/longword
+
+Lo_Hi		proc
+		ldx	ipc
+		lda	x, 0
+		bmi	FromLong
+		tab
+		andb	#$1f
+		cmpb	#8
+		bne	UnImplement
+		bita	#%00100000
+		beq	Hi_byte
+		tsx
+		clr	x, 1		; clear hi byte
+		jmp	BumpIPC
+Hi_byte 	pla
+		plb
+		clra
+		pha
+		phb
+		jmp	BumpIPC
+FromLong
+		tab
+		andb	#$1f
+		cmpb	#16
+		beq	ok_16
+UnImplement	jmp	UnImp
+ok_16
+		bita	#%00100000
+		beq	Hi_word
+		tsx
+		pla
+		plb
+		ins
+		ins			; clear hi word
+		phb
+		pha
+		jmp	BumpIPC
+Hi_word
+		ins
+		ins			; pop LSWord
+		jmp	BumpIPC
+		endp;	Lo_Hi
+
+; ------- Swap Bits in Word/Double word -------
+; mnemonic: Swap byte
+; stack:    { w/dw } -> { w/dw }
+; Action:   <byte>: AB.DEFGH   ако би▓ B е 0 ▒е п░ави swap / longswap
+;		    || \___/
+;		    ||	 |____ б░ой би▓ове кои▓о ╣е о▓ида▓ о▓ на╖ало▓о в к░а┐
+;		    ||		  ╣е важи ▒амо ако би▓ B е вдигна▓ в 1
+;		    ||________ ако е <> 0 => по ▒пе╢иален swap
+;		    |_________ 0/1 TOS is word/longword
+; ка▓о ╢┐ло не ми ╡а░е▒ва. по доб░е да има╕е две о▓делни ин▒▓░│к╢ии за ╢ел▓а
+
+swap		proc
+		ldx	ipc
+		lda	x, 0
+		bmi	SwapLong
+		cmpa	#$00 + 8
+		bne	Unimplem
+		pla
+		plb
+		pha
+		phb
+		jmp	BumpIPC
+SwapLong	cmpa	#$80 + 16
+		beq	OK_16
+Unimplem	jmp	UnImp
+ok_16		tsx
+		lda	x, 0
+		ldb	x, 3
+		stb	x, 0
+		sta	x, 3
+		lda	x, 1
+		ldb	x, 2
+		stb	x, 1
+		sta	x, 2
+		jmp	BumpIPC
+		endp;	swap
+
+;------------------------------------------------------------------------------

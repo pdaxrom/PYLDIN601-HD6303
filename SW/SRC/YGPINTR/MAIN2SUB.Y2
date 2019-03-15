@@ -1,0 +1,169 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Main common used SubRoutines (bank 2). (c) 1989, 1990 YGP.
+
+;------------------------------------------------------------------------------
+; GetStack. Заемане на паме▓ о▓ ▒▓ека (а не heap-а) и еднов░емено▓о и н│ли░ане.
+; Import: BA - size of memory to get (in bytes).
+; Export: NoCarry - OK. X - Ptr to start of memory.
+; Uses:   Ни╣и╖ко не ▒е ▒капва
+
+GetStack	proc
+		phb			; preserve BA
+		pha
+		des			; use stack as local work area
+		des
+		tsx
+		stx	x
+		adda	LoMemPtr+1
+		adcb	LoMemPtr
+		incb
+		cmpb	x, 0		; п░ове░┐ваме дали имаме поне $100
+		bcc	NoMem		; паме▓ м/│ new LoMem и SP
+		decb
+
+		tsx
+		sei ; ▓│к ▓░┐бва да ▒е внимава
+		pha
+		lda	LoMemPtr+1
+		sta	x, 1		; work cell in Stack
+		pla
+		sta	LoMemPtr+1	; да! имаме ▓олкоз паме▓
+		lda	LoMemPtr
+		sta	x, 0		; TOS = LoMemPtr (old)
+		stb	LoMemPtr	; запи▒ваме нови┐ LoMemPtr
+
+		lda	x, 2		; get size (даден в на╖ало▓о)
+		ldb	x, 3
+		ldx	x, 0		; get start address
+		tsta
+		beq	DecB
+CleanUp 	clr	x, 0
+		inx
+		deca
+		bne	CleanUp
+DecB		decb
+		bpl	CleanUp
+
+		tsx
+		ldx	x, 0		; get start address
+		cli ; ------------
+		clc
+		db	_ldb_		; trick to jump over next sec (ldb #)
+NoMem		sec
+		ins			; pop work cell
+		ins
+		pla			; restore BA
+		plb
+		rts
+		endp;	GetStack
+
+; ------- GetStackErr -------
+; GetStackErr = GetStack + RunTime Error if carry is set
+; използ│ва ▒е о▓ Link and Load modules.
+
+GetStackErr	proc
+		bsr	GetStack
+		bcs	NoMemory
+		rts
+NoMemory	jmp	FatalMemory
+		endp;	GetStackErr
+
+;------------------------------------------------------------------------------
+; CmpBytes. С░авн┐ва два ма▒ива о▓ бай▓ове в паме▓▓а.
+; Import: Src, Dest - ptrs; BA - size;
+; Export: Processor Status: result of comparison Src =, <>, <, <=, >, >= Dest
+;	  X reg points to byte where differ in Dest
+; Uses:   tempX, tempS
+
+CmpBytes	proc
+		pha			; preserve BA
+		phb
+		adda	Dest+1
+		adcb	Dest
+		sta	tempX+1
+		stb	tempX
+		ldx	Dest
+
+		SEI			; п░о╢ед│░а▓а е много внима▓елна
+		sts	tempS
+		lds	Src
+		des
+		bra	Check
+
+loop		pla
+		cmpa	x
+		bne	ExitLoop
+		inx
+Check		cpx	tempX
+		bne	loop
+
+ExitLoop	tpa			; save processor status
+		lds	tempS
+		tap			; restore processor status
+		CLI			; ▒▓ига ▒и внимавал
+
+		plb			; restore BA
+		pla
+		rts
+		endp;	CmpBytes
+
+; ------- Pop Long Integer Number from stack -------
+; Import: ни╣о
+; Export: LongInt = TOS's LongInt
+; Stack:  { return, LongInt } -> { }
+; Accomulator A unchanged
+
+PopLongInt	proc
+		tsx
+		ldx	x, 0		; get return address
+		ins			; and pop it
+		ins
+
+		plb
+		stb	LongWork+3
+		plb
+		stb	LongWork+2
+		plb
+		stb	LongWork+1
+		plb
+		stb	LongWork+0
+		jmp	x, 0		; do rts
+		endp;	PopLongInt
+
+
+; ------- Pop Real Number from stack in fp_1 -------
+; Import: ни╣о
+; Export: fp_1 = TOS's real
+; Stack:  { return, real } -> { }
+
+PopReal 	proc
+
+		tsx			; get return address
+		ldx	x, 0
+		ins			; pop from stack
+		ins
+
+		clr	fp_m1+3 	; pull real number (in IEEE format)
+		pla
+		sta	fp_m1+2
+		pla
+		sta	fp_m1+1
+		pla
+		plb
+		asla
+		rolb
+		stb	fp_e1
+		beq	Is0
+		rorb
+		sec
+		rora
+Is0
+		sta	fp_m1+0
+		andb	#$80
+		stb	fp_s1
+
+		jmp	x, 0		; do rts
+		endp;	PopReal
+
+;------------------------------------------------------------------------------
+

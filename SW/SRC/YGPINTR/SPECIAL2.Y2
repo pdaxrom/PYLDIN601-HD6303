@@ -1,0 +1,522 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter 1.00. Special proc/funcs.		    (c) 1989, 1990 YGP.
+
+; ------- Identifier Search (Classes oriented routine) -------
+; mnemonic: IdSearch
+; Stack:    {addr} -> {word}
+; Action:   С▓░а╕но ▓░│дно за опи▒ване.
+
+_Class_D	=	$01
+_Class_C	=	$02
+_Class_E	=	$04
+_Class_A	=	$08
+_Class_B	=	$10
+_Class_A1	=	$20
+_Class_B1	=	$40
+_Class_C1	=	$80
+
+		section 0
+_LxIdName	ds	2
+_LxIdSz 	ds	1
+_LxFlags	ds	1
+_LxBuff 	ds	2
+_LxBuffSz	ds	2
+_LxNdx		ds	2
+_LxStrt 	ds	2
+_LxKword	ds	2
+_LxClasses	ds	2
+_LxClassA	ds	2
+_LxClassB	ds	2
+_LxClassC	ds	2
+		ends
+
+		section 0
+TokenInvalid	ds	1		; invalid char
+TokenUser	ds	1		; user char
+TokenEOB	ds	1		; end of buffer
+TokenIdentA	ds	1		; identifier of calss A
+TokenIdentB	ds	1		; identifier of class B
+TokenAkw	ds	1		; keyword of class A
+TokenBkw	ds	1		; keyword of class B
+TokenCkw	ds	1		; keyword of class C
+		ends
+
+		section WorkArea
+LxStruct	ds	2
+LxClasses	ds	2
+LxKword 	ds	2
+LxStart 	ds	2
+LxNmSz		ds	1
+LxFlags 	ds	1
+LxCyrCorr	ds	1
+LxLatCorr	ds	1
+LxLoCase	ds	1
+LxSaveEnd	ds	2
+		error	* / (workarea + 16 +1)
+		ends
+
+IdSrch		proc
+		ldx	#0		; clear keyword (in case of)
+		stx	LxKword
+		tsx			; get address of lexical structure
+		ldx	x, 0
+		ins			; pop it
+		ins
+		stx	LxStruct
+		lda	x, _LxIdSz	; significant
+		sta	LxNmSz		; name size
+		lda	x, _LxFlags
+		ora	#1		; prepare for end of buffer
+		sta	LxFlags
+		tab
+		anda	#$20
+		sta	LxLoCase
+		tba
+		anda	#$10
+		sta	LxLatCorr
+		andb	#$08
+		stb	LxCyrCorr
+
+		lda	x, _LxBuff+1	; calc end address
+		ldb	x, _LxBuff	; add base address with
+		adda	x, _LxBuffSz	; buffer's length
+		adcb	x, _LxBuffSz+1
+		sta	Dest+1
+		stb	Dest
+		lda	x, _LxBuff+1	; calc start address
+		ldb	x, _LxBuff	; add base address with
+		adda	x, _LxNdx	; index
+		adcb	x, _LxNdx+1
+		sta	Src+1
+		stb	Src
+		sta	LxStart+1
+		stb	LxStart
+
+		suba	Dest+1		; Src < Dest ?
+		sbcb	Dest
+		bcs	OKndx		; да по-малко е
+EndOfBuffer
+		lda	#TokenEOB
+		ldb	LxFlags
+		bra	EndBuff
+Quit		; A = token
+		ldb	LxFlags
+		ldx	Src
+		cpx	Dest
+		beq	EndBuff
+		andb	#$fe
+EndBuff 	ldx	LxStruct
+		stb	x, _LxFlags
+		clrb			; MSByte of return value is 0
+		phb			; return value
+		pha
+		lda	LxKword+1	; return keyword
+		ldb	LxKword
+		sta	x, _LxKword
+		stb	x, _LxKword+1
+
+		lda	LxStart+1	; calc start index
+		ldb	LxStart
+		suba	x, _LxBuff+1
+		sbcb	x, _LxBuff
+		sta	x, _LxStrt
+		stb	x, _LxStrt+1
+		lda	Src+1		; calc index
+		ldb	Src
+		suba	x, _LxBuff+1
+		sbcb	x, _LxBuff
+		sta	x, _LxNdx
+		stb	x, _LxNdx+1
+		jmp	MainLoop1
+OKndx
+		ldx	x, _LxClasses
+		dex			; за╣о▓о ╣е го ползваме п░ез ▒▓ека
+		stx	LxClasses
+
+		ldx	Src
+		lda	x, 0		; get character
+		bpl	HasClass
+		ldb	LxFlags
+		bmi	NoClass
+HasClass	clrb
+		adda	LxClasses+1
+		adcb	LxClasses
+		sta	tempX+1
+		stb	tempX
+		ldx	tempX
+		ldb	x, 1		; по го░е ▒ме го decrement-нали
+		db	_cmpb_
+NoClass 	clrb			; class 0 character
+		ldx	Src
+
+		bitb	#_Class_D	; Class_D ?
+		beq	NotD
+		ldb	#_Class_D
+		bsr	SkipClass
+NotD		stx	LxStart
+		stx	LxSaveEnd	; ▓░┐бва ни кога▓о п░авим SearchTbl
+		cpx	Dest
+		beq	EndOfBuffer
+
+		bitb	#_Class_C	; class C character?
+		beq	NotC
+		phb			; preserve Class of first character
+		ldb	#_Class_C1
+		bsr	SkipClass
+		ldx	LxStruct
+		ldx	x, _LxClassC
+		clra
+		jsr	SearchTbl
+		plb			; restore Class of first character
+		stx	Src
+		cpx	LxStart
+		beq	NotC
+		lda	#TokenCkw
+		bra	Quit_
+NotC		bitb	#_Class_E
+		beq	NotE
+		lda	#TokenUser
+NotE_		inx
+		stx	Src
+		bra	Quit_
+NotE		bitb	#_Class_A
+		beq	NotA
+		ldb	#_Class_A1
+		bsr	SkipClass
+		jsr	CopyIdent
+		ldx	LxStruct
+		ldx	x, _LxClassA
+		lda	#1
+		jsr	SearchTbl
+		lda	#TokenIdentA
+		cpx	LxStart
+		beq	Quit_
+		lda	#TokenAkw
+Quit_		jmp	Quit
+NotA		bitb	#_Class_B
+		beq	NotB
+		ldb	#_Class_B1
+		bsr	SkipClass
+		jsr	CopyIdent
+		ldx	LxStruct
+		ldx	x, _LxClassB
+		lda	#1
+		jsr	SearchTbl
+		lda	#TokenIdentB
+		cpx	LxStart
+		beq	Quit_
+		lda	#TokenBkw
+		bra	Quit_
+NotB		lda	#TokenInvalid
+		bra	NotE_
+
+SkipClass	proc
+		stb	wrk
+		ldx	Src
+		sei
+		sts	tempS
+		bra	SkipFirst
+loop
+		lda	x, 0		; get character
+                bpl     _HasClass
+		ldb	LxFlags
+                bmi     _NoClass
+_HasClass       clrb
+		adda	LxClasses+1
+		adcb	LxClasses
+		sta	tempX+1
+		stb	tempX
+		lds	tempX
+		plb
+		db	_cmpb_
+_NoClass        clrb                    ; class 0 character
+		bitb	wrk
+		beq	ClassNotMatch
+SkipFirst
+		inx
+		cpx	Dest
+		bne	loop
+ClassNotMatch
+		lds	tempS
+		cli
+		stx	Src
+		rts
+		endp;	SkipClass
+
+SearchTbl	proc
+		stx	wrk		; address of a keyword table
+		bne	HasTable
+		ldx	LxStart 	; return LxStart
+		rts
+HasTable
+		sta	wrk2		; allow partial found
+		lda	#$ff
+		sta	wrk2+1
+		lda	LxFlags
+		tab
+		anda	#$04
+		andb	#$02
+		sta	wrk1
+		stb	wrk1+1
+		sei
+		sts	tempS
+		lds	#0
+		sts	wrk3
+loop_
+		lds	LxStart 	; п░иго▓в┐ме ▒е да изпомпваме
+		des			; б│┤е░а
+		lda	x, 0		; length of current keyword
+		beq	NoMore
+		inc	wrk3+1		; count keywords
+		bne	NoCarry
+		inc	wrk3
+NoCarry 	clrb
+		inca			; н┐маме кл╛╖ови д│ми големи 255
+		adda	wrk+1		; calc address of next keyword
+		adcb	wrk
+		sta	wrk+1
+		stb	wrk
+		inx
+loop		pla			; get next character from buffer
+		tsta
+		bpl	ASCII7
+		ldb	wrk1+1		; case insensitive cyr?
+		beq	NoCase
+		cmpa	#'┐'
+		bhi	NoCase
+		bra	CaseInsens
+ASCII7		cmpa	#'a'
+		bcs	NoCase
+		cmpa	#'z'
+		bhi	NoCase
+		ldb	wrk1		; case insensitive lat?
+		beq	NoCase
+CaseInsens	anda	#$df		; upcase it
+NoCase
+		cmpa	x, 0
+		bne	NotMatch
+		inx
+		cpx	wrk		; ▒▓игна╡ме ли до ▒ледва╣и┐ keyword
+		bne	loop		; о╣е не ▒ме
+		tsx
+		cpx	Src		; а ▒▓игна╡ме ли и к░а┐ на ▓║░▒ено▓о
+		beq	Found		; да наме░или ▒ме го
+		lda	wrk2		; да п░ове░им ли дали ▒║впада ╖а▒▓и╖но
+		bne	NotMatch	; не, н┐ма н│жда, ▒амо п║лно ни │░ежда
+		stx	tempX		; за ▓ази п░ове░ка ▓░┐бва
+		lda	Src+1		; да полз│ваме аком│ла▓о░и▓е ╣о▓о
+		ldb	Src		; cpx ╡и╖ ба░ем не в║░╕и ░або▓а
+		suba	tempX+1
+		sbcb	tempX		; п░и ▓ова ░азлика▓а ▓░┐бва да е < 256
+		bcs	NotMatch
+		cmpa	wrk2+1		; пове╖е ли ▒║впада о▓колко▓о п░еди
+		bcc	NotMatch	; ▓.е. по-близо ли е до Src
+		sta	wrk2+1
+		ldx	wrk3
+		stx	LxKword
+		ins			; ▒ега в SP има какво▓о и в║в X
+		sts	LxSaveEnd
+
+NotMatch	ldx	wrk
+		bra	loop_
+Found
+		lds	wrk3		; наме░и╡ме к`во▓о ни ▓░┐бва
+		sts	LxKword
+		db	_cpx_
+NoMore
+		ldx	LxSaveEnd	; док║де е наме░ено
+EndSrchTbl
+		lds	tempS
+		cli
+		rts
+		endp;	SearchTbl
+
+CopyIdent	proc
+		ldx	LxStruct
+		ldx	x, _LxIdName
+		beq	NoIdent
+		lda	Src+1
+		ldb	Src
+		suba	LxStart+1
+		sbcb	LxStart
+		bne	TooLarge
+		tab
+		cmpb	LxNmSz
+		bcs	OKsize
+TooLarge	ldb	LxNmSz
+OKsize
+		stb	x, 0		; length of identifier
+		beq	NoIdent
+;		tab
+;		suba	LxNmSz		; LxNmSz пове╖е не ни ▓░┐бва
+;		sta	LxNmSz		; колко о▒▓ава до к░а┐ за space fill
+		sei
+		sts	tempS
+		lds	LxStart
+		des
+loop
+		pla
+		des
+		anda	#$df
+		bpl	Lat
+		tst	LxCyrCorr
+		beq	NoCase
+		cmpa	#'Я'
+		bhi	NoCase
+		bra	CorrectChar
+Lat		tst	LxLatCorr
+		beq	NoCase
+		cmpa	#'A'
+		bcs	NoCase
+		cmpa	#'Z'
+		bhi	NoCase
+CorrectChar	ora	LxLoCase
+		ins
+		db	_cmpa_
+NoCase		pla
+		sta	x, 1
+		inx
+		decb
+		bne	loop
+		lds	tempS
+		cli
+;		lda	#' '           ; ▓ова ако за╖и▒▓ваме string-а из╢┐ло
+;		ldb	LxNmSz
+;		beq	NoIdent
+;SpaceLoop	sta	x, 1
+;		inx
+;		decb
+;		bne	SpaceLoop
+NoIdent 	rts
+		endp;	CopyIdent
+
+		endp;	IdSrch
+
+; ------- Queue Search -------
+; function QueueSearch(Root: pointer; LinkOffs, SortOffs: Natural;
+;		       var LastSrch: pointer; const SrchFor;
+;		       Special: word): boolean;
+; mnemonic Qsrch
+; Action: Запо╖вайки о▓ Root ▓║░▒им в ▒пи▒║к ка▓о знаем ╖е LinkOffs е
+;	  о▓ме▒▓ване о▓ на╖ало▓о на ▓ози ▒пи▒║к на поле▓о в кое▓о е запи▒ан
+;	  │каза▓ел┐ к║м ▒ледва╣и┐ елемен▓ о▓ ▒пи▒║ка, в SortOffs е запи▒ано
+;	  о▓ме▒▓ване▓о на поле▓о по кое▓о ▒е ▓║░▒и, SrchFor е ▓ова кое▓о ▒е
+;	  ▓║░▒и. LastSrch е наме░ени┐▓ елемен▓ о▓ ▒пи▒║ка или елемен▓а
+;	  ▒лед кои▓о ▓░┐бва да вкл╛╖им ▓║░▒ени┐ елемен▓ ако не е наме░ен.
+;	  Special: LSByte - %ABCDEFGH
+;			     ^****^^^
+;			     |	  |||-> FGH = 100, 010, 000 - >, <, <> под░едба
+;			     |--------> 0/1 Packed/String
+;		   MSByte - Size of searched (only if packed)
+
+Qsearch 	proc
+
+		pla			; get LSByte(Special)
+		sta	NewProc 	; used as flags
+		pla
+		sta	NewSlot 	; used as size
+
+		plb			; Searched name
+		pla
+		sta	Dest+1
+		stb	Dest
+
+		plb			; address of var parameter
+		pla
+		sta	wrk+1
+		stb	wrk
+
+		pla			; offset of name
+		plb
+		sta	wrk1+1
+		stb	wrk1
+
+		pla			; offset of link field
+		plb
+		sta	wrk2+1
+		stb	wrk2
+
+		plb			; Root
+		pla
+		sta	wrk3+1
+		stb	wrk3
+
+		ldx	wrk		; LastSrch:= nil
+		clr	x
+		clr	x, 1
+
+		lda	NewProc 	; string search?
+		bmi	nonString	; No, don't correct
+		ldx	Dest
+		lda	x, 0		; get string size
+		sta	NewSlot 	; size of string
+		inx
+		stx	Dest
+nonString
+		ldx	wrk3
+		beq	NotFound
+
+loop		lda	wrk3+1		; calc address of name in record
+		ldb	wrk3		;   = root + offset
+		adda	wrk1+1
+		adcb	wrk1
+		sta	Src+1
+		stb	Src
+		lda	NewSlot
+		ldb	NewProc 	; string search
+		bmi	packed		; no, do packed search
+		ldx	Src
+		ldb	x, 0		; get string's size
+		inx
+		stx	Src
+		pha			; preserve lengths (Src, Dest)
+		phb			; в A имаме д║лжина▓а на DEST
+		cba
+		bls	Aless		; вземаме по-малки┐ о▓ два▓а
+		tba
+Aless		clrb			; в BA пол│╖аваме 16 би▓ова д║лжина
+		jsr	CmpBytes	; ▒░авн┐ваме
+		pla			; pull не зака╖а▓ Processor status
+		plb			; в A имаме д║лжина▓а на Src
+		bne	IsDiffer
+		cba
+		bra	ContinueCheck
+packed
+		clrb
+		jsr	CmpBytes
+ContinueCheck	beq	Found
+IsDiffer	bhi	IsHI
+		lda	#$02
+		db	_cpx_		; trick to jump over next lda
+IsHi		lda	#$04
+		anda	NewProc 	; check flags
+		bne	NotFound	; ░ез│л▓а▓а е > п░и > ▒о░▓и░ан ▒пи▒║к
+					; или п║к     < п░и < ▒о░▓и░ан ▒пи▒║к
+		lda	wrk3+1
+		ldb	wrk3
+		ldx	wrk
+		sta	x, 1		; LastSrch:= Root
+		stb	x, 0
+		adda	wrk2+1
+		adcb	wrk2
+		sta	Src+1		; Root:= Root^.next
+		stb	Src
+		ldx	Src
+		ldx	x
+		stx	wrk3
+		bne	loop
+
+NotFound	clra
+NotFound1	clrb
+		jmp	PushBA
+Found
+		lda	wrk3+1
+		ldb	wrk3
+		ldx	wrk
+		sta	x, 1		; LastSrch:= Root
+		stb	x, 0
+		lda	#1
+		bra	NotFound1
+		endp;	Qsearch
+
+;------------------------------------------------------------------------------

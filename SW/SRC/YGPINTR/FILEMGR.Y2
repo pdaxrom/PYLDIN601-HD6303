@@ -1,0 +1,122 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. File manager main functions.	    (c) 1989, 1990 YGP.
+
+;---------------------------- Pascal File structure ---------------------------
+
+		section 0	     ; Pascal File internal format
+F_type		ds	1		; File type: (File, Normal, Text);
+
+F_flags 	ds	1		; %ABCDEFGH
+					;  A - Write Enable
+					;  B - Read Enable
+					;  C - Eof
+					;  D - Eoln		   (text file)
+					;  E - ChAvail		   (text file)
+					;  F - CR readed	   (text file)
+					;  G - copy of Write-Read flags (AB)
+					;  H / when first open takes place
+
+F_char		ds	0		; Char if char avail	   (text file)
+F_rsize 	ds	2		; Record Size in bytes	 (normal file)
+
+		;if	Дали да го има ▓ова
+;F_io		 ds	 2		 ; I/O result of last I/O operation
+;F_proc 	 ds	 2		 ; address of file processor
+		;else
+		ds	4
+		;endif
+					;		  (0 - internal)
+F_BIOS		ds	1		; use BIOS (0/24)
+F_handle	ds	1		; File Handle
+
+		error	* / (2*8)	; maximum 8 words long
+		ends		     ; Pascal File Internal format
+
+UntypedFile	=	0		; f: file
+NormalFile	=	1		; f: file of ...
+TextFile	=	2		; f: text = packed file of char
+
+WriteRequest	=	%10000000
+WbufferRequ	=	%00000000
+WnspacesRequ	=	%00000001
+WNewLineRequ	=	%00000010
+WEndWrRequ	=	%00000100
+
+ReadRequest	=	%01000000
+RbufferRequ	=	%00000000
+RoneCharRequ	=	%00000001
+RNewLineRequ	=	%00000010
+RstrRequ	=	%00000100
+
+OpenRequest	=	%00100000
+
+CloseRequest	=	%00010000
+
+OtherRequest	=	%00000000
+EOFrequ 	=	%00000000
+EOLNrequ	=	%00000001
+
+; ------- Call Standard I/O procedure or function -------
+; mnemonic: StdPF <byte>
+; Stack:    depends on Std I/O proc/func
+; Action:   call Standard P/F with No = <byte>.
+
+StdPF
+		ldx	ipc		; X ▒о╖и к║м опе░анда
+		lda	x		;   ▓.е. в ▒л│╖а┐ к║м extended OpCode
+		inx			; Bump IPC
+		stx	ipc
+		asla			; times 2 for offset
+		bcs	______		; ▓и┐ ▒а ▒амо 64 instructions
+		bmi	______
+		clrb
+		adda	#StdIOpfTable
+		adcb	#/StdIOpfTable
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldx	x, 0
+		jmp	x, 0
+
+OK_IOresult	clra
+SetIOresult	sta	IOresult+1	; two byte IOresult
+		clr	IOresult
+		jmp	MainLoop1
+
+_____           ldx     SystemPage +$fa
+		bra	______+3
+
+______		proc
+                ldx     SystemPage +$fc ; UnImpSTDproc -н┐кой ╣е го об▒л│жи ли?
+		beq	No
+		jmp	x, 0		; да го об▒л│жва ╣ом и▒ка
+No
+		ldx	ipc		; за да ▒е покаже в┐░но г░е╕ка▓а
+		dex
+		stx	ipc
+
+		jmp	UnImp
+		endp;	______
+
+		trunc	off
+StdIOpfTable
+		dw	______, ______, RdInt,	RdCard	; 00..03
+		dw	RdLong, WrLwrd, RdReal, ______	; 04..07
+		dw	RdChr,	RdStr,	Eoln,	RdLn	; 08..0b
+		dw	WrInt,	WrCard, WrLong, WrWord	; 0c..0f
+		dw	WrReal, ______, WrChr,	WrStr	; 10..13
+		dw	WrPack, WrLn,	fRdInt, fRdCard ; 14..17
+		dw	fRdLong,fWrLwrd,fRdReal,______	; 18..1b
+		dw	fRdChr, fRdStr, fEoln,	fRdLn	; 1c..1f
+		dw	fWrInt, fWrCard,fWrLong,fWrWord ; 20..23
+		dw	fWrReal,______, fWrChr, fWrStr	; 24..27
+		dw	fWrPack,fWrLn,	Finit,	Fopen	; 28..2b
+		dw	Fclose, EOF,	fEOF,	EndWr	; 2c..2f
+		dw	fEndWr, BlockRW,Fpos,	Seek	; 30..33
+		dw	Pcount, Pstrng, MsgLmt, Remove	; 34..37
+		dw	Fsize,	StdPut, StdGet, Rename	; 38..3b
+		dw	______, ______, ______, ______	; 3c..3f
+
+		trunc	on
+
+;------------------------------------------------------------------------------

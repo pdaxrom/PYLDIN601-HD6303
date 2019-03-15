@@ -1,0 +1,640 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Standard write procedures handling.    (c) 1989, 1990 YGP.
+
+;------------------ standard procedure Put (always in file) -------------------
+; procedure Put(var F; var Buffer);	 { Компила▓о░а гене░и░а използ│ване▓о }
+;							{ й п░и write(f, ...) }
+
+StdPut		proc
+		tsx
+		ldx	x, 0		; get Buffer address
+		stx	IObuff
+		tsx
+		ldx	x, 2		; get file address
+		ins			; pop addresses from stack
+		ins
+		ins
+		ins
+
+		lda	x, F_flags
+		bita	#%10000000
+		bne	OKwr
+		lda	#_IO_NotWritable
+		jmp	SetIOresult
+OKwr		lda	x, F_type	; normal file?
+		deca
+		beq	OKnormal
+		lda	#_IO_InvalidKind
+		jmp	SetIOresult
+OKnormal	stx	IOfile
+		ldx	x, F_rsize
+		stx	IOsize
+		ldx	IOfile
+		lda	x, F_handle
+		ldx	#IObuff
+		int	_Fwrite
+endPUT		jmp	SetIOresult
+		endp;	StdPut
+
+;-------------------- Write Word/Byte standard procedures ---------------------
+
+; ------- Write word into File (standard procedure) -------
+; procedure fWrWord(var f: text; w: word; width: integer; Nbytes: word);
+; Stack:    { NDigits, width, w, f } -> { f }
+; Action:   Write word <w> in file <f> with required width.
+;	    Ndigits е б░о┐ ╢и┤░и 2 - byte, 4 - word
+
+fWrWord 	lda	#$80
+		db	_cmpa_
+
+; ------- Write word (standard procedure) -------
+; procedure WrWord(w: word; width: integer; Nbytes: word);
+; Stack:    { NDigits, width, w } -> { }
+; Action:   Write word <w> in default output file with required width.
+;	    Ndigits е б░о┐ ╢и┤░и 2 - byte, 4 - word
+
+WrWord		proc
+		clra
+		sta	IOfile
+
+		pla			; б░ой ╢и┤░и
+		plb			; ▓ой ▓░┐бва да б║де 2/4
+		sta	IOsize+1	; за ▒л│╖а┐ byte/word
+		stb	IOsize
+
+		pla			; вадиме ▒и Width
+		plb			; ▓ой ▒ега ╡и╖ не ни ин▓е░е▒│ва
+		sta	IOwidth+1	; ╣е ни заин▓е░е▒│ва
+		stb	IOwidth 	; кога▓о ▒ко╖им на WritePacked
+
+		pla			; get Number
+		plb
+		sta	LongWork+3
+		stb	LongWork+2
+		ldx	#0		; clear MSWord
+		stx	LongWork+0
+
+		jsr	LongWord2Str	; convert to long string
+
+		ldx	#WorkBuff+WBsize
+		lda	IOsize+1
+
+loop		dex			; x:= end - Ndigits
+		deca
+		bne	loop
+
+		stx	IObuff
+		jmp	WritePacked
+		endp;	WrWord
+
+;--------------------- Write Integer standard procedures ----------------------
+
+; ------- Write Integer into File (standard procedure) -------
+; procedure fWrInt(var f: text; i: integer; width: integer);
+; Stack:    { w, int, f } -> { f }
+; Action:   Write integer number <int> in file <f>
+;	    with required width <w>
+
+fWrInt		lda	#$80
+		db	_cmpa_
+
+; ------- Write Integer (standard procedure) -------
+; procedure WrInt(i: integer; width: integer);
+; Stack:    { w, int } -> { }
+; Action:   Write integer number <int> in default output file
+;	    with required width <w>
+
+WrInt		clra
+		ldb	#$ff
+		bra	WrCard_
+
+;--------------------- Write Cardinal standard procedures ---------------------
+
+; ------- Write Cardinal into File (standard procedure) -------
+; procedure fWrCard(var f: text; c: card; width: integer);
+; Stack:    { w, c, f } -> { f }
+; Action:   Write cardinal number <c> in file <f>
+;	    with required width <w>
+
+fWrCard 	lda	#$80
+		db	_cmpa_
+
+; ------- Write Cardinal (standard procedure) -------
+; procedure WrCard(c: card; width: integer);
+; Stack:    { w, c } -> { }
+; Action:   Write cardinal number <c> in default output file
+;	    with required width <w>
+
+WrCard		proc
+		clra
+		clrb
+WrCard_ 	=	*
+		sta	IOfile		; казваме о▓ к║де е ┤айла
+
+		pla			; вадиме ▒и Width
+		sta	IOwidth+1	; ▓ой ▒ега ╡и╖ не ни ин▓е░е▒│ва
+		pla			; ╣е ни заин▓е░е▒│ва
+		sta	IOwidth 	; кога▓о ▒ко╖им на WritePacked
+
+		pla			; get Number
+		sta	LongWork+3	; ако е Cardinal ▓о Breg е заб║░▒ан
+		pla			; п░и влизане в WrCard
+		sta	LongWork+2	; дока▓о ако е WrInt ▓о в Breg има $ff
+		bmi	Negative	; и ако е положи▓елно ▒е заб║░▒ва
+		clrb			; а ако е о▓░и╢а▓елно ▒и о▒▓ава $ff
+Negative	stb	LongWork+1
+		stb	LongWork+0
+		bra	WrNumber
+		endp;	WrCard
+
+;-------------------- Write Long Word standard procedures ---------------------
+
+; ------- Write long word into File (standard procedure) -------
+; procedure fWrLword(var f: text; dw: longword; width: integer);
+; Stack:    { width, dw, f } -> { f }
+; Action:   Write word <dw> in file <f>
+;	    with required width.
+
+fWrLwrd 	lda	#$80
+		db	_cmpa_
+
+; ------- Write Long word (standard procedure) -------
+; procedure WrLword(dw: longword; width: integer);
+; Stack:    { width, dw } -> { }
+; Action:   Write longword <dw> in default output file
+;	    with required width.
+
+WrLwrd		clra
+		ldb	#$80		; п░о▒▓о <> 0
+		bra	WrLong+2
+
+;--------------------- Write LongInt standard procedures ----------------------
+
+; ------- Write LongInt into File (standard procedure) -------
+; procedure fWrLong(var f: text; L: longint; width: integer);
+; Stack:    { w, L, f } -> { f }
+; Action:   Write longint number <L> in file <f>
+;	    with required width <w>, and live file address in stack.
+
+fWrLong 	lda	#$80
+		db	_cmpa_
+
+; ------- Write LongInt (standard procedure) -------
+; procedure WrLong(L: longint; width: integer);
+; Stack:    { w, L } -> { }
+; Action:   Write longint number <L> in default output file
+;	    with required width <w>
+
+WrLong		proc
+		clra
+		clrb			; write Decimal
+
+		stb	wrk		; ▒ка╖а ▒е на WrLong+2
+		sta	IOfile		; казваме о▓ к║де е ┤айла
+
+		pla			; вадиме ▒и Width
+		plb			; ▓ой ▒ега ╡и╖ не ни ин▓е░е▒│ва
+		sta	IOwidth+1	; ╣е ни заин▓е░е▒│ва
+		stb	IOwidth 	; кога▓о ▒ко╖им на WritePacked
+
+		jsr	PopLongInt
+		ldb	wrk		; Decimal / Hex
+		beq	WrNumber
+
+WrNumberHex	=	*
+		jsr	LongWord2Str	; convert LongWord to hex string
+		bra	continue
+
+WrNumber	=	*
+		jsr	Long2Str	; convert LongInt to decimal string
+continue
+		lda	x, 0		; get string size
+		sta	IOsize+1
+		clr	IOsize
+		inx
+		stx	IObuff
+		jmp	WritePacked
+		endp;	WrLong
+
+;--------------------- Write Character standard procedures --------------------
+
+; ------- Write Char into File (standard procedure) -------
+; procedure fWrChar(f: text; c: char; width: integer);
+; Stack:    { w, char, f } -> { f }
+; Action:   Write character <char> in file <f>
+;	    with required width <w>
+
+fWrChr		lda	#$80
+		db	_cmpa_
+
+; ------- Write Char (standard procedure) -------
+; procedure WrChar(c: char; width: integer);
+; Stack:    { w, char } -> { }
+; Action:   Write charcter <char> in default output file
+;	    with required width <w>
+
+WrChr		clra
+		sta	IOfile
+		tsx
+		lda	x, 2		; get character
+		sta	WorkBuff	; place it in work buff
+		lda	#WorkBuff
+		ldb	#/WorkBuff
+		sta	x, 3		; patch char to be an address
+		stb	x, 2
+		lda	#1		; 16 bit size = 1
+		clrb
+		bra	WrPack_
+
+;---------------------- Write String standard procedures ----------------------
+
+; ------- Write String into file (standard procedure) -------
+; procedure fWrStr(var f: text; const s: string; width: integer);
+; Stack:    { w, addr, file } -> { file }
+; Action:   Write string pointed at by <addr>,
+;	    with width <w> to the file pointed at by <file>.
+
+fWrStr		lda	#$80
+		db	_cmpa_
+
+; ------- Write String standard procedure -------
+; procedure WrStr(const s: string; width: integer);
+; Stack:    { w, addr } -> { }
+; Action:   Write string pointed at by <addr>,
+;	    with width <w> to the Default Output file.
+
+WrStr		proc
+		clra
+		sta	IOfile
+
+		tsx
+		ldx	x, 2		; get string address
+
+		lda	x, 0		; get string size
+		clrb			; 16 bit size
+
+		tsx
+		inc	x, 3		; bump ptr to string
+		bne	NoCarry 	; да ▒о╖и к║м string[1]
+		inc	x, 2
+NoCarry
+		bra	WrPack_
+		endp;	WrStr
+
+;--------------- Write Packed array of char standard procedures ---------------
+
+; ------- Write Packed array of characters into file standard procedure -------
+; procedure fWrPack(var f: text; const s: packed array of char;
+;		    width, size: integer);
+; Stack:    { Sz, W, addr, file } -> { file }
+; Action:   Write packed array of char pointed at by <addr>,
+;	    with size <Sz> and width <W> to the file pointed at by <file>
+;	    and live file address in stack (don't pop it).
+
+fWrPack 	lda	#$80
+		db	_cmpa_
+
+; ------- Write Packed Array of characters standard procedure -------
+; procedure WrPack(const s: packed array of char; width, size: integer);
+; Stack:    { Sz, W, addr } -> { }
+; Action:   Write packed array of char pointed at by <addr>,
+;	    with size <Sz> and width <W> to the Default Output file.
+
+WrPack		clra			; $00/$80 (default/TOS file)
+		sta	IOfile
+
+		pla			; вадим па░аме▓░и▓е един по един
+		plb
+WrPack_ 				; ▓│к идваме о▓ WrStr & WrChar
+		sta	IOsize+1
+		stb	IOsize
+
+		pla
+		plb
+		sta	IOwidth+1
+		stb	IOwidth
+
+		plb
+		pla
+		sta	IObuff+1
+		stb	IObuff
+
+; ------- Write character Buffer to the file -------
+;   Запи▒ваме IObuff ▒ д║лжина IOsize и Width = IOwidth в ▒▓анда░▓ни┐
+; из╡оден ┤айл или в║в ┤айл ╖ий▓о ад░е▒ е на в║░╡а на ▒▓ека взамви▒имо▒▓
+; о▓ ▒▓ойно▒▓▓а на IOfile ($00 - DefaultOutput, $80 - Stack file), ка▓о
+; ад░е▒а на ┤айла винаги о▒▓ава в ▒▓ека ако е бил ▓ам.
+
+WritePacked	jsr	GetOWTfileAddr
+		bsr	WritePacked_
+		jmp	SetIOresult
+
+WritePacked_	proc
+		tsta
+		bne	exit
+
+		lda	IOwidth+1
+		ldb	IOwidth 	; ако width < 0 зна╖и left justify
+		bpl	PosWidth
+
+		adda	IOsize+1	; Нека SP = б░ой ╕па╢ии о▓зад
+		adcb	IOsize		;      W = width, Sz = pack Size
+		bpl	NoJustify	; ▓огава: SP = -W - Sz = -(W+Sz)
+		nega			; понеже ▒ме нап░авили ▒амо W+Sz
+		adcb	#0		; ▓о ако ░ез│л▓а▓а е < 0 зна╖и
+		negb			; ╣е ▓░┐бва да напи╕ем -(▓олкоз) <sp>
+					; о▓зад ▒лед packed array-┐
+		phb			; negate-ваме, push-ваме, пи╕ем pack
+		pha			; и по▒ле пи╕ем N <sp>
+		bsr	PrintPack
+		tsta
+		bne	POPexit 	; п░ове░┐ваме да не би да има г░е╕ка
+		pla			; вадим б░ойка▓а ин▓е░вали
+		plb
+		bsr	PrintNsp
+		db	_cpx_
+POPexit 	ins
+		ins
+exit		rts
+
+PosWidth	suba	IOsize+1	; вадим о▓ width д║лжина▓а на packed-a
+		sbcb	IOsize
+		bcs	NoJustify	; ако width<size н┐ма кво да just-ваме
+		ldx	IOsize		; ▓░┐бва п║░во да напи╕ем N spaces
+		stx	IOwidth 	; оба╖е ▓ой ╣е ▒капе IOsize
+		bsr	PrintNsp	; по ▓о┐ ▒л│╖ай го '▒ейвим' в ИОвид▓╡
+		tsta
+		bne	exit
+		ldx	IOwidth 	; '░е▒▓о░ваме' ИО▒изе-▓о
+		stx	IOsize
+NoJustify
+		bsr	PrintPack
+		bra	exit
+		endp;	WritePacked_
+
+;------------------------------- Print N spaces -------------------------------
+; Import:  IOfile - Pascal File variable address.
+;	       BA - б░ой ╕па╢ии
+; Export:	A - error no
+; Action:  Print N spaces in a text file.
+; Warning: IOsize, wrkF destroed
+; Note:    В▒и╖ки п░ове░ки - дали ┤айла е ▓ек▒▓ов и е за пи▒ане -
+;	   ▓░┐бва да ▒а нап░авени, ▓.е. ▓ова не ▒е п░ове░┐ва.
+
+PrintNsp	proc
+		sta	IOsize+1
+		stb	IOsize
+		lda	#' '
+		ldx	IOfile
+		ldb	x, F_BIOS	; п░ез BIOS-a ли ╣е пе░да╕им
+		beq	ViaDOS		; не п░ез UniDOS-а
+
+		ldx	IOsize		; п│▒каме ╕па╢ии▓е на BIOS-╖о
+		beq	OK		; ако ╣е пи╕ем 0 ╕па╢ии ▒ме го▓ови
+BIOSloop	int	_Wchar
+		dex
+		bne	BIOSloop
+
+OK		clra			; а бе BIOS-a н┐ма г░е╕ка бе!
+		rts
+
+ViaDOS		ldb	x, F_handle	; get file handle
+		sta	__Ph		; подго▓в┐ме б│┤е░ за пи▒ане в кой▓о
+		ldx	#__Ph		; има една ╕па╢и┐ ко┐▓о ╣е ▒е пи╕е
+		stx	wrkF		; колко▓о ▓░┐бва п║▓и
+		ldx	#1
+		stx	wrkF+2
+
+DOSloop 	ldx	IOsize
+		beq	OK
+		dex
+		stx	IOsize
+		ldx	#wrkF
+		tba			; file handle е в аком│ла▓о░ B
+		int	_Fwrite
+		tsta
+		beq	DOSloop
+		rts
+		endp;	PrintNsp
+
+;------------------------- Print Packed array of char -------------------------
+; Import: IOfile - Pascal File variable address.
+;	  IObuff - packed array of char address.
+;	  IOsize - size of packed array
+; Export:      A - error no
+; Note:   В▒и╖ки п░ове░ки - дали ┤айла е ▓ек▒▓ов и е за пи▒ане -
+;	  ▓░┐бва да ▒а нап░авени, ▓.е. ▓ова не ▒е п░ове░┐ва.
+
+PrintPack	proc
+		ldx	IOfile
+		ldb	x, F_BIOS	; п░ез BIOS-a ли ╣е пе░да╕им
+		beq	ViaDOS		; не п░ез UniDOS-а
+
+		ldx	IObuff		; п│▒каме ╢ели┐ packed array of char
+		lda	IOsize+1	; к║м BIOS да ▒и го ╖│ка в
+		ldb	IOsize		; глава▓а
+		adda	IObuff+1
+		adcb	IObuff
+		sta	wrkF+1
+		stb	wrkF
+		bra	BIOStest
+
+BIOSloop	lda	x, 0
+		int	_Wchar
+		inx
+BIOStest	cpx	wrkF
+		bne	BIOSloop
+
+OK		clra			; п░и BIOS-a н┐ма г░е╕ка
+		rts
+
+ViaDOS		lda	x, F_handle	; ако F_handle < 0 зна╖и имаме direct
+		ldx	#IObuff 	; prepare for Write in file
+		int	_Fwrite 	; пи╕ем го б░е
+		rts
+		endp;	PrintPack
+
+;--------------------- Get Open Writable Text File address --------------------
+; Export: A - error No
+;	  X - ptr to file
+;	  B - no change
+;   В IOfile ▒е запи▒ва ад░е▒а на ┤айла кой▓о ни ▓░бва ка▓о ▒е п░ове░┐ва дали е
+; о▓во░ен ▓ек▒▓ов ┤айл за пи▒ане. Да не ▒е заб░ав┐ ╖е в момен▓а на в║░╡а на
+; ▒▓ека има return.
+; Аком│ла▓о░ B не ▒е зака╖а.
+
+GetOWTfileAddr	proc
+
+		lda	IOfile		; какво има╕е ▓│к? (default/TOS file)
+		bmi	TOS_file	; file address is on TOS
+		ldx	StdVarsPtr	; dafault output file
+		ldx	x, DefaultOut
+		bra	continue
+TOS_file	tsx
+		ldx	x, 2		; get file address from stack
+continue
+		stx	IOfile
+		lda	x, F_flags
+		beq	NotOpen
+		bpl	NotWritable
+		lda	x, F_type
+		cmpa	#TextFile
+		beq	FileOK
+		lda	#_IO_NotText
+		db	_cpx_
+NotWritable	lda	#_IO_NotWritable
+		db	_cpx_
+NotOpen 	lda	#_IO_NotOpen
+		db	_cmpa_
+FileOK		clra
+		rts
+		endp;	GetOWTfileAddr
+
+;-------- Write Line (goto beginning of next line) standard procedure ---------
+
+; ------- Write Line into File (standard procedure) -------
+; procedure fWriteLn(var f: text);
+; Stack:    { f } -> { }
+; Action:   Write <cr>, <lf> in file pointed at by TOS
+
+fWrLn		lda	#$81
+		db	_cmpa_
+
+; ------- Write Line (standard procedure) -------
+; procedure WriteLn;
+; Stack:    no change
+; Action:   Write <cr>, <lf> in Default Output file
+
+WrLn		proc
+		clra
+		sta	IOfile
+		tab			; preserve A
+		bsr	GetOWTfileAddr
+		tstb
+		bpl	DontPOP 	; ▓░┐бва да извадим ад░е▒а на ┤айла
+		ins
+		ins
+DontPOP 	tsta
+		bne	exit
+
+		ldx	#WorkBuff
+		stx	IObuff
+
+		ldx	#$0d0a		; <cr>, <lf>
+		stx	WorkBuff
+
+		ldx	#2
+		stx	IOsize
+		stx	IOwidth
+
+		bsr	PrintPack
+set_io_near                           =*; за░ад 3 бай▓а келепи░
+exit		jmp	SetIOresult
+		endp;	WrLn
+
+;---------------------- End of Write standard procedure -----------------------
+; generated by the compiler when write procedure (not writeln) is used
+; it's purpuse is to pop file address from stack and inform user defined
+; device procedures to dump buffer (if any)
+
+; ------- End of Write into File (standard procedure) -------
+; procedure fEndWrite(var f: text);
+; Stack:    { f } -> { }
+; Action:   Pop address from stack and call user procedure (if any)
+
+fEndWr		lda	#$81
+		db	_cmpa_
+
+; ------- End Of Write (standard procedure) -------
+; procedure EndWrite;
+; Stack:    no change
+; Action:   Do nothing if not user file
+
+EndWr		proc
+		clra
+		sta	IOfile
+		tab			; preserve A
+		bsr	GetOWTfileAddr
+		tstb
+		bpl	DontPOP 	; ▓░┐бва да извадим ад░е▒а на ┤айла
+		ins
+		ins
+DontPOP 	tsta
+
+                bne     set_io_near     ; v1.65
+                ;beq     OK             ; к┐░им 3 бай▓а бе мой ╖│л┐к
+                ;jmp     SetIOresult
+
+OK		jmp	MainLoop1
+		endp;	EndWr
+
+;----------------------- Write Real standard procedures -----------------------
+
+; ------- Write Real into File (standard procedure) -------
+; procedure fWrReal(var f: text; r: real; width, fraction: integer);
+; Stack:    { f, w, real, file } -> { file }
+; Action:   Write <real> in file <file>
+;	    with required width <w> and required fraction size <f>
+;	    if <f> < 0 => use exponential form
+
+FWrReal 	lda	#$80
+		db	_cmpa_
+
+; ------- Write Real (standard procedure) -------
+; procedure WrReal(r: real; width, fraction: integer);
+; Stack:    { f, w, real } -> { }
+; Action:   Write <real> in default output file
+;	    with required width <w> and required fraction size <f>
+;	    if <f> < 0 => use exponential form
+
+WrReal		proc
+		clra
+		sta	IOfile		; preserve file address
+
+		pla			; големина на д░обна▓а ╖а▒▓
+		plb
+		sta	IOsize+1
+		stb	IOsize
+		pla			; големина на поле▓о
+		plb
+		sta	IOwidth+1
+		stb	IOwidth
+
+		jsr	PopReal
+
+		lda	#90		; вземаме ▒и до▒▓а▓║╖но много паме▓
+		clrb			; ко┐▓о да ▒▓игне за един string
+		jsr	GetStackErr
+
+		lda	IOwidth+1	; ако е н│ла зна╖и write е използ│вано
+		beq	LSByte_0	; без двое▓о╖и┐
+		ldb	IOwidth
+		bpl	PosWidth
+		nega
+		adcb	#0
+		negb
+PosWidth	beq	MSByte_0
+LSByte_0	lda	#255
+MSByte_0	ldb	IOsize
+		bmi	NegSize
+		bne	too_large
+		lda	IOsize+1
+		db	_cpx_
+too_large	lda	#255
+NegSize
+		jsr	Real2str	; П░авим string
+
+		lda	x, 0		; string size
+		sta	IOsize+1
+		clr	IOsize
+		inx
+		stx	IObuff
+		jsr	GetOWTfileAddr
+		jsr	WritePacked_
+		ldx	IObuff		; release memory
+		dex
+		stx	LoMemPtr
+		jmp	SetIOresult
+		endp;	WrReal
+
+;------------------------------------------------------------------------------

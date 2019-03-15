@@ -1,0 +1,226 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. EOF, EOLN, ...                         (c) 1989, 1990 YGP.
+
+;----------------------------- End Of File (EOF) ------------------------------
+
+; ------ End Of File (no parameters) ------
+; function: EOF: boolean;
+; Stack:    { } -> { bool }
+; Action:   Test End Of default Input File reached
+
+Eof		bsr	StdInFile
+		db	_cpx_
+
+; ------ End Of File ------
+; function: EOF(var f: file): boolean;
+; Stack:    { ^f } -> { bool }
+; Action:   Test End Of File reached
+
+fEof		bsr	TOSinFile
+
+Eof_Common	proc
+		jsr	PrepRead1
+		bcc	OKreadable
+PushTrue	=	*
+		db	_cmpa_
+PushTrueOK	=	*
+		clra
+		clrb
+		phb
+		incb
+push_jump	phb
+		jmp	SetIOresult
+OKreadable
+		lda	x, F_BIOS	; ам║ п░ез BIOS-║▓ ли ▒║ ░║бо▓и?
+		beq	notBIOS
+PushFalseOK	=	*
+		clra
+PushFalse	clrb
+		phb
+		bra	push_jump	; пе▒▓им малко бай▓╖ен╢а (2 б░о┐)
+notBIOS
+		bitb	#%00100000	; is EOF bit set?
+		bne	PushTrueOK	; да бе, вдигна▓ е, ади да ▒и одиме.
+		lda	x, F_type
+		cmpa	#TextFile	; EOF(textfile)?
+		beq	IsText
+		lda	x, F_handle	; не е ▓ек▒▓ов
+		clrb
+		int	_eof
+EOF_EOLN	=	*
+		tsta
+		bne	PushTrue	; има г░е╕ка (в░║╣аме ЪХЪ и еггог)
+		tstb			; нема г░е╕ки казваме кво ▒▓ава
+		bne	PushTrueOK
+		bra	PushFalseOK
+IsText
+		bitb	#%1000		; има ли го▓ова б│ква
+		bne	PushFalseOK	; да, е зна╖и не е EOF
+		jsr	RdChText	; дали е к░ай на ┤айл или не, е п║лна
+		bcs	PushTrue	; м║гла по в║п░о▒а, за▓ова лапваме
+		sta	x, F_char	; една б│кви╢а и гледаме к'во ▒▓ава
+		orb	#%1000		; и понеже ▒ме ┐ лапнали ┐ в░║╣аме
+		stb	x, F_flags	; и пак п░ове░┐ваме де░едже▓о
+		bra	notBIOS
+		endp;	Eof_Common
+
+;------------------------------------------------------------------------------
+
+; ------- GetInFile -------
+; Get Input file address (from stack or default)
+; Import: IOfile - 0/x default/TOS input file
+; Export: IOfile - address of file
+; Uses:     A, B - destroied
+
+GetInFile	proc
+		lda	IOfile
+		bsr	StdInFile
+TOSinFile	=	*
+		tsx
+		ldx	x, 2		; tos is return address
+		pla
+		plb
+		ins			; pop file address
+		ins
+		phb
+		pha
+		bra	continue
+StdInFile	=	*
+		ldx	StdVarsPtr
+		ldx	x, DefaultIn
+continue	stx	IOfile
+		rts
+		endp;	GetInFile
+
+;----------------------------- End Of LiNe (EOLN) -----------------------------
+
+; ------ End Of Line (no parameters) ------
+; function: EOLN: boolean;
+; Stack:    { } -> { bool }
+; Action:   Test End Of Line on default Input File
+
+EOLN		bsr	StdInFile
+		db	_cpx_
+
+; ------ End Of Line ------
+; function: EOF(var f: file): boolean;
+; Stack:    { ^f } -> { bool }
+; Action:   Test End Of Line
+
+fEOLN		bsr	TOSinFile
+
+EOLN_Common	proc
+		jsr	PrepReadText
+PushTrue_	bcs	PushTrue
+
+TestAgain	bitb	#%00010000	; is EOLN bit set?
+		bne	PushTrueOK	; да бе, вдигна▓ е, ади да ▒и одиме.
+		lda	x, F_BIOS	; ам║ п░ез BIOS-║▓ ли ▒║ ░║бо▓и?
+		bne	PushFalseOK
+		bitb	#%1000		; има ли го▓ова б│ква
+		bne	PushFalseOK	; да, е зна╖и не е EOLN
+		jsr	RdChText	; дали е к░ай на ░ед или не, е п║лна
+		bcs	PushTrue_	; м║гла по в║п░о▒а, за▓ова лапваме
+		sta	x, F_char	; една б│кви╢а и гледаме к'во ▒▓ава
+		orb	#%1000		; и понеже ▒ме ┐ лапнали ┐ в░║╣аме
+		stb	x, F_flags	; и пак п░ове░┐ваме де░едже▓о
+		bitb	#%00010000
+		bra	TestAgain
+		endp;	EOLN_Common
+
+;-------------------------- Block Read / Block Write --------------------------
+
+; ------- Block Read/Write procedure -------
+; procedure BlockRW(var f: file; var Buff; Offset, Nbytes: Cardinal;
+;		    var Processed: word; Write: boolean);
+; Stack     { RW, addrP, Nbytes, Offset, AddrBuff, f } -> { }
+; Action    Read/Write Nbytes from file f in buffer Buff and if addrP <> nil
+;	    return number of bytes processed in addrP and set IOresult to 0
+;	    if addrP = 0 then if Processed bytes <> Nbytes set IOresult
+
+BlockRW 	proc
+		pla			; get Read/Write flag
+		ins			; pop MSByte
+		ldb	#%01000000
+		sta	wrk3+1
+		beq	rd
+		aslb
+rd
+		stb	wrk3		; %1000000 / %01000000 = Write/Read
+
+		tsx			; address of return value
+		ldx	x
+		stx	wrkF		; addr(Processed) = nil
+		beq	DontZero
+		clr	x, 0		; say 0 bytes readed
+		clr	x, 1
+DontZero	ins
+		ins
+
+		pla			; get Number of bytes to process
+		plb
+		sta	IOsize+1
+		stb	IOsize
+
+                .ifdef addr_offs
+                 jsr     get_addr_offset
+                 tsx
+                 ldx     x, 0            ; get file address
+                .else
+                 pla                     ; get offset in buffer
+                 plb
+                 tsx
+                 adda    x, 1            ; add base
+                 adcb    x, 0
+                 ins                     ; pop base
+                 ins
+                 ldx     x, 2            ; get file address
+                .endif
+                sta     IObuff+1
+                stb     IObuff
+		ins			; pop file address
+		ins
+
+		stx	IOfile
+		lda	wrk3
+		bita	x, F_flags
+		beq	InvalidRequest
+		lda	x, F_type	; type f = file; ▒е о▓бел┐зва ка▓о 0
+		bne	InvalidFkind
+		lda	x, F_handle
+		ldx	#IObuff
+		ldb	wrk3+1
+		beq	MakeRead
+		int	_FWrite
+		db	_cpx_		; trick to jump over next interrupt
+MakeRead	int	_FRead
+rw_made 	stx	wrk2
+		tsta
+		bne	RWerror
+		cpx	IOsize
+		beq	IsOK
+		lda	#_IO_lessbytes
+		ldx	IOfile
+		ldb	x, F_flags
+		orb	#%00100000
+		stb	x, F_flags
+IsOK
+RWerror
+		ldx	wrkF
+		beq	NoReturnValue
+		ldb	wrk2+1
+		stb	x, 0		; set return value
+		ldb	wrk2
+		stb	x, 1
+		cmpa	#_IO_lessbytes
+		bne	NoReturnValue
+		clra
+		db	_cpx_		; trick to jump over next lda
+InvalidRequest	lda	#_IO_not_RW
+		db	_cpx_
+InvalidFkind	lda	#_IO_InvalidKind
+NoReturnValue
+		jmp	SetIOresult
+		endp;	BlockRW
+
+;------------------------------------------------------------------------------

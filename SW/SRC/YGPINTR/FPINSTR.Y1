@@ -1,0 +1,1567 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Floating Point instructions.	    (c) 1989, 1990 YGP.
+
+;  Real format number (IEEE standard in Negative Byte Sex):
+;	(в▒║╣но▒▓ ╖е▓и░и▓е бай▓а ▒а об║░на▓и за░ади negative ByteSex)
+;  ┌─── byte 3 ────┬─── byte 2 ────┬─── byte 1 ────┬─── byte 0 ────╧
+;  ┌─┬───────────────┬─────────────────────────────────────────────╧
+;  ╙s╙	  exponent   ╙		    m a n t i s s a		   ╙
+;  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+;  31 30	   23 22					  0
+;
+;  assume e = exponent; m = mantissa; s = sign
+;
+; (1) if 0 < e < 255		then value = (-1)^s * 2^(e - 127) * (1.m);
+; (2) if (e = 0) and (m = 0)	then value = (-1)^s * 0;
+; (3) if (e = 0) and (m <> 0)	then value = (-1)^s * 2^(-126) * (0.m);
+; (4) if (e = 255) and (m = 0)	then value = (-1)^s * infinite;
+; (5) if (e = 255) and (m <> 0) then value is a NaN (Not A Number);
+;
+;  this implementation of FP arithmetics can't handle:
+;    denormals (3), infinites (4) and NaNs (5)
+
+;  Internal Real format (two FP accomulators in zero page) (Positive Byte Sex)
+;
+;  ┌───────────────╧   8 bit exponent: $00 means that real number = 0.0
+;  ╙	exponent   ╙		       $ff can't take this value
+;  └─┴─┴─┴─┴─┴─┴─┴─┘		       $01..$fe = 2 ^ (exponent - 127)
+;
+;  ┌─── byte 0 ────┬─── byte 1 ────┬─── byte 2 ────┬─── byte 3 ────╧
+;  ┌───────────────────────────────────────────────────────────────╧
+;  ╙1			    m a n t i s s a	   ╙additional byte╙
+;  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+;  a 32 bit positive byte sex unsigned integer number (noramalized)
+;		      first bit of mantissa is always 1 (exept 0.0)
+;
+;  ┌───────────────╧ Only first bit is used but the others must be zero
+;  ╙S 0 0 0 0 0 0 0╙ $00 means positive mantissa
+;  └─┴─┴─┴─┴─┴─┴─┴─┘ $80 means negative mantissa
+
+;------------------- Floating Point instructions addresses --------------------
+
+		trunc	off
+FPaddresses
+		dw	addR,	subR,	mulR,	divR	; 80..83
+		dw	absR,	negR,	sqrR,	sqrt	; 84..87
+		dw	sin,	cos,	exp,	ln	; 88..8b
+		dw	Atan,	intR,	fracR,	randomR ; 8c..8f
+		dw	equR,	neqR,	lesR,	leqR	; 90..93
+		dw	grtR,	geqR,	trunc,	round	; 94..97
+		dw	i2real, c2real, l2real, LwRcnst ; 98..9b
+
+		trunc	on
+
+; ------- Round Real (convert to LongInt by rounding) -------
+; mnemonic: roundR
+; Stack:   { r } -> { L }
+; Action:  round TOS
+
+round		lda	#1
+		db	_cmpa_		; trick to jump over clra
+
+; ------- Truncate Real (convert to LongInt by truncating) -------
+; mnemonic: truncR
+; Stack:   { r } -> { L }
+; Action:  truncate TOS
+
+trunc		clra
+		sta	wrk3
+		jsr	PullFP_1
+		jsr	trunc_round
+
+		ldb	fp_m1+0
+		lda	fp_m1+1
+		phb
+		pha
+		ldb	fp_m1+2
+		lda	fp_m1+3
+		jmp	PushBA
+
+; ------- LESs than Reals -------
+; mnemonic: lesR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> < <r2>
+
+lesR		lda	#%010
+		db	_cpx_		; trick to jump over next lda
+
+; ------- Less than or EQual Reals -------
+; mnemonic: leqR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> <= <r2>
+
+leqR		lda	#%011
+		db	_cpx_
+
+; ------- GReaT than Reals -------
+; mnemonic: grtR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> > <r2>
+
+grtR		lda	#%100
+		db	_cpx_
+
+; ------- GReaT than or EQual Reals -------
+; mnemonic: geqR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> => <r2>
+
+geqR		lda	#%101
+		db	_cpx_
+
+; ------- Not EQual Reals -------
+; mnemonic: neqR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> <> <r2>
+
+neqR		lda	#%110
+		db	_cpx_
+
+; ------- EQUal Reals -------
+; mnemonic: equR
+; Stack:    { r2, r1 } -> { b }
+; Action:   push result of comparison <r1> = <r2>
+
+equR		proc
+		lda	#%001		; %ABC
+		sta	wrk3		;  A: >, B: <, C: =
+
+
+		bsr	PullFP_1
+		bsr	PullFP_2
+
+		jsr	Fcmp
+		des			; о▒▓ав┐ме два за ░ез│л▓а▓а (boolean)
+		des
+
+		bne	notEQUAL	; ▒░авнение▓о е на в▓о░о▓о ▒ п║░во▓о
+		jmp	CMP_eq		; ▓.е. Carry е взави▒имо▒▓ о▓
+notEQUAL	bcc	isGREAT 	; fp2 - fp1 (▓.е. r1 - r2)
+		jmp	CMP_less
+isGREAT 	jmp	CMP_great
+		endp;	equR
+
+; ------- Square Floating Point number -------
+; mnemonic: sqrR
+; Stack:   { r } -> { r }
+; Action:  Calc square of TOS real
+
+sqrR		bsr	PullFP_1	; вадим ▓ова кое▓о ╣е вдигаме
+		ldx	#fp_2		; на квад░а▓
+		jsr	save_fp1	; и го п░е╡в║░л┐ме в fp_2
+		jsr	restore_fp2
+		jsr	Fmul		; ▒лед кое▓о │множаваме
+		bra	PushResultML_
+
+; ------- Get Integer part of a Real number -------
+; mnemonic: intR
+; Stack:    { r } -> { r }
+
+intR		bsr	PullFP_1
+		ldx	#fp_2
+		jsr	save_fp1	; и го п░е╡в║░л┐ме в fp_2
+		jsr	restore_fp2
+		jsr	Ffrac		; вземаме д░обна▓а ╖а▒▓
+		jsr	Fsub		; и ┐ вадим о▓ ╢┐ла▓а (ко┐▓о е в fp_2)
+		bra	PushResultML_
+
+; ------- Get Fraction part of a Real number -------
+; mnemonic: fracR
+; Stack:    { r } -> { r }
+
+fracR		bsr	PullFP_1
+		jsr	Ffrac
+		bra	PushResultML_
+
+; ------- Calculate Exp -------
+; mnemonic: exp
+; Stack:    { r } -> { r }
+
+exp		bsr	PullFP_1
+		jsr	Fexp
+		bra	PushResultML_
+
+; ------- Calculate Ln -------
+; mnemonic: ln
+; Stack:    { r } -> { r }
+
+ln		bsr	PullFP_1
+		jsr	Fln
+		bra	PushResultML_
+
+; ------- Calculate SQRT -------
+; mnemonic: sqrt
+; Stack:    { r } -> { r }
+
+sqrt		bsr	PullFP_1
+		jsr	Fsqrt
+PushResultML_	jmp	PushResultML
+
+; ------- Pull IEEE format Real Number from TOS -------
+; TOS is a real number pull in (X)
+; Uses: tempX, A, B, X registers
+
+PullFP_2	ldx	#fp_2
+		bra	PullReal_x
+PullFP_1	ldx	#fp_1
+
+PullReal_X	proc
+		plb
+		pla
+		sta	tempX+1
+		stb	tempX
+		clr	x, fp_m_+3
+		pla
+		sta	x, fp_m_+2
+		pla
+		sta	x, fp_m_+1
+		pla
+		plb
+		asla
+		rolb
+		stb	x, fp_e_
+		beq	Is0
+		rorb
+		sec
+		rora
+Is0
+		sta	x, fp_m_+0
+		andb	#$80
+		stb	x, fp_s_
+		ldx	tempX
+		jmp	x, 0		; do rts
+		endp;	PullReal_X
+
+;-------------------- Floating Point instructions handling --------------------
+; mnemonic: FP byte, special
+; Stack:    depends on Floating Point instruction
+; Action:   execute floating point instruction <byte>
+
+FPinstr 	proc
+		ldx	ipc		; X ▒о╖и к║м опе░анда
+		lda	x		;    в ▒л│╖а┐ к║м FP OpCode
+		inx			; Bump IPC
+		stx	ipc
+		asla			; times 2 for offset
+		bcc	ShortLoadReal
+		cmpa	#$9c * 2	; ин▒▓░│к╢ии▓е о▓ $a0 на▓а▓║к ги н┐ма
+		bcs	OK_fp
+UnImpFP 	=	*
+		ldx	UnImpFPcode	; н┐кой ╣е об▒л│жи ли ▓ози доп║лни▓елен
+continue	bne	Execute
+NoBody		jmp	UnImp
+OK_fp
+		clrb
+		adda	#FPaddresses
+		adcb	#/FPaddresses
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldx	x, 0
+Execute 	jmp	x, 0
+		endp;	FPinstr
+
+; ------- Add Floating Point numbers -------
+; mnemonic addR
+; Stack:   { r2, r1 } -> { r }
+; Action:  r:= r1 + r2
+
+addR		bsr	PullFP_1
+		bsr	PullFP_2
+		jsr	Fadd
+		bra	PushResultML
+
+; ------- Subtract Floating Point numbers -------
+; mnemonic: subR
+; Stack:   { r2, r1 } -> { r }
+; Action:  r:= r1 - r2
+
+subR		bsr	PullFP_1
+		bsr	PullFP_2
+		jsr	Fsub
+		bra	PushResultML
+
+; ------- Multiply Floating Point numbers -------
+; mnemonic: mulR
+; Stack:   { r2, r1 } -> { r }
+; Action:  r:= r1 * r2
+
+mulR		bsr	PullFP_1
+		bsr	PullFP_2
+		jsr	Fmul
+		bra	PushResultML
+
+; ------- Divide Floating Point numbers -------
+; mnemonic: divR
+; Stack:   { r2, r1 } -> { r }
+; Action:  r:= r1 / r2
+
+divR		bsr	PullFP_1
+		bsr	PullFP_2
+		jsr	Fdiv
+		bra	PushResultML
+
+; ------- Calculate SIN -------
+; mnemonic: sin
+; Stack:    { r } -> { r }
+
+sin		bsr	PullFP_1
+		jsr	Fsin
+		bra	PushResultML
+
+; ------- Calculate COS -------
+; mnemonic: cos
+; Stack:    { r } -> { r }
+
+cos		bsr	PullFP_1
+		jsr	Fcos
+		bra	PushResultML
+
+; ------- Calculate ArcTan -------
+; mnemonic: Atan
+; Stack:    { r } -> { r }
+
+Atan		bsr	PullFP_1
+		jsr	Fatan
+		bra	PushResultML
+
+; ------- Short Load Real Constant -------
+; mnemonic: sldrc
+; Stack:   {} -> { r }
+; Action:  ин▒▓░│к╢ии▓е ▒а ▒ номе░а м/│ 0..127 ▓.е. -$40..$3f.
+;	   За░еждаме ▓│й ╖и▒ло ка▓о ░еално.
+
+ShortLoadReal	clrb
+                lsra                    ; в║з▒▓анов┐ваме аком│л▓о░а
+		suba	#$40
+		bpl	floatBAint
+		decb			; B = $ff/$00 взви▒имо▒▓ о▓ A <, >= 0
+floatBAint			      =*; float BA (16 bit integer to Real)
+		jsr	Int2Real
+PushResultML			      =*; push real and jump to MainLoop
+		jsr	RoundLast
+		lda	fp_s1		; get sign
+		ldb	fp_m1+0 	; get MSByte of mantissa
+		aslb			; из╡в║░л┐ме п║░ви┐ би▓ на mantissa
+		asla			; из╡в║░л┐ме знака в Carry
+		lda	fp_e1
+		rora			; нап║╡ваме знака в exponent
+		rorb			; и по▒ледни┐ на exponent в mantissa
+		pha
+		phb
+		ldb	fp_m1+1
+		lda	fp_m1+2
+		jmp	pushBA
+
+; ------- Load Word as real constant -------
+; mnemonic: LwRcnst w
+; Stack:   {} -> { r }
+; Action:   load word parameter as real constant
+
+LwRcnst 	proc
+		ldx	ipc
+		lda	x, 0
+		ldb	x, 1
+		inx
+		inx
+		stx	ipc
+		bra	floatBAint
+		endp;	LwRcnst
+
+; ------- Random -------
+; mnemonic: rndR
+; Stack:   {} -> { r }
+; Action:  return a real  0 <= r < 1
+
+randomR 	proc
+		jsr	GetAddrRnd	; п░иби░аме 4-░и▓е бай▓а ка▓о ман▓и▒а
+		lda	x, 0		; ▒лагаме по░┐д║к $7e
+		sta	fp_m1+0 	; но░мализи░аме и ▒ме го▓ови
+		lda	x, 1
+		sta	fp_m1+1
+		lda	x, 2
+		sta	fp_m1+2
+		lda	x, 3
+		sta	fp_m1+3
+		lda	#$7e
+		sta	fp_e1
+		clr	fp_s1
+ .ifdef old_nomalize
+		jsr	Normalize0
+ .else
+                jsr     Normalize
+ .endif
+		jsr	MakeNewRnd
+		bra	PushResultML
+		endp;	randomR
+
+; ------- Convert Integer to Real -------
+; mnemonic: I -> Real
+; Stack:    { i } -> { r }
+; Action:   Convert TOS integer to internal real format
+
+I2real		pla
+		plb
+		bra	floatBAint
+
+; ------- Convert Cardinal to Real -------
+; mnemonic: C -> Real
+; Stack:    { c } -> { r }
+; Action:   Convert TOS cardinal to internal real format
+
+C2real		pla
+		plb
+		jsr	Card2real
+		bra	PushResultML
+
+; ------- Convert Long Integer to Real -------
+; mnemonic: L -> Real
+; Stack:    { l } -> { r }
+; Action:   Convert TOS long integer to internal real format
+
+l2real		proc
+		tsx
+		ldb	x, 3		; test sign
+		andb	#$80
+		stb	fp_s1
+		bpl	Positive
+		jsr	NegLongTOS
+Positive
+		plb
+		stb	fp_m1+3
+		plb
+		stb	fp_m1+2
+		plb
+		stb	fp_m1+1
+		plb
+		stb	fp_m1+0
+		lda	#$7E+32
+		sta	fp_e1
+ .ifdef old_nomalize
+		jsr	Normalize0
+ .else
+                jsr     Normalize
+ .endif
+		bra	PushResultML
+		endp;	l2real
+
+; ------- Absolute Value of Floating Point number -------
+; mnemonic: absR
+; Stack:   { r } -> { r }
+; Action:  Calc Absolute value of TOS real
+
+absR		tsx
+                ldb     x, 3            ; get MSByte of IEEE format real
+                andb    #$7f            ; clear sign bit
+                bra     _boza
+                ;stb     x, 3
+                ;jmp     MainLoop
+
+; ------- Negate Floating Point number -------
+; mnemonic: negR
+; Stack:   { r } -> { r }
+; Action:  negate TOS real
+
+negR		proc
+		tsx
+		ldb	x, 3		; test exponent for 0.0 number
+		lda	x, 2
+		asla			; calculate exponent
+		rolb
+		beq	DontNegate
+		rorb
+		xorb	#$80
+_boza           =       *
+		stb	x, 3		; negate sign
+DontNegate	jmp	MainLoop
+		endp;	negR
+
+; ------- Convert Integer (Cardinal) to internal real format -------
+; Import:    BA - 16 bit Integer (Cardinal) number
+; Export:    fp_1 internal real format number
+; Destroyed: B, A registers
+
+Card2Real	phb			; preserve MSByte
+		clrb			; п░авим знака $00
+		db	_cmpa_		; trick to jump over phb
+
+Int2Real	proc
+		phb			; prserve MSByte
+		andb	#$80		; get sign
+		stb	fp_s1		; set sign (Negative flag is OK)
+		plb			; restore MSByte(не пипа Negative flag)
+		bpl	Positive
+		nega			; negate number
+		adcb	#0
+		negb
+Positive
+		sta	fp_m1+1
+		stb	fp_m1
+                ;ora     fp_m1           ; zero? (демек: ╖и▒ло▓о е 0?)
+                ;bne     OK_not_0        ; ина╖е п░опадаме в Zero_fp1
+
+;OK_not_0
+                lda     #$7e + 16       ; 16 bit integer (cardinal) number
+		sta	fp_e1
+		ldx	#0
+		stx	fp_m1+2
+		;bra	 Normalize	; нап░аво п░опадаме в него
+		endp;	Int2Real
+
+; ------- Normalize -------
+; Imoprt:    fp_1 internal format real number (denormalized)
+; Export:    fp_1 internal format real number (normalized)
+; Destroyed: B, A, X registers
+
+Normalize	proc
+ .ifdef old_nomalize
+		lda	fp_m1
+		bmi	FP_rts_1	; number is normalized?
+
+		ldb	fp_e1
+NormLoop	decb
+		beq	Zero_fp1	; п░и underflow ▒е п░ави 0.0
+		asl	fp_m1+3
+		rol	fp_m1+2
+		rol	fp_m1+1
+		rola	;fp_m1
+		bpl	NormLoop
+		sta	fp_m1
+		stb	fp_e1
+FP_rts_1	=	*
+		rts
+ .else
+		ldb	fp_e1
+
+		lda	fp_m1
+                bra     check_m1
+                ;bmi     FP_rts_1        ; number is normalized?
+                ;bne     norm_bits
+MSB_0
+                subb    #8
+                bls     Zero_fp1
+                lda     fp_m1+1
+                ldx     fp_m1+2
+                clr     fp_m1+3
+                stx     fp_m1+1
+                bne     sta_fp_m1       ; п░ове░┐ваме дали ╢┐ло▓о ╖и▒ло не е 0
+                tsta                    ; и ако е ▓ака (mantissa = $00000000)
+                beq     Zero_fp1        ; н│ли░аме в▒и╖ко
+sta_fp_m1       sta     fp_m1+0
+check_m1        beq     MSB_0
+                bmi     store_m1_e1
+norm_bits
+NormLoop	decb
+		beq	Zero_fp1	; п░и underflow ▒е п░ави 0.0
+		asl	fp_m1+3
+		rol	fp_m1+2
+		rol	fp_m1+1
+		rola	;fp_m1
+		bpl	NormLoop
+store_m1_e1     sta     fp_m1
+		stb	fp_e1
+FP_rts_1	=	*
+		rts
+ .endif
+		endp;	Normalize
+
+; ------- Zero FP_1 -------
+; Import:    ни╣о
+; Export:    fp_1 = 0.0 (all 6 bytes are zeroed)
+; Destroyed: X & A registers
+
+Zero_fp1	=	*
+		ldx	#0		; в║зможно най-б║░зи┐ и най-к░а▓ки┐
+		stx	fp_1+0		; на╖ин за за▓░иване на 6 бай▓а
+		stx	fp_1+2
+		stx	fp_1+4
+		rts
+
+; ------- Multiply Floating Point numbers -------
+; Import:    fp_1 internal format real number
+;	       fp_2 internal format floating point numbers  (Fmul)
+;     or:      X ptr to second fp opernad      (X)  -> fp_2 (FmulX)
+; Export:    fp_1:= fp_2 * fp_1
+
+FmulX		jsr	restore_fp2
+Fmul		proc
+		lda	fp_e1		; ако fp_1 = 0.0 ▓о ░ез│л▓а▓а е 0.0
+		beq	FP_rts_1
+		lda	fp_e2		; ако п║к fp_2 = 0
+		beq	Zero_fp1	; ▓о ░ез│л▓а▓а е ▒║╣о 0.0
+
+		lda	fp_s1		; знака на ░ез│л▓а▓а е:
+		xora	fp_s2		; + ако ▒а ▒ еднакви зна╢и
+		sta	fp_s1		; - ако ▒а ▒ ░азли╖ни
+
+		lda	fp_e1		; ек▒понен▓и▓е запо╖ва▓ о▓ $7f
+		suba	#$7f
+		ldb	fp_e2
+		subb	#$7f
+		aba			; ▒║би░аме ек▒понен▓и▓е
+		bvc	MayOK
+Zero_fp1_	=	*		; използ│ва ▒е о▓ Fdiv
+		bpl	Zero_fp1	; имаме underflow
+Overflow        =       *
+                jmp     FP_over
+MayOK           cmpa    #$81
+                ble     Zero_fp1
+                adda    #$7f            ; добав┐ме н│ла▓а
+
+		sta	fp_e1		; resulting exponent calculated
+                ldx     #0
+		stx	mantissa+0	; last byte of mantissa (result)
+		stx	mantissa+2	; за╖и▒▓ваме ░ез│л▓а▓на▓а ман▓и▒а
+		clra			; а ▓ова е млад╕и┐ бай▓ о▓ ман▓и▒а▓а
+                ldx     #32+1           ; 32 bit + 1 за░ади DenormalLoop
+DenormLoop
+		lsr	fp_m2+0 	; ░або▓а▓а е в ▓ова, ╖е ако Carry = 0
+		ror	fp_m2+1 	; ▓о в обикновенно▓о │множение
+		ror	fp_m2+2 	; ░ез│л▓а▓а ▒е shr нен│жно за╣о▓о е 0
+		ror	fp_m2+3 	; ▓ози ╢ик║л (DenormLoop) може да го
+		dex			; н┐ма и е┤ек▓а ТРЯБВА да е ▒║╣и┐
+		bcc	DenormLoop	; но по-бавно (о▒вен ▓ова ▓░┐бва да ▒е
+		bcs	IncResult	; пи╕е ldx #32 а не ldx #32+1)
+Loop
+		lsr	fp_m2+0
+		ror	fp_m2+1
+		ror	fp_m2+2
+		ror	fp_m2+3
+		bcc	DontAdd
+IncResult
+		;lda	 mantissa+3
+		adda	fp_m1+3
+		;sta	 mantissa+3
+		ldb	mantissa+2
+		adcb	fp_m1+2
+		stb	mantissa+2
+		ldb	mantissa+1
+		adcb	fp_m1+1
+		stb	mantissa+1
+		ldb	mantissa+0
+		adcb	fp_m1+0
+		stb	mantissa+0
+DontAdd
+		dex			; ▓ова ▒е п░ави ▓│к за╣о▓о
+		beq	EndMPLY 	; по ▓ози на╖ин п║░ви┐ би▓ ╣е е винаги
+		ror	mantissa+0	; едини╢а, ▓.е. но░мализи░ан
+		ror	mantissa+1
+		ror	mantissa+2
+		rora	;mantissa+3
+                bcc     Loop            ; ако из╡в░║ква н┐кой би▓ ▓░┐бва
+                ;lda     mantissa+3     ; да го в║░нем об░а▓но за зак░║гл┐ване
+                ora     #1
+                ;sta     mantissa+3
+		bra	Loop
+
+EndMply 	sta	mantissa+3
+MoveMantissaC	=	*		; move mantissa and insert carry
+		ldx	mantissa
+		stx	fp_m1
+		ldx	mantissa+2
+		stx	fp_m1+2
+		jmp	InsertCarry
+		endp;	Fmul
+
+; ------- Divide Floating Point numbers -------
+; Import:    fp_1 internal format real number
+;	       fp_2 internal format floating point numbers  (Fdiv)
+;     or:      X ptr to second fp opernad      (X)  -> fp_2 (FdivX)
+; Export:    fp_1:= fp_2 / fp_1
+
+FdivX		jsr	restore_fp2
+Fdiv		proc
+		lda	fp_e1		; дали п║к не делим на 0.0?
+                beq     div_zero        ; ами да ╡аймана▓а м│ ▒ ╡аймана
+		lda	fp_e2		; дали п║к не делим 0.0 на не╣о
+Underflow	beq	Zero_fp1_	; ами да ▓огава ╣е пол│╖им 0.0
+					; да не заб░ав┐ме, ╖е $7f озна╖ава 2^0
+		suba	fp_e1		; expR = exp2 - exp1
+		bcs	E2lesE1 	; но exp2 < exp1
+                bmi     Overflow        ; ▓ова ▒▓ава ако A >= $80 (и + $7f ...)
+                ;adda    #$7f            ; добав┐ме н│ла▓а на ек▒понен▓а▓а
+                ;bcs     Overflow        ; п░екалено гол┐м ░ез│л▓а▓
+                ;cmpa    #$ff            ; $ff ▒║╣о е заб░анена ек▒понен▓а
+                ;bne     OKexp
+;Overflow        jmp     FP_over
+
+E2lesE1 	adda	#$7f		; add zero exponent
+		beq	Underflow	; ▓в║░де малко ╖и▒║л╢е пол│╖аваме
+                ;bpl     OKexp  ??? OKexp е ▒ледва╣и┐ е▓ике▓ ???
+
+OKexp		sta	fp_e1		; Resulting exponent calculated
+
+		ldb	fp_s1		; знака е + ако ▒а ▒ еднакви зна╢и
+		xorb	fp_s2		;	и - ако ▒а ▒ ░азли╖ни
+		stb	fp_s1
+
+		ldx	#32		; 32 bit division
+DIVloop
+		lda	fp_m2+3 	; fp2 > fp1 ?
+		ldb	fp_m2+2
+		suba	fp_m1+3
+		sbcb	fp_m1+2
+		lda	fp_m2+1
+		ldb	fp_m2+0
+		sbca	fp_m1+1
+		sbcb	fp_m1+0
+
+		bcs	NotGRT
+		sta	fp_m2+1 	; ▒▓а░╕и▓е ве╖е ▒а ▒ме▓на▓и и ▒а го▓ови
+		stb	fp_m2+0
+		lda	fp_m2+3 	; ▒м┐▓аме о▓ново млад╕и▓е бай▓ове
+		ldb	fp_m2+2 	; ╣о▓о ▒ме ги заг│били
+		suba	fp_m1+3
+		sbcb	fp_m1+2
+		sta	fp_m2+3
+		stb	fp_m2+2
+		sec
+		db	$c6		; trick to jump over clc (ldb #clc)
+NotGRT		clc
+		rol	mantissa+3	; shift left result
+		rol	mantissa+2
+		rol	mantissa+1
+		rol	mantissa+0
+		lsr	fp_m1+0 	; shift right fp1
+		ror	fp_m1+1
+		ror	fp_m1+2
+		ror	fp_m1+3
+;               bcc     NoRound        ; о▓ ▓ази ░або▓а н┐ма келепи░
+;               lda     fp_m1+3        ; а ░або▓а▓а е добав┐не▓о на
+;               ora     #1             ; из╡в░║ква╣а▓а едини╢а
+;               sta     fp_m1+3
+;NoRound
+		dex
+		bne	DIVloop
+		clc
+                jsr     MoveMantissaC
+		jmp	Normalize	; jsr + rts
+
+div_zero        jmp     FP_divzer
+		endp;	Fdiv
+
+; ------- Round Last byte -------
+; Зак░║гл┐ване по по▒ледни┐ бай▓. Та┐ ░або▓а ▓░┐бва да ▒е п░ави за╣о▓о
+; в п░о▓ивен ▒л│╖ай ╖и▒ло▓о $7e ff ff ff ff 00 в║в в║▓░е╕но п░ед▒▓ав┐не
+; е ░авно в▒║╣но▒▓ на -1 а не на 0
+
+RoundLast	proc
+		lda	fp_m1+3 	; дали п║░ви┐ би▓ на по▒ледни┐ бай▓
+		bpl	NoCarry 	; е вдигна▓, ▓.е. ▓░┐бва ли round?
+		clr	fp_m1+3 	; за╖и▒▓ваме по▒ледни┐ бай▓ (round)
+		inc	fp_m1+2 	; да, ▓░┐бва и го п░авим
+		bne	NoCarry
+		inc	fp_m1+1
+		bne	NoCarry
+		inc	fp_m1+0
+		bne	NoCarry
+		sec
+		bra	InsertCarry	; ако има carry ▒е вм║ква най о▓п░ед
+NoCarry 	rts			; и ▓ова ╖е ▒е п░ави ╕и┤▓ не е ▒▓░а╕но
+		endp;	RoundLast	; ╣о▓о в д░│ги▓е бай▓ове има 0
+
+; ------- Add Floating Point numbers -------
+; Import:    fp_1 internal format real number
+;	       fp_2 internal format floating point numbers  (Fadd)
+;     or:      X ptr to second fp opernad      (X)  -> fp_2 (FaddX)
+; Export:    fp_1:= fp_2 + fp_1
+
+FaddX		jsr	restore_fp2
+Fadd		proc
+		lda	fp_e2		; дали п░ибав┐ме к║м 0.0?
+		bne	Not0
+		rts			; да, е н┐ма какво да п░авим.
+Not0		ldb	fp_e1		; дали п░ибав┐ме 0.0?
+		bne	Not00
+		bra	Swap_FP 	; да, ▓огава п░а╣аме fp_2 в fp_1
+Not00					; и две▓е ▒а <> 0
+		lda	fp_s2		; п░ове░┐ваме зна╢и▓е
+		tab
+		xora	fp_s1		; дали ▒а ░азли╖ни
+		bmi	SubSameSigns	; ▒ ░азли╖ни зна╢и
+AddSameSigns	=	*		; ▓е или ▒а или ▓░┐бва да ▒а ▒ еднакви
+		stb	fp_s1		; зна╢и.
+
+		jsr	Denormalize	; из░авн┐ване на по░┐д║╢и▓е
+		lda	fp_m1+3 	; 32 bit integer addition
+		adda	fp_m2+3
+		sta	fp_m1+3
+		lda	fp_m1+2
+		adca	fp_m2+2
+		sta	fp_m1+2
+		lda	fp_m1+1
+		adca	fp_m2+1
+		sta	fp_m1+1
+		lda	fp_m1+0
+		adca	fp_m2+0
+		sta	fp_m1+0
+		;jmp	 InsertCarry	 ; jsr + rts п░опадаме ди░ек▓но ▓ам
+		endp;	Fadd
+
+; ------- Insert Carry -------
+; Import: Carry = 0/1, fp_1 internal format real number
+; Export: if Carry = 1 then Shift Right fp_1 and insert carry as first bit
+;			    and bump exponent
+
+InsertCarry	proc
+		bcc	rts
+		ror	fp_m1+0
+		ror	fp_m1+1
+		ror	fp_m1+2
+		ror	fp_m1+3
+		bcc	IncExp
+		lda	#1		; по▒ледни┐ излиза╣ би▓ ▒е ┤ик▒и░а
+		ora	fp_m1+3 	; об░а▓но
+		sta	fp_m1+3
+IncExp		lda	fp_e1
+		inca
+		cmpa	#$ff
+		bne	ExpOK
+		jmp	FP_over
+ExpOK		sta	fp_e1
+rts		rts
+		endp;	InsertCarry
+
+; ------- Swap fp_1 <--> fp_2 -------
+
+Swap_FP 	proc
+		ldx	#6		; swap fp_1 and fp_2
+loop		lda	x, fp_1 -1
+		ldb	x, fp_2 -1
+		stb	x, fp_1 -1
+		sta	x, fp_2 -1
+		dex
+		bne	loop
+		rts
+		endp;	Swap_FP
+
+; ------- Subtact Floating Point numbers -------
+; Import:    fp_1 internal format real number
+;	       fp_2 internal format floating point numbers  (Fsub)
+;     or:      X ptr to second fp opernad      (X)  -> fp_2 (FsubX)
+; Export:    fp_1:= fp_2 - fp_1
+
+FsubX		jsr	restore_fp2
+Fsub		proc
+		lda	fp_e1		; дали вадим 0.0?
+		bne	Not0
+		bra	Swap_FP 	; да, ▓огава в░║╣аме fp_2
+Not0		ldb	fp_e2		; дали вадим о▓ 0.0?
+		bne	Not00		; ▓огава в░║╣аме (-fp_1)
+		lda	fp_s1		; о▒вен ▓ова ▒ме ▒иг│░ни ╖е fp_1
+		xora	#$80		; не е 0.0 (ина╖е би╡ме в║░нали fp_2)
+		sta	fp_s1
+		rts
+Not00					; и две▓е ▒а <> 0
+		lda	fp_s2		; п░ове░┐ваме зна╢и▓е
+		tab
+		xora	fp_s1		; дали ▒а ░азли╖ни
+		bmi	AddSameSigns	; ▒ ░азли╖ни зна╢и ▒а (▓огава ▒║би░аме)
+SubSameSigns	=	*		; ▓е или ▒а или ▓░┐бва да ▒а ▒ еднакви
+		stb	fp_s1		; зна╢и
+
+		bsr	ABScmpR 	; п░ове░┐ваме кое о▓ две▓е ╖и▒ла
+		bcc	FirstGreat	; е по-гол┐мо
+		xorb	#$80		; знака на ░ез│л▓а▓а e об░а▓ен за╣о▓о
+		stb	fp_s2		; в▓о░о▓о(fp_1) е по-гол┐мо о▓ п║░во▓о
+		bsr	Swap_FP
+FirstGreat
+		bsr	Denormalize
+		ldb	fp_m2+3
+		subb	fp_m1+3
+		stb	fp_m1+3
+		ldb	fp_m2+2
+		sbcb	fp_m1+2
+		stb	fp_m1+2
+		ldb	fp_m2+1
+		sbcb	fp_m1+1
+		stb	fp_m1+1
+		ldb	fp_m2+0
+		sbcb	fp_m1+0
+		stb	fp_m1+0
+ .ifdef old_nomalize
+		bra	Normalize0	; jsr + rts
+ .else
+                jmp     Normalize       ; jsr + rts
+ .endif
+		endp;	Fsub
+
+; ------- Denormalize -------
+; Import: fp_1, fp_2 internal format real numbers
+; Export: fp_1 & fp_2 ▒а ▒ из░авнени по░┐д║╢и (к║м по-големи┐ о▓ два▓а)
+;	  ка▓о ╖и▒ло▓о ▒ по-малки┐ по░┐д║к е дено░мализи░ано.
+;	  fp_e1, и fp_e2 не ▒а пипна▓и, но по-големи┐ о▓ два▓а по░┐д║ка
+;	  е запи▒ан в fp_e1
+
+Denormalize	proc
+		lda	fp_e1		; ▒░авн┐ваме две▓е ек▒понен▓и
+		tab
+		subb	fp_e2
+		bcc	E1geqE2 	; taken if e1 >= e2
+		negb			; понеже e1 < e2 ▓о ▓░┐бва да negate
+		lda	fp_e2
+		sta	fp_e1		; ░ез│л▓а▓на▓а ек▒понен▓а
+		ldx	#fp_m1
+		bra	ShiftRight
+E1geqE2 	beq	rts
+		;sta	 fp_e1		; ░ез│л▓а▓на▓а ек▒понен▓а ▒и е ▒║╣а▓а
+		ldx	#fp_m2
+ShiftRight
+		lda	x, 3		; ▓ака е ╡ем по-б║░зо ╡ем по-к░а▓ко
+ShiftLoop	lsr	x, 0
+		ror	x, 1
+		ror	x, 2
+		rora	;x, 3
+		bcc	NoCarry 	; из╡в║░╖а╣и┐ би▓ ▓░┐бва да ▒е
+		ora	#1		; в║░не на м┐▒▓о▓о м│ за░ади ▓о╖но▒▓
+NoCarry 				; а дали най▒▓ина ▓░┐бва, а?
+		decb			; да доп│▒нем, ╖е ▒║би░аме 0.000000001
+		bne	ShiftLoop	; ▒ 10000000000000, ▓огава?
+		sta	x, 3
+rts		rts
+		endp;	Denormalize
+
+; ------- Compare Floating Point numbers -------
+; Import:    fp_1 internal format real number
+;	       fp_2 internal format floating point numbers  (Fcmp)
+;     or:      X ptr to second fp opernad      (X)  -> fp_2 (FcmpX)
+; Export: Carry & Zero flags are set acording to comparison
+;	  fp_1 <, =, > fp_2 (non destructive fp2 - fp1)
+
+FcmpX		bsr	restore_fp2
+Fcmp		lda	fp_s1		; п░авим ▒░авнение на зна╢и▓е
+		cmpa	fp_s2		; оба╖е об░а▓но за╣о▓о (-) = $80
+		bne	FP_rts_2	; ако зна╢и▓е ▒е ░азли╖ава▓ ОК
+                tsta
+                bpl     ABScmpR         ; compare postive numbers
+                bsr     ABScmpR         ; compare negative numbers
+                beq     FP_rts_2        ; and if equal then OK
+                tpa                     ; if not equal then change result
+                xora    #%0000_0001     ; reverse result (C) if negative
+                tap                     ; numbers compeared
+                rts
+
+; ------- Compare FP (absolute values) -------
+; Import:    fp_1, fp_2 in internal real format
+; Export:    Carry & Zero flag are set acording to comparison fp2 - fp1
+;	     С░авн┐ване▓о ▒е п░ави по аб▒ол╛▓на ▒▓ойно▒▓.
+; Warning: ▒капва ▒е ▒амо ░еги▒▓║░ A и никой д░│г
+
+ABScmpR 	proc
+		lda	fp_e2
+		cmpa	fp_e1
+		bne	FP_rts_2	; fp_2 - fp_1 (exponents)
+
+		lda	fp_m2+0 	; ек▒понен▓и▓е ▒а еднакви
+		cmpa	fp_m1+0 	; п░ове░┐ваме ман▓и▒и▓е
+		bne	FP_rts_2
+		lda	fp_m2+1
+		cmpa	fp_m1+1
+		bne	FP_rts_2
+		lda	fp_m2+2
+		cmpa	fp_m1+2
+		bne	FP_rts_2
+		lda	fp_m2+3
+		cmpa	fp_m1+3
+FP_rts_2	=	*
+                rts
+		endp;	ABScmpR
+
+; ------- Get Fraction Part of a real number -------
+; Import: fp_1 internal format real number
+; Export: fp_1 = frac(fp_1)
+
+Ffrac		proc
+		lda	fp_e1		; минимални┐ по░┐д║к за ╢┐ло ╖и▒ло
+                beq     FP_rts_2        ; е $7f
+		cmpa	#$7e+32 	; ако по░┐д║ка е ▓ак║в н┐мa fraction
+		bcs	NotLarge
+is_Zero 	jmp	Zero_fp1	; return 0
+
+NotLarge
+		cmpa	#$7f		; ╣ом по░┐д║ка е по мал║к о▓ $7f
+                bcs     FP_rts_2        ; зна╖и ╖и▒ло▓о ▒и е по-малко о▓ 1
+
+LeftLoop	asl	fp_m1+3 	; за╖и▒▓ваме integer ╖а▒▓▓а
+		rol	fp_m1+2 	; ка▓о п░о▒▓о го ме▒▓им колко▓о
+		rol	fp_m1+1 	; ▓░┐бва нал┐во
+		rol	fp_m1+0
+		deca			; в на╖ало▓о на ╢ик║ла имаме:
+		cmpa	#$7e		; $7f <= A <= $7e + 32
+		bne	LeftLoop
+		sta	fp_e1
+ .ifdef old_nomalize
+Normalize0			      =*; check for 0.0 and normalize
+		lda	fp_m1+3 	; а дали не ▒ме пол│╖или 0.0?
+		ora	fp_m1+2
+		ora	fp_m1+1
+		ora	fp_m1+0
+		bne	NotZero
+		sta	fp_s1
+		sta	fp_e1
+rts		rts
+NotZero
+ .endif
+                jmp     Normalize
+		endp;	Ffrac
+
+; ------- Restore FP accomulator 2 -------
+; Import: X ptr to internal packed format
+; Export: (X) -> fp_2
+
+restore_fp2	proc
+		lda	x, 2
+		sta	fp_m2+1
+		lda	x, 3
+		tab
+		andb	#$80		; знака
+		stb	fp_s2
+		ldb	x, 1		; понеже ░еда е без зна╖ение
+		stb	fp_m2+2 	; и за ▒л│╖а┐ X = fp_2
+		ldb	x, 4		; ек▒понен▓а
+		beq	Is0
+		ora	#$80
+Is0		sta	fp_m2
+		lda	x, 0
+		sta	fp_m2+3
+		stb	fp_e2
+		rts
+		endp;	restore_fp2
+
+; ------- Prepare FP number for print -------
+; Подго▓овка на FP number за пе╖а▓ане.
+; Import: fp_1 ╖и▒ло кое▓о ╣е ▓░┐бва да пе╖а▓аме
+; Export: LongWork = fp_1 *10 или /10 ▓олкова п║▓и ╖е да влезе ▓о╖но в 32bits
+;	  wrk3+1   = по де▒е▓ на ко┐ ▒▓епен
+;   Т.е. в LongWork пол│╖аваме зна╖е╣и▓е ╢и┤░и о▓ ман▓и▒а▓а на ек▒понен╢иална▓а
+;   ┤о░ма ( ╢и┤░а.╢и┤░иEпо░┐д║к), а в║в wrk3+1 пол│╖аваме по░┐д║ка.
+
+prepareFP	proc
+		clra
+		sta	wrk3+1		; exp:= 0;	{ по де▒е▓ на ▒▓епен }
+		sta	fp_s1		; fp:= abs(fp);
+Loop_1		lda	fp_e1		; while exp < $7e + 31 do
+		beq	End_2		;			ако имаме 0.0
+		cmpa	#$7e+31 	;   begin
+		bcc	End_1		;
+		dec	wrk3+1		;   Dec(exp);
+		ldx	#OneE01 	;   fp:= fp * 10;
+		jsr	FmulX
+		bra	Loop_1		;   end;
+End_1
+Loop_2		lda	#$7e+31 	; while $7e + 31 < exp do
+		cmpa	fp_e1		;   begin
+		bcc	End_2		;
+		inc	wrk3+1		;   Inc(exp);
+		ldx	#OneE_01	;   fp:= fp * 0.1; { fp:= fp / 10 }
+		jsr	FmulX		;
+		bra	Loop_2		;   end;
+End_2
+		lda	#1
+		sta	wrk3
+		bsr	trunc_round	; l:= round(fp);
+		ldx	fp_m1		; п░е╡в║░л┐ме го в LongWork
+		stx	LongWork
+		ldx	fp_m1+2
+		stx	LongWork+2
+FP_rts_3	=	*
+		rts
+		endp;	prepareFP
+
+; ------- Truncate (Round) Floating Point Number -------
+; Import: fp_1 internal format real, wrk3 = 0/1 truncate/round
+; Export: fp_m1 long integer in Bsex+
+
+trunc_round	proc
+		lda	#$7e+31 	; ╖и▒ло▓о ▓░┐бва да има най-много 31
+		suba	fp_e1		; ╢и┤░и (без да б░ойм знака)
+		bcc	OKexp		; ка▓о в A пол│╖аваме колко п║▓и
+                bra     err_ovr         ; да го п░идвижим над┐▒но
+OKexp		cmpa	#32
+		bmi	NotSmall	; ╖и▒ло▓о е ▓в║░де малко
+		jmp	zero_fp1	; пол│╖ава ▒е 0
+NotSmall	tsta			; п░еме▒▓ваме го но не 32, а ▒амо 31
+		beq	OKinteger	; п║▓и (▓.е. ако в A има 0 ни▓о ведн║ж)
+ShiftLoop	lsr	fp_m1+0 	; по ▓ози на╖ин пол│╖аваме ▒амо 31 би▓а
+		ror	fp_m1+1 	; о▓ ╖и▒ло▓о а по▒ледни┐ е о▓
+		ror	fp_m1+2 	; д░обна▓а м│ ╖а▒▓ (за░ади round)
+		ror	fp_m1+3
+		deca
+		bne	ShiftLoop
+OKinteger
+		lda	wrk3
+		beq	NotRound
+		inc	fp_m1+3 	; ако имаме round ▓░┐бва да добавим
+		bne	NotRound	; по▒ледни┐ би▓ к║м ╖и▒ло▓о
+		inc	fp_m1+2
+		bne	NotRound
+		inc	fp_m1+1
+		bne	NotRound
+		inc	fp_m1+0
+		bne	NotRound
+err_ovr         jmp     fp_int_ovr
+NotRound	lsr	fp_m1+0 	; ▒ега п░авим по▒ледно▓о п░еме▒▓ване
+		ror	fp_m1+1 	; ка▓о из╡в║░л┐ме по▒ледни┐
+		ror	fp_m1+2 	; д░обен би▓
+		ror	fp_m1+3
+		lda	fp_s1		; а да не би да ▒ме имали (-) ╖и▒ло?
+		bpl	FP_rts_3	; не, в▒и╖ко е на░ед (branch to rts)
+		clrb
+		clra
+		neg	fp_m1+3 	; + 2 за░ади return address
+		sbca	fp_m1+2
+		sta	fp_m1+2
+		tba			; we need Carry
+		sbca	fp_m1+1
+		sbcb	fp_m1+0
+		sta	fp_m1+1
+		stb	fp_m1+0
+		rts
+		endp;	trunc_round
+
+; ------- Calculate a + b*x + c*x^2 + d*x^3 + ... -------
+; Import: fp_1 е ░еално▓о ╖и▒ло x о▓ полинома по-го░е
+;	  X reg - ptr to coef table
+; Export: fp_1 = a + b*x + c*x^2 + d*x^3 + ...
+; uses:   wrk1, fp_w
+; Note:   В▒║╣но▒▓ из╖и▒ление▓о ▒е п░ави ▓ака:
+;	  ((((...) + d) * x + c) * x + b) * x + a
+
+Series		proc
+
+fp_w		=	WorkBuff	; ░або▓ни 5 бай▓а за малко
+
+		lda	x, 0		; get number of coef
+		pha
+		inx			; bump X to point to last coef
+		stx	wrk1		; which comes first in table
+		ldx	#fp_w		; save x (╖и▒ло▓о о▓ полинома
+		bsr	save_fp1
+		ldx	wrk1
+		pla
+loop		pha
+		jsr	FmulX		; (X) * fp_1
+		ldx	wrk1		; bump X to point to next item in table
+		inx
+		inx
+		inx
+		inx
+		inx
+		stx	wrk1
+		jsr	FaddX		; (X) + fp_1
+		ldx	#fp_w		; ▒ега ╣е │множим по x
+		pla
+		deca
+		bne	loop
+		rts
+		endp;	Series
+
+; ------- Save FP accomulator 1 -------
+; Import: X ptr to 5 byte space
+; Export: fp_1 -> (X) ка▓о знака ▒е паке▓и░а (BSex-)
+
+save_fp1	proc
+		lda	fp_e1		; п░е╡в║░л┐ме ек▒понен▓а▓а
+		ldb	fp_m1+3 	; и ▓║й ка▓о е без зна╖ение ░еда
+		stb	x, 0		; в кой▓о ╣е п░еме▒▓им ╖и▒ло▓о
+		sta	x, 4		; го п░авим ▓ака ╖е да в║░ви и за
+		lda	fp_m1+1 	; ▒л│╖а┐ X = fp_1
+		sta	x, 2
+		lda	fp_m1
+		ldb	fp_m1+2
+		stb	x, 1
+		ldb	fp_s1		; знака
+		anda	#$7f
+		aba			; add $80 if negative
+		sta	x, 3
+		rts
+		endp;	save_fp1
+
+; ------- Calculate ax + b*x^3 + c*x^5 + d*x^7 + ... -------
+; Import: fp_1 е ░еално▓о ╖и▒ло x о▓ полинома по-го░е
+;	  X reg - ptr to coef table
+; Export: fp_1 = ax + b*x^3 + c*x^5 + d*x^7 + ...
+; uses:   wrk1, fp_t
+; Note:   В▒║╣но▒▓ из╖и▒ление▓о ▒е п░ави ▓ака:
+;	  полагаме y = x^2
+;	  x * (a + b*y + c*y^2 + d*y^3 + ...), ▓.е. ползваме Series
+
+OddSeries	proc
+
+fp_t		=	WorkBuff+6	; ░або▓ни 5 бай▓а за малко
+
+		stx	wrk1
+		ldx	#fp_t
+		bsr	save_fp1	; запазваме ▒и x за да │множим по к║▒но
+		ldx	#fp_2		; за да нап░авим x * x
+		bsr	save_fp1	; restore_fp2 ░або▓и в║░╡│ ▒ебе ▒и
+		jsr	FmulX		; п░авим x * x, ▓.е. x^2
+		ldx	wrk1		; restore ptr to table
+		bsr	Series
+		ldx	#fp_t
+		jmp	FmulX		; jsr + rts
+		endp;	OddSeries
+
+; ------- Calc COS -------
+; Import: fp_1 cos's parameter
+; Export: fp_1 = cos(fp_1)
+
+Fcos		ldx	#HalfPi 	; cos(x) = sin(pi/2 + x)
+		jsr	FaddX		; п░ибав┐ме pi/2 и п░од║лжаваме ▒║▒ sin
+
+; ------- Calc SIN -------
+; Import: fp_1 sin's parameter
+; Export: fp_1 = sin(fp_1)
+; Об┐▒нение: За да п░е▒ме▓нем sin ╣е използ│ваме ┤о░м│ла▓а на Тейло░:
+; sin(x) = x - x^3 / 3! + x^5 / 5! - x^7 / 7! + ...
+; Оба╖е п║░во ▓░┐бва да ▒е п░ове░и дали 0 <= x < 2*pi, и ако не е ▓ака да ▒е
+; по▒▓ави ▓ам. Рабо▓а▓а е ▓ам ╖е понеже ╣е делим на 2*pi ▓о за да не │множаваме
+; ▒лед ▓ова пак (за╣о▓о x - int(x/2*pi)*2*pi) може да ползваме y = frac(x/2*pi)
+; но ▓огава ▓░┐бва в ▓ейло░ови┐ ░ед да ко░иги░аме кое┤и╢иен▓и▓е ▒ 2*pi, а п║к
+; за y е изп║лнено 0 <= y < 1. Но ▓ова не е в▒и╖ко. Сме▓ки▓е ╣е п░авим ▒амо за
+; ин▓е░вала 0 <= y < 1/4 кое▓о о▓гова░┐ на 0 <= x < pi/2.
+; П░ев░║╣ане▓о на y е ка▓о ▒ледва
+;     0 <= y < 1/4 ==> sin(z) =  sin(y)
+;   1/4 <= y < 1/2 ==> sin(z) =  sin(1/2 - y)
+;   1/2 <= y < 3/4 ==> sin(z) = -sin(y - 1/2)  { забележи, ╖е знака ▒е об░║╣а }
+;   3/4 <= y < 1   ==> sin(z) = -sin(1 - y)    { забележи, ╖е знака ▒е об░║╣а }
+
+Fsin		proc
+		lda	fp_s1		; запазваме знака, ка▓о п░авим abs(fp1)
+		pha			; за╣о▓о, sin(-x) = -sin(x);
+		clr	fp_s1		; abs(fp_1)
+		ldx	#PiDoub 	; делим на 2*pi, как▓о об┐▒ни╡ме
+		jsr	restore_fp2	; понеже имаме ▓акива п░о╢ед│░и
+		jsr	Swap_FP 	; ▓о за▓ова п░авим ▓ака
+		jsr	Fdiv
+		jsr	Ffrac		; 0 <= (y = frac(x/2pi)) < 1
+		ldx	#Half		; ▒░авн┐ваме 1/2 ▒ y
+		jsr	FcmpX
+		bhi	lessHalf	; 1/2 е по-гол┐ма о▓ y
+		pla			; об░║╣аме знака (как▓о ▒е │гово░и╡ме)
+		xora	#$80
+		pha
+subHalf 	ldx	#Half		; дали вадим 1/2 или о▓ 1/2 н┐ма зна╖ка
+		jsr	FsubX		; за╣о▓о по▒ле п░авим abs
+		clr	fp_s1
+lessHalf	ldx	#Quarter	; ▒░авн┐ваме ▒ 1/4
+		jsr	FcmpX
+		bcs	subHalf 	; 1/4 е по-малка о▓ fp_1
+		ldx	#SINserTBL	; z е п░е▒ме▓на▓о и ▒ега ▒м┐▓аме ░еда
+		jsr	OddSeries
+SetRightSign	=	*		; ▓░┐бва да по▒▓овим н│жни┐ знак
+		pla			; е▓о го знака кой▓о ╣е ▒ложим
+		ldb	fp_e1		; оба╖е да не би ╖и▒ло▓о да е 0.0
+		beq	rts
+		sta	fp_s1		; не, не е 0.0 ▒лагаме м│ знака
+rts		rts
+		endp;	Fsin
+
+; ------- Calc ArcTan -------
+; Import: fp_1 arctan's parameter
+; Export: fp_1 = ArcTan(fp_1)
+; Об┐▒нение: За да п░е▒ме▓нем ArcTan ╣е използ│ваме ┤о░м│ла▓а на Тейло░:
+; ArcTan(x) = x - x^3 / 3 + x^5 / 5 - x^7 / 7 + ..., за abs(x) < 1
+; О▒вен ▓ова е ┐▒но ╖е ArcTan(-x) = -ArcTan(x) и зна╖и ╣е ░або▓им как▓о п░и SIN
+; За да ▒пазим изи▒кване▓о abs(x) < 1 ╣е използ│ваме ╖е:
+;   ArcTan(x) = pi/2 - ArcTan(1/x) и в▒и╖ко ╣е е на░ед.
+
+Fatan		proc
+		lda	fp_s1		; ░ез│л▓а▓а на ┤│нк╢и┐▓а има знака на
+		pha			; па░аме▓║░а ▒и. Запазваме го и abs
+		clr	fp_s1
+		lda	fp_e1		; п░ове░┐ваме ек▒понен▓а▓а
+		pha			; запазваме за пов▓о░на п░ове░ка
+		cmpa	#$7f		; Дали има ╢┐ла ╖а▒▓?
+		bcs	LessOne 	; не, н┐ма ек▒понен▓а▓а е малка
+		ldx	#One		; има ╢┐ла ╖а▒▓, делим 1 / fp_1
+		jsr	FdivX
+LessOne 	ldx	#ATANserTBL	; за░еждаме │каза▓ел┐ к║м ▓абли╢а▓а и
+		jsr	OddSeries	; п░е▒м┐▓аме не╖е▓ен ░ед
+		pla			; б┐╡ме ▒па▒или ек▒понен▓а▓а за check
+		cmpa	#$7f
+		bcs	SetRightSign	; па░аме▓║░а е бил < 1, оп░ав┐ме знака
+		ldx	#HalfPi 	; акое е бил >= 1, вадим о▓ pi/2
+		jsr	FsubX		; пол│╖ени┐ ░ез│л▓а▓а, без зна╖ка е
+		bra	SetRightSign	; дали вадим pi/2 или о▓ pi/2
+		endp;	Fatan
+
+; ------- Calc EXP -------
+; Import: fp_1 exp's parameter
+; Export: fp_1 = exp(fp_1)
+; Об┐▒нение: За да п░е▒ме▓нем exp ╣е използ│ваме ┤о░м│ла▓а на Тейло░, но
+; за ▒║жаление ▓ам много б║░зо ╡в░║ква▓ наго░е ▒▓епени▓е. ПО░ади ▓ази п░и╖ина
+; ▒ме▓ки▓е ╣е б║да▓ п░авени ▓ака: exp(x) = 2^(x * log2(e)).
+; И ▓огава използ│вайки ▒▓епенен ░ед пол│╖аваме ╖е:
+; 2^y = 1 + ln(2)*y + (ln(2))^2/2 + (ln(2))^3/3 + ...
+; Д░│г един ▓░ик е ▒ледни┐: 2 ^ y = 2 ^(int(y) + frac(y)) = 2^int(y)*2^frac(y)
+; а ▓ова зна╖и ╖е вземаме int(y), ▒м┐▓аме 2^frac(y) и к║м ек▒понен▓а▓а на
+; ░ез│л▓а▓а добав┐ме int(y) (за╣о▓о ек▒понен▓а▓а е за двой╖но▓о п░ед▒▓ав┐не)
+
+Fexp		proc
+		ldx	#log2_e 	; │множаваме по log2(e)
+		jsr	FmulX
+		clrb
+		lda	fp_e1		; ек▒понен▓а▓а
+		cmpa	#$7e + 7	; дали има пове╖е о▓ 7 ╢ели би▓а
+		bls	OKexp		; не не ▒а пове╖е о▓ 7
+		lda	fp_s1		; ако е о▓░и╢а▓елна ▒▓епен ▓о 0
+                bpl     _overflow
+		jmp	Zero_fp1	; гол┐ма о▓░и╢а▓елна ▒▓епен ==> 0.0
+_overflow       jmp     fp_over         ; ▓о large
+GetIntPart	asl	fp_m1+3 	; п░идвижваме ман▓и▒а▓а нал┐во
+		rol	fp_m1+2
+		rol	fp_m1+1
+		rol	fp_m1+0
+		rolb			; излиза╣и┐ би▓ влиза в ░еги▒▓║░ B
+		deca
+OKexp		cmpa	#$7e		; пов▓а░┐ме ▓ази опе░а╢и┐ дока▓о излезе
+		bhi	GetIntPart	; ╢┐ла▓а и о▒▓ане ▒амо д░обна▓а ╖а▒▓.
+		sta	fp_e1
+		lda	fp_s1
+		bpl	PositivePwr	; положи▓елна или о▓░и╢а▓елна
+		negb			; ако е о▓░и╢а▓елна
+PositivePwr	phb			; запазваме ╢┐ла▓а ╖а▒▓
+ .ifdef old_nomalize
+		jsr	Normalize0	; но░мализи░аме д░обна▓а
+ .else
+                jsr     Normalize
+ .endif
+		ldx	#EXPserTBL	; п░е▒м┐▓аме ▒▓епенен ░ед за 2^frac(y)
+		jsr	Series
+		ldx	#One		; п░ибав┐ме к║м ек▒понен▓а▓а
+		jsr	restore_fp2	; ╢┐ла▓а ╖а▒▓ о▓ y, ка▓о за ╢ел▓а
+		pla			; │множаваме по 2 на н│жна▓а ▒▓епен
+		adda	#$7f		; а н│жна▓а ▒▓епен ▒е пол│╖ава
+		sta	fp_e2		; ка▓о п░ибавим к║м $7f, запазена▓а
+		jmp	Fmul		; ▒▓епен (▓┐ е о▓░и╢а▓елна ако ▓░┐бва)
+		endp;	Fexp
+
+; ------- Calc LN -------
+; Import: fp_1 ln's parameter
+; Export: fp_1 = ln(fp_1)
+; Об┐▒нение: ln(z) = ln(x*2^n), к║де▓о 0.5 <= x < 1; о▒вен ▓ова имаме
+;            ln(z) = ln(x) + ln(2^n) = ln(2) * (log2(x) + n) =
+;                  = ln(2) * (log2(x*√2) - log2(1/√2) + n) =
+;                  = ln(2) * (ln(x*√2)/ln(2) - 1/2 + n)
+;            и зна╖и ни о▒▓ава да ▒ме▓нем ln(x*√2)/ln(2), ▓ова ▒▓ава ка▓о
+;            използ│ваме ╖е ln(x) = 2*( (x-1)/(x+1) + ((x-1)/(x+1))^3 ...)
+;            кое┤и╢иен▓и▓е на ░еда ▒а ▒║о▓ве▓но ░азделени на ln(2) за╣о▓о
+;            и▒каме да пол│╖им ln(x*√2)/ln(2), (за╣о │множаваме по √2!)
+;            И о╣е не╣о: (x*√2 -1)/(x*√2 + 1) = 1 - √2 / (x + √2/2)
+; Забележка: ин▓е░е▒но▓о е ╖е ако използ│ваме ди░ек▓но ┤о░м│ла▓а за ln(x)
+;            ▒е пол│╖ава▓ г░е╕ки о▓ по░┐д║ка на 10^-7 и ┐вно ▓░┐бва да
+;            ▒е ▒м┐▓а за ln(x*√2) а не ди░ек▓но за ln(x).
+
+Fln		proc
+		lda	fp_s1
+		bpl	signOK
+error		jmp	FP_invalid
+signOK		lda	fp_e1		; save exponent
+		beq	error
+                suba    #$7e
+		pha
+                lda     #$7e
+		sta	fp_e1
+
+                ldx     #HalfSqrt2      ; x + √2/2
+                jsr     FaddX
+                ldx     #sqrt2          ; √2 / (x + √2/2)
+                jsr     FdivX
+                ldx     #One            ; 1 - √2 / (x + √2/2)
+                jsr     FsubX
+
+		ldx	#LNserTBL	; calculate via odd powers of
+                jsr     OddSeries       ; (√2*x -1) / (√2*x + 1)
+                ldx     #NegHalf        ; subtract 1/2
+                jsr     FaddX
+                jsr     RoundLast       ; 1.54 (28.Nov.1990)
+                clr     fp_m1+3         ; LN(1) = 0
+		jsr	Swap_FP 	; add original exponent
+		pla
+		clrb
+		tsta
+		bpl	OKpositive
+		decb
+OKpositive      jsr     Int2real        ; add n
+		jsr	Fadd
+                ldx     #ln_2           ; divide by ln(2)
+		jmp	FmulX
+		endp;	Fln
+
+; ------- Calculate SQRT -------
+; П░е▒м┐▓ане▓о ▒е п░ави ╖░ез 7 и▓е░а╢ии п║░во▓о п░иближение е p (parameter)
+; а в▒┐ко ▒ледва╣о ▒е пол│╖ава о▓ п░еди╕но▓о по ┤о░м│ла▓а:
+;  X[n+1] = (p/X[n] + X[n]) / 2
+; ка▓о п░еди ▓ова ▒ма╖кваме ╖и▒ло▓о в ин▓е░вала 1/4..4, ка▓о го ░азлагаме на
+; P = p * 2¤№ => √P = √p * 2№
+
+Fsqrt		proc
+fp_x            =       WorkBuff
+fp_parameter    =       WorkBuff+6
+save_exp        =       wrk3
+iteration       =       wrk3+1
+
+                lda     fp_s1
+                beq     not_neg
+                jmp     FP_sqrt_neg
+not_neg         lda     fp_e1
+                beq     ready_0
+                suba    #127            ; пол│╖аваме ек▒понен▓а▓а
+                asrA                    ; делим на 2 signed byte
+                sta     save_exp        ; save for later use
+                lda     #127            ; exp = 0
+                adca    #0              ; добав┐ме не╣а▒▓но▓о изб┐гало carry
+                sta     fp_e1           ; по ▓ози на╖ин ▒ма╖ка╡ме ╖и▒ло▓о
+                                        ; близо около 1 (1/4 .. 4)
+
+                lda     #7+ 1; за░ади ┤ал╕иви┐ dec (bra save_x)
+                sta     iteration
+                ldx     #fp_parameter   ; ╣е ▒м┐▓аме по ┤о░м│ла▓а
+                jsr     save_fp1        ; newX:= (P/X + X)/2
+                bra     save_x          ; и ка░аме 7 на б░ой и▓е░а╢ии
+
+loop            ldx     #fp_parameter   ; P/X
+                jsr     FdivX
+                ldx     #fp_x           ; P/X + X
+                jsr     FaddX
+                dec     fp_e1           ; а ▒ега го делим б║░зо и ле▒но на 2
+
+save_x          ldx     #fp_x
+                jsr     save_fp1
+                dec     iteration
+                bne     loop
+
+OK_ready
+                lda     save_exp
+                adda    fp_e1
+                ;suba    #127
+                sta     fp_e1
+ready_0         rts
+		endp;	Fsqrt
+
+; ------- Multiply fp_1 by 10 and add Acc A -------
+
+mply10addA	proc
+		pha			;preserve Acc A
+		ldx	#OneE01
+		jsr	FmulX		; multiply by 10
+		jsr	swap_fp
+		pla
+		clrb
+		jsr	Card2real	; convert Acc A to integer number
+		jmp	Fadd		; add fp_1 and fp_2
+		endp;	mply10addA
+
+; ------- Multiply fp_1 by 1eA and convert to IEEE format in LongInt -------
+
+fp_10_pwr	proc			; Acc A = колко п║▓и по 10 да │множим
+
+		ldx	#OneE01
+		tsta
+		bpl	Times10 	; ╣е │множаваме по 10
+		ldx	#OneE_01
+		nega
+Times10 	stx	LongWork
+		tsta
+		beq	DontMply
+loop		pha
+		ldx	LongWork
+		jsr	FmulX
+		pla
+		deca
+		bne	loop
+DontMply
+		jsr	RoundLast
+		lda	fp_s1		; get sign
+		ldb	fp_m1+0 	; get MSByte of mantissa
+		aslb			; из╡в║░л┐ме п║░ви┐ би▓ на mantissa
+		asla			; из╡в║░л┐ме знака в Carry
+		lda	fp_e1
+		rora			; нап║╡ваме знака в exponent
+		rorb			; и по▒ледни┐ на exponent в mantissa
+		sta	LongWork+0
+		stb	LongWork+1
+		ldb	fp_m1+1
+		lda	fp_m1+2
+		stb	LongWork+2
+		sta	LongWork+3
+		rts
+		endp;	fp_10_pwr
+
+;--------- Н┐кой ╡│бави╖ки кон▒▓ан▓и в packed internal format (BSex-) ---------
+; В▒║╣но▒▓ ▓│ка има една гол┐ма боза и ▓┐ е ╖е в▒и╖ки ▓ези кон▒▓ан▓и ▒а в Bsex-
+; кой▓о ▒▓░│ва ми ▒е е о▒▓анал о▓ н┐кой ▒▓а░и н│жди. В▒║╣но▒▓ sex-а зави▒и ▒амо
+; о▓ п░о╢ед│░и▓е restore_fp2 и save_fp1, ▓ака ╖е ▒покойно може да ▒е нап░ави +
+; ама ме м║░зи да го п░ав┐.
+
+		;	┌─ mantissa+sgn ─╧  exp
+Half		db	$00, $00, $00, $00, $7e ;  0.5	=   1/2
+NegHalf 	db	$00, $00, $00, $80, $7e ; -0.5	= - 1/2
+Quarter 	db	$00, $00, $00, $00, $7d ;  0.25 =   1/4
+
+HalfPI		db	$a2, $da, $0f, $49, $7f ; pi / 2
+
+log2_e		db	$29, $3b, $aa, $38, $7f ; log2(e)
+ln_2		db	$f8, $17, $72, $31, $7e ; ln(2)
+
+sqrt2		db	$34, $f3, $04, $35, $7f ; sqrt(2)
+HalfSqrt2       db      $34, $f3, $04, $35, $7e ; sqrt(2) / 2
+
+OneE01		db	$00, $00, $00, $20, $82 ; 1.0E+01 = 10
+OneE_01 	db	$cd, $cc, $cc, $4c, $7b ; 1.0E-01 = 0.1
+
+;------------------------------------------------------------------------------
+; Табли╢и ▒ кое┤и╢иен▓и за ▓ейло░ови▓е ░едове. Пове╖е▓о о▓ кое┤и╢иен▓и▓е ▒а
+; моди┤и╢и░ани ▓ака ╖е да има по-б║░за ▒╡одимо▒▓. С║▒ *** ▒а о▓бел┐зани
+; и▒▓ин▒ки▓е ▒▓ойно▒▓и (нап░авено е ▒амо за SIN за д░│ги▓е ме м║░зе╕е)
+; В▒┐ка ▓абли╢а има ▒ледни┐ вид:
+;		db	б░ой кое┤и╢иен▓и - 1
+;		db	по▒леден кое┤и╢иен▓
+;		....
+;		db	п║░ви кое┤и╢иен▓
+
+SINserTBL	db	5
+		;***	$ef, $a7, $83, $f1
+		db	$1b, $2d, $1a, $e6, $82 ; -(2 * pi)^11/ 11!
+		;***	$44, $1a, $3c
+		db	$f8, $fb, $07, $28, $84 ; +(2 * pi)^9 / 9!
+		;***	$73, $66, $69
+		db	$01, $89, $68, $99, $85 ; -(2 * pi)^7 / 7!
+		;***	$3c, $e3
+		db	$e1, $df, $35, $23, $85 ; +(2 * pi)^5 / 5!
+		;***	$31
+		db	$28, $e7, $5d, $a5, $84 ; -(2 * pi)^3 / 3!
+PiDoub		db	$a2, $da, $0f, $49, $81 ; +(2 * pi)
+
+ATANserTBL	db	11
+		db	$d3, $bd, $83, $b3, $74 ; 1 / 23  A modified
+		db	$f5, $a6, $f4, $1e, $77 ; 1 / 21  Gregory
+		db	$10, $b0, $fc, $83, $79 ; 1 / 19  series
+		db	$ca, $67, $1f, $0c, $7a ; 1 / 17  is used
+		db	$c1, $cb, $53, $de, $7a ; 1 / 15  to calc
+		db	$4c, $70, $64, $14, $7b ; 1 / 13  ArcTan.
+		db	$7a, $51, $ea, $b7, $7b ; 1 / 11
+		db	$7e, $88, $30, $63, $7b ; 1 / 9   Gregory
+		db	$3a, $99, $44, $92, $7c ; 1 / 7   converges
+		db	$c7, $91, $cc, $4c, $7c ; 1 / 5   too
+		db	$13, $aa, $aa, $aa, $7d ; 1 / 3   slowly.
+One		db	$00, $00, $00, $00, $7f ; 1
+
+EXPserTBL	db	7
+		db	$56, $3e, $58, $34, $6f ; ln(2)^7 / 7
+		db	$1b, $b3, $7e, $16, $72 ; ln(2)^6 / 6
+		db	$85, $e3, $ee, $2f, $75 ; ln(2)^5 / 5
+		db	$2a, $1c, $84, $1d, $78 ; ln(2)^4 / 4
+		db	$0a, $58, $59, $63, $7a ; ln(2)^3 / 3
+		db	$c6, $e7, $fd, $75, $7c ; ln(2)^2 / 2
+		db	$10, $18, $72, $31, $7e ; ln(2)
+		db	$00, $00, $00, $00, $7f ; 1
+
+LNserTBL        db      3
+                db      $79, $cb, $56, $5e, $7d ; 2/7 / ln(2)
+                db      $64, $0b, $9b, $13, $7e ; 2/5 / ln(2)
+                db      $16, $93, $38, $76, $7e ; 2/3 / ln(2)
+                db      $20, $3b, $aa, $38, $80 ; 2   / ln(2)
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,46 @@
+#  Този ми ▓и ┤айл е за make-ване на в▒и╖ки не╣а по Ycode Interpreter
+
+boza: y1.RAM y2.RAM check.cmd y.cmd	  # за да ▒е об░або▓┐▓ в▒и╖ки
+
+check.cmd:	check.asm interrupts.inc undocumented.inc globals.y
+
+  68   check.asm;
+
+
+y.cmd:		y.asm interrupts.inc undocumented.inc globals.y
+
+  68   y.asm;
+
+
+y1.RAM: 	y1.asm					       \
+		interrupts.inc				 	\
+		undocumented.inc			 	 \
+                globals.Y       sys_page.Y      ErrorNo.Y         \
+                RomHead1.Y1     OpCodeAddr.Y1   Errors1.Y1         \
+                CnstLoad.Y1     Variables.Y1    Misc.Y1             \
+                Comparisons.Y1  Jumps.Y1        StdLYCreal.Y1        \
+                Arithmetic.Y1   RecordArray.Y1  Packed.Y1             \
+                Strings.Y1      PowerSets.Y1    DynamicMem.Y1          \
+                FPinstr.Y1      Misc_.Y1        RAMcode.Y1              \
+                ProcCalls.Y1    ProcExits.Y1    SegInitFinit.Y1
+
+  @ffc rom_ram.def ; > nul
+  @type rom_ram.def
+  68 y1 nul y1.ram;
+
+
+y2.RAM: 	y2.asm					       \
+		interrupts.inc					\
+		undocumented.inc			 	 \
+                globals.Y       sys_page.Y      ErrorNo.Y         \
+                IOerrorNo.Y2    RomHead2.Y2     main2subs.Y2       \
+                StrVal.Y2       LYCodes2.Y2     FillMove.Y2         \
+                DateTime.Y2     strings2.Y2                          \
+                FileMgr.Y2      Read.Y2         Write.Y2              \
+                MiscIO.Y2       OpenClose.Y2    OtherIO.Y2             \
+                Overlay.Y2      LinkUp.Y2       StartUp.Y2              \
+                errors2.Y2      special2.Y2     ExitYcode.Y2
+
+  @ffc rom_ram.def ; > nul
+  @type rom_ram.def
+  68 y2 nul y2.ram;

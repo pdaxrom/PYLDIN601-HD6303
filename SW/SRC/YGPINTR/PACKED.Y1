@@ -1,0 +1,188 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Packed array & record handling.	    (c) 1989, 1990 YGP.
+
+; ------- Convert packed pointer to address (pointer) -------
+; mnemonic: packAddr
+; Stack:    {offs, addr} -> {addr+offs}
+; Action:   add offset to address
+
+pckAddr         plb			; get offset
+		pla
+		tsx
+		addb	x, 1		; add with address
+		adca	x, 0
+		jmp	FixX_BA 	; all is done in Positive Byte Sex
+
+; ------- Store Byte -------
+; mnemonic: STB
+; Stack:    { w, offs, addr } -> { }
+; Action:   store <w> from TOS to a byte pointed at by
+;	    addr + offset.
+
+stb		pla			; get byte
+		ins			; flush MSByte
+		tsx
+		plb			; add offset to base
+		addb	x, 3		; offset - NegBsex, base - PosBsex
+		stb	wrk+1		; result in PosBsex
+		plb
+		adcb	x, 2
+		stb	wrk
+		ins			; flush base from stack
+		ins
+		ldx	wrk
+		sta	x, 0
+		jmp	MainLoop
+
+; ------- LoaD Signed Byte -------
+; mnemonic: LDSB
+; Stack:    { offs, addr } -> { w }
+; Action:   load byte pointed at by addr + offset as 16 bit signed word
+
+ldsb		ldb	#$ff		; MSByte negative
+		db	_cmpa_
+
+; ------- LoaD Byte -------
+; mnemonic: LDB
+; Stack:    { offs, addr } -> { w }
+; Action:   load byte pointed at by addr + offset as 16 bit word
+
+ldb		proc
+		clrb			; clear MSByte
+		tsx
+		pla			; pull offset
+		adda	x, 3		; offset - NegBsex, base - PosBsex
+		sta	wrk+1		; result in PosBsex
+		pla
+		adca	x, 2
+		sta	wrk
+		ldx	wrk
+		lda	x, 0
+		bmi	negative	; leave MSByte as is (0 or $ff)
+                clrb                    ; according to instruction ldb/ldsb
+negative
+                jmp     FixS_BA         ; corrected in version 1.65
+                ;tsx
+                ;jmp     FixX_BA
+		endp; ldb
+
+; ------- Move Packed -------
+; mnemonic: MOVpack big
+; Stack:    { offs, Src, offs, Dest } -> { }
+; Action:   Move <word> bytes from source to destination
+
+MOVpck		proc
+		pla			; get src offset
+		plb
+		tsx
+		adda	x, 1		; add src address
+		adcb	x, 0
+		sta	Src+1
+		stb	Src
+		ins			; pop src address
+		ins
+
+		pla			; get Dest offset
+		plb
+		tsx
+		adda	x, 1		; add dest address
+		adcb	x, 0
+		sta	Dest+1
+		stb	Dest
+		ins			; pop destination address
+		ins
+
+		jsr	GetBigNot2
+
+                bra     MVmem_MNloop    ; виж RecordArrays.Y ┤айла
+                ;jsr     MoveMemory     ; ▓ова ▓ам е до▒▓а▓║╖но близко
+                ;jmp     MainLoop
+		endp;	MOVpck
+
+; ------- Packed Array of char comparisons -------
+; mnemonic: PackCmp byte, big
+; Stack:    { dest, src } -> { b }
+; Action    С░авн┐ваме два паке▓и░ани ма▒ива о▓ б│кви и по▒▓ав┐ме ░ез│л▓а▓а
+;	    (true/false) в ▒▓ека. В <byte> пи╕е вида на ▒░авнение▓о и на
+;	    ад░е▒и▓е. (ако ▒а <byte> < 0 => Packed Pointers)
+
+PackCmp 	proc			; ▓ази п░о╢ед│░а е о▒▓анала
+		ldx	ipc		; без изменение о▓ ве░▒и┐▓а 1.03
+		lda	x, 0
+		inx
+		stx	ipc
+		sta	wrk3
+		bpl	NonPackPtr
+		pla
+		plb
+		tsx
+		adda	x, 1
+		adcb	x, 0
+		sta	Dest+1
+		stb	Dest
+		ins
+		ins
+		pla
+		plb
+		tsx
+		adda	x, 1
+		adcb	x, 0
+		sta	Src+1
+		stb	Src
+		bra	MakeComp
+
+NonPackPtr	tsx
+		ldx	x
+		stx	Dest
+		ins
+		ins
+		tsx
+		ldx	x
+		stx	Src
+MakeComp
+		jsr	GetBigNot2
+		bsr	CmpBytes
+		jmp	_unsigned
+
+		endp;	PackCmp
+
+;------------------------------------------------------------------------------
+; CmpBytes. С░авн┐ва два ма▒ива о▓ бай▓ове в паме▓▓а.
+; Import: Src, Dest - ptrs; BA - size;
+; Export: Processor Status: result of comparison Src =, <>, <, <=, >, >= Dest
+;	  X reg points to byte where differ in Dest
+; Uses:   tempX, tempS
+
+CmpBytes	proc
+		pha			; preserve BA
+		phb
+		adda	Dest+1
+		adcb	Dest
+		sta	tempX+1
+		stb	tempX
+		ldx	Dest
+
+		SEI			; п░о╢ед│░а▓а е много внима▓елна
+		sts	tempS
+		lds	Src
+		des
+		bra	Check
+
+loop		pla
+		cmpa	x
+		bne	ExitLoop
+		inx
+Check		cpx	tempX
+		bne	loop
+
+ExitLoop	tpa			; save processor status
+		lds	tempS
+		tap			; restore processor status
+		CLI			; ▒▓ига ▒и внимавал
+
+		plb			; restore BA
+		pla
+		rts
+		endp;	CmpBytes
+
+;------------------------------------------------------------------------------

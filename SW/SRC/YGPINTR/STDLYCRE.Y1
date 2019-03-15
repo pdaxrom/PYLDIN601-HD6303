@@ -1,0 +1,53 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Calling instructions from Bank 2.	    (c) 1989, 1990 YGP.
+
+; ------- Call Standard I/O procedure or function -------
+; mnemonic: stdIOpf No
+; Stack:    depends on Std I/O proc/func
+; Action:   Switch to Bank2 and call it.
+
+CallStd 	ldx	StdAddress
+
+ToBank2 	ldb	Bank2page
+		jmp	InterPageJump
+
+; ------- Long Ycode instructions handling -------
+; mnemonic: LYC No
+; Stack:    depends on Long Y instruction
+; Action:   Switch to Bank2 and call Long Y instruction <No>.
+
+LYCode		proc
+		ldx	ipc		; X ▒о╖и к║м опе░анда
+		lda	x		;   ▓.е. в ▒л│╖а┐ к║м extended OpCode
+		inx			; Bump IPC
+		stx	ipc
+		asla			; times 2 for offset
+		bcs	UnknownLYcode
+		bmi	InThisRom	; $40..$7f ▒а в ▓ози ROM
+
+		ldx	LYCaddress
+		bra	ToBank2
+UnknownLYcode
+______		=	*
+		ldx	UnImpLYcode	; н┐кой ╣е об▒л│жи ли ▓ози доп║лни▓елен
+continue	bne	execute
+		jmp	UnImp
+_____		=	*
+		ldx	UnImpYcode	; н┐кой ╣е об▒л│жи ли ▓ози доп║лни▓елен
+		bra	continue
+
+
+InThisROM
+		clrb			; боза▓а е ко▒ма▓а,
+		anda	#$3f*2		; но за▓ова п║к в║░в┐╣а
+		adda	#LYtable_40_7f
+		adcb	#/LYtable_40_7f
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldx	x, 0
+execute 	jmp	x, 0
+		endp;	LYCode
+
+;------------------------------------------------------------------------------
+

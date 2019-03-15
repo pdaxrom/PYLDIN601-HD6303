@@ -1,0 +1,358 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Exit/return from  procedure/function.  (c) 1989, 1990 YGP.
+
+; ------- Exit From procedure/function -------
+; mnemonic: XitFrom byte1, byte2
+; Stack:    {} -> {}
+; Action:   Минава ▒е по в▒и╖ки IPC-▓а на ▓ек│╣а▓а и извиква╣и▓е ┐ п░о╢ед│░и
+;	    и ▒е на▒о╖ва▓ к║м на exit: ако ▓░┐бва.
+;	    <byte1> = Seg No, <byte2> = Proc No
+
+XitFrom 	jsr	GetSegProc
+		bra	ExitFormal
+
+; ------- Halt program execution -------
+; procedure HALT(ErrorLevel: ShortCard);
+; stack:   { w } -> { }
+; Action   Exit main program with Error Level <w>
+
+HALT
+		plb			; GetReturn value (LSByte only)
+		ins
+		db	_cpx_
+haltpgm
+		ldb	#$fd
+		stb	SaveSWI_Area+1
+		lda	#1		; exit from Proc 1 of Main Slot
+		ldb	ProgramSlot
+		;jmp	ExitFormal     ; п░опадаме ▓ам
+
+; ------- Exit from Procedure -------
+; OnEntry: B - slot No, A - proc No
+
+ExitFormal	proc
+		cmpb	SlotNo
+		bne	NotSame
+		cmpa	ProcNo
+		beq	XitCurr 	; exit from current procedure
+
+NotSame 	sta	NewProc 	; initialize Exit proc Loop
+		stb	NewSlot
+		ldx	MS
+ExitLoop
+		lda	x, MSpno
+		ldb	x, MSsno
+		clr	wrk1
+		cmpb	NewSlot
+		bne	NotThis
+		cmpa	NewProc
+		bne	NotThis
+		inc	wrk1
+NotThis
+		stx	wrk2		; preserve X register
+                bsr     FindATptr       ; FindATptr returns proper zero flag
+                ;cpx     #0             ; v1.66
+		bne	Exist
+		jmp	BadReturn
+Exist
+		cmpb	SlotNo
+		bne	NotThis1
+		cmpa	ProcNo
+		bne	NotThis1
+		inc	wrk1
+NotThis1	stx	wrk
+		lda	wrk+1
+		ldb	wrk
+		adda	x, AT_exit	; Bsex-
+		adcb	x, AT_exit+1
+		ldx	wrk2		; restore MSptr
+		cmpb	x, MSipc
+		bcs	DontXitThis
+		bhi	XitThis
+		cmpa	x, MSipc+1
+		bcs	DontXitThis
+XitThis 	sta	x, MSipc+1	; set ipc to exit:
+		stb	x, MSipc
+DontXitThis	lda	x, MSlcl+1	; get next MS called procedure
+		ldb	x, MSlcl
+		suba	#MSsz
+		sbcb	#0
+		sta	wrk2+1
+		stb	wrk2
+		ldx	wrk2
+		lda	wrk1		; loop till xit from requested
+		beq	ExitLoop
+
+XitCurr 			      =*; Exit from current procedure
+		ldx	ATptr
+		lda	x, AT_exit	; negative Bsex
+		ldb	x, AT_exit+1
+		adda	ATptr+1 	; calc address of Exit IPC
+		adcb	ATptr
+		suba	ipc+1		; ipc < exit: ?
+		;cmpb	ipc		; 1.61 -> v1.62 bug corrected 23-Sep-91
+		sbcb	ipc		; v1.62
+		bcs	InFinit 	; in Finitialization part
+		adda	ipc+1
+		adcb	ipc		; v1.62
+		sta	ipc+1		; put IPC to point at exit:
+		stb	ipc
+InFinit 	jmp	MainLoop
+		endp;	ExitFormal
+
+; ------- Return from initialize -------
+; mnemonic: Irtrn
+; Stack:    no change
+; Action:   may occure only in proc 1 of a main segment
+;	    if initialize of a unit is in progress
+;	    then return to caller, else do nothing.
+
+Irtrn		proc
+		lda	ProcNo		; п░ове░┐ваме дали наи▒▓ина ▒ме в
+		deca			; п░о╢ед│░а 1
+		bne	error_1 	; не! Не може да б║де
+		ldx	SegPtr		; дали ▒ме в главен ▒егмен▓
+		ldb	x, SegFlags
+		bmi	OK_main 	; да в главен ▒егмен▓ ▒ме
+error_1 	jmp	BadIreturn
+OK_main
+		clra			; подго▓вка за return0
+                bitb    #%0010_0000      ; in initialize ?
+		beq	NotInInit
+                orb     #%0100_0000      ; казваме ╖е е ини╢иализи░ан
+                andb    #%1101_1111      ; казваме ╖е не е в initialize
+		stb	x, SegFlags
+		bra	Return_ 	; да, ами ▓огава к░ай на initialize
+NotInInit	jmp	MainLoop	; не, не ▒ме в initialze, п░авим ни╣о.
+		endp;	Irtrn
+
+; ------- Find ATptr of Procedure -------
+; Import: B - slot No, A - proc No
+; Export: X points to ATptr, B - SlotNo (may change)
+;   note: Zero = 1 if X reg = 0, Zero = 0 if X <> 0, i.e. can use bne/beq
+; Uses:   wrk
+
+FindATptr	proc
+		ldx	PDict
+		cmpb	SlotNo		; in current Slot?
+		beq	CurrSlot
+ExtrnlSlot	jsr	FindSD		; Find SlotDictionary of requested Slot
+                ;cpx     #0             ; FindSD do cpx itself v1.66
+		beq	NotFound
+		ldx	x, SegPdict
+CurrSlot	stx	wrk		; save ProcDictionary ptr
+		pha			; preserve proc No
+		phb
+
+		clrb			; \    BUG fixed on 21.Oct.1990 v1.52
+		asla			;  > бе╕е asla; clrb; е┤ек▓а ▒е по┐в┐ва
+		rolb			; /   ▒амо п░и пове╖е о▓ 127 п░о╢ед│░и
+
+		adda	wrk+1		; offset to proc's ATptr
+		adcb	wrk
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		pla
+		ldb	x, 0		; internal procedure?
+		bne	InternalProc	; да бе ▓аквази е
+		ins			; pop SlotNo
+		ldb	x, 1		; No, get Slot No
+		bra	ExtrnlSlot
+InternalProc    ldx     x               ; get ATptr and set zero flag
+		plb
+NotFound                                ; branch here only if X = 0 & Z = 1
+		rts
+		endp;	FindATptr
+
+; --- Return from procedure leaving LongWord (2 words) in stack ---
+; mnemonic: rtrnD
+; Stack:    { dw [, ?] } -> { dw [, --- ]}
+; Action:   leave stack as was after parameters pop in the
+;	    begining of procedure but leave one more longword,
+;	    which is on TOS.
+
+Rtrn2		lda	#4
+		db	_cpx_		; trick to jump over next lda
+
+; --- Return from procedure leaving 1 word in stack ---
+; mnemonic: rtrnW
+; Stack:    { w [, ?] } -> { w [, --- ]}
+; Action:   leave stack as was after parameters pop in the
+;	    begining of procedure but leave one more word,
+;	    which is on TOS
+
+Rtrn1		lda	#2
+		db	_cmpa_		; trick to jump over next clra
+
+; ------- Return from procedure -------
+; mnemonic: rtrnW
+; Stack:    { [ ? ] } -> { [ --- ] }
+; Action:   leave stack as was after parameters pop in the
+;	    begining of procedure.
+
+Rtrn0		clra			; п░опадаме в return
+
+; --- Return from procedure or function (Common part) ---
+; A - б░ой бай▓ове кой▓о ▒е в░║╣а▓ в ▒▓ека
+
+Return		proc
+		clrb
+Return_ 	=	*
+		sta	wrk2+1		; ако ▒е ╖и▒▓и wrk2 16 bit return size
+		stb	wrk3		; в░║╣аме ▒е о▓ Init (<>0) или не (=0)
+
+		ldx	InterruptAddr + _DbgPFrtrn*2
+		beq	NoDbg		; ▓ова ▒е п░ави за по-б║░зо
+		int	_DbgPFrtrn	; да не викаме не╣о кое▓о го н┐ма
+NoDbg
+		ldx	MS
+		lda	HiMemPtr+1	; BA:= HiMem
+		ldb	HiMemPtr
+		suba	x, MSsp+1	; BA:= HiMem - Stack Depth
+		sbcb	x, MSsp
+		sta	wrk1+1
+                stb     wrk1            ; wrk1 = Stack Before call (без па░ам.)
+		suba	wrk2+1		; BA:= HiMem - Stack Depth - Return Size
+		sbcb	#0		; ако ▒е вади wrk2 16 bit return size
+		sta	wrk+1		; wrk = SP after return
+		stb	wrk
+
+		tsx
+		cpx	wrk		; ▓олкова колко▓о ▓░┐бва ли е?
+		beq	OKstack 	; ако не е =>н┐кой ▒и е о▒▓авил лайна▓а
+					;		  ▓░┐бва да ги изб║░╕ем
+
+; ▓░┐бва да п░еме▒▓им return value де▓о м│ е м┐▒▓о▓о
+
+		sei	;---------------- В Н И М А Н И Е
+		lds	wrk1
+		des			; set Stack (п░еди rtrn value)
+		ldb	wrk2+1
+		beq	NoReturn	; да ама ние ▒и н┐маме return value
+					; ╣е ▒ме▓нем wrk1:= X + B - 1
+		stx	wrk1		; в X имаме ▒ега╕ни┐ stack
+		lda	wrk1+1
+		deca
+		aba			; add return value size
+		sta	wrk1+1
+		lda	wrk1
+		adca	#0		; calc last byte address
+		sta	wrk1
+		ldx	wrk1		; ▒ме▓на╡ме какво▓о и▒каме
+
+RtrnLoop	lda	x,0
+		pha
+		dex
+		decb
+		bne	RtrnLoop
+NoReturn
+		cli	;---------------- ▒▓ига ▒и ВНИМАВАЛ
+
+OKstack
+		ldx	MS		; restore MarkStack info
+		ldb	x, MSsno
+		stb	NewSlot
+		lda	x, MSpno
+		sta	NewProc
+
+		bne	NotHalt 	; exit to unknow slot from proc 0
+		int	_ExitYcode	; нали ▓ака, а!
+NotHalt
+
+		ldx	x, MSipc
+		stx	ipc
+
+		ldx	MS
+		lda	x, MSlcl+1
+		ldb	x, MSlcl
+		sta	lcl+1
+		stb	lcl
+		suba	#MSsz
+		sbcb	#/MSsz
+		sta	MS+1		; restore MS (X = Curr MS)
+		stb	MS
+
+		ldb	wrk3		; п░ове░ка за Ireturn (don't cut mem)
+		bne	fromI
+		stx	LoMemPtr	; Cut back memory (Old LoMem = MS)
+
+		ldb	SlotNo		; п░ове░┐ва ▒е дали в░║╣аме в д░│г
+		cmpb	NewSlot 	; ▒егмен▓ и ако е ▓ака ▒е казва
+		beq	SameSlot	; SegFree на ▓ози ▒егмен▓
+		bsr	FreeSlot	; flush segment from memory
+fromI
+		ldb	NewSlot
+		stb	SlotNo
+
+		jsr	FindSD		; intersegment returns
+                ;cpx     #0             ; FindSD do cpx itself v1.66
+		bne	OKslotfound
+		jmp	BadReturn
+OKslotfound	bsr	setSLOTinfo
+SameSlot
+		ldx	MS		; restore MS of a caller
+		ldx	x, MSstat
+		stx	stat
+
+		lda	NewProc
+		sta	ProcNo
+		clrb
+		asla
+		rolb
+		adda	Pdict+1
+		adcb	Pdict
+		sta	ATptr+1
+		stb	ATptr
+		ldx	ATptr
+		ldx	x
+		stx	ATptr
+		lda	x, AT_lex
+		sta	LexLev
+		jmp	MainLoop
+		endp;	Return
+
+setSLOTinfo	proc			; SegPtr, Pdict, Cpool, GblSegPtr, gbl
+		stx	SegPtr		; ptr to current segment
+		ldx	x, SegPdict	; ProcDictionary
+		stx	Pdict
+		ldx	SegPtr
+		ldx	x, SegCpool	; and ConstPool address
+		stx	Cpool
+		ldx	SegPtr
+		lda	x, SegFlags	; is it a main segment?
+		bmi	IsMain		; ам'╖и да!
+		ldx	x, SegGbl	; get main segment descriptor
+IsMain		stx	GblSegPtr
+		ldx	x, SegGbl
+		stx	gbl		; globals
+		rts
+		endp;	setSLOTinfo
+
+; ------- Free Slot from Memory -------
+; input: B - SlotNo.
+; usage: B, A, X registers destroyed
+
+FreeSlot	proc
+		jsr	FindSD
+                ;cpx     #0             ; FindSD do cpx itself v1.66
+		bne	SlotOK
+		jmp	NoSlot
+SlotOK
+		lda	x, SegNloads+1	; намал┐ваме б░о┐╖а на използване▓о
+		bne	NoCarry
+		dec	x, SegNloads
+NoCarry 	dec	x, SegNloads+1
+		lda	x, SegNloads
+		ora	x, SegNloads+1	; и п░ове░┐ваме дали ▒е ползва о▓ н┐кой
+		bne	Used		; ▓.е. дали е <> 0
+		sta	x, SegCpool+1	; clear CPool ptr (not in memory)
+		sta	x, SegCpool
+		sta	x, SegPDict+1	; clear PDict ptr (not in memory)
+		sta	x, SegPDict
+		ldx	x, SegLM
+		stx	LoMemPtr
+Used		rts
+		endp;	FreeSlot
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,478 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Conditional & Unconditional jumps.     (c) 1989, 1990 YGP.
+
+; ------- Get Big parameter but dont multiply by 2 -------
+; On Entry: ipc points to start of BIG operand
+; On Exit:  ipc & X reg points to next operand (or instruction)
+;	    BA = BIG operand (but not times 2)
+
+GetBigNot2	proc
+		ldx	ipc
+		clrb			; prepare if small parameter
+		lda	x
+		bpl	SingleByte
+		tab			; this is the MSbyte
+		andb	#%01111111	; mask off MSBit
+		inx
+		lda	x
+SingleByte	inx
+		stx	ipc
+		rts
+		endp;	GetBigNot2
+
+; ------- Case Jump by value-address table -------
+; mnemonic: Cjump big, ElseLab, array[1..big] of (Value, Address);
+; Stack:    { w } -> { }
+; Action:   Хва╣аме д│ма▓а о▓ в║░╡а на ▒▓ека и ▒░авн┐ваме ▒ Value
+;	    па░╖е▓а▓а о▓ ▓абли╢а▓а и ако не дай боже ▒║впадне ▓о
+;	    jump-ваме по ▒║▓ове▓ни┐ Address кой▓о е даден о▓но▒но
+;	    на╖ало▓о на ▓абли╢а▓а (array).
+
+Cjump		proc
+		bsr	GetBigNot2
+		sta	wrk+1		; save number of Value-address items
+		stb	wrk
+
+		ldx	x		; get Jump address of else part
+		stx	wrk1		; in Bsex-
+		ldx	ipc
+		inx
+		inx
+
+		pla			; get Word
+		plb
+
+loop		tst	wrk+1		; намал┐ваме б░о┐╖а на
+		bne	NotEnd		; items о▓ ▓абли╢а▓а
+		dec	wrk
+		bmi	MakeJump
+NotEnd		dec	wrk+1
+
+		cmpa	x, 0
+		bne	NotMatch
+		cmpb	x, 1
+		beq	Match
+NotMatch	inx
+		inx
+		inx
+		inx
+		bra	loop
+
+Match		ldx	x, 2		; get jump address
+		stx	wrk1
+MakeJump	lda	wrk1		; make jump to address in wrk1
+		ldb	wrk1+1
+		jmp	BumpBAipc
+		endp;	Cjump
+
+; ------- Case Jump by address table -------
+; mnemonic: CjumpT min, max, ElseLab, array[0..max-min] of Address;
+; Stack:    { w } -> { }
+; Action:   Хва╣аме д│ма▓а о▓ в║░╡а на ▒▓ека и ▒░авн┐ваме ▒ min и
+;	    max па░аме▓░и▓е на ин▒▓░│к╢и┐▓а, ако е межд│ ▓┐╡ ▓о
+;	    вадим min, │множаваме по две и пол│╖аваме offset в ▓абли╢а▓а
+;	    jump-ваме по ▒║▓ове▓ни┐ Address кой▓о е даден о▓но▒но
+;	    на╖ало▓о на ▓абли╢а▓а (array).
+
+CjumpT		proc
+		ldx	ipc
+		lda	x, 0
+		ldb	x, 1
+		sta	wrk+1		; min
+		stb	wrk
+		suba	x, 2		; max
+		sbcb	x, 3
+		nega
+		adcb	#0
+		negb
+		sta	wrk1+1		; Nitems - 1
+		stb	wrk1
+
+					; skip min, max values
+		inx
+		inx
+		inx
+		inx
+		stx	ipc
+
+		ldx	x		; get Jump address of else part
+		stx	Dest		; in Bsex-
+		ldx	ipc
+		inx
+		inx
+		stx	Src		; address of table
+
+		pla			; get Word
+		plb
+		suba	wrk+1		; word - min
+		sbcb	wrk
+		cmpb	wrk1		; (word - min) < Nitems
+		bhi	MakeJump
+		bcs	CalcOffset
+		cmpa	wrk1+1
+		bhi	MakeJump
+CalcOffset	asla			; times 2
+		rolb
+		adda	Src+1
+		adcb	Src
+		sta	Src+1
+		stb	Src
+		ldx	Src
+		ldx	x
+		beq	MakeJump	; address is 0 => make jump to else: lab
+		stx	Dest
+MakeJump
+		lda	Dest		; make jump to address in Dest
+		ldb	Dest+1
+		bra	BumpBAipc
+		endp;	CjumpT
+
+; ------- test Boolean -------
+; import: ни╣о
+; export: A = Hi(TOS(word)) or Lo(TOS(word))
+
+tstTOSbool	tsx
+		lda	x, 2
+		ora	x, 3
+		rts
+
+; ------- Long Or else JuMP -------
+; mnemonic: LOjmp word
+; Stack:    { b } -> { } / { b }
+; Action:   if boolean TOS is true
+;	      then perform a long jump and leave boolean in stack
+;	      else don't jump but pop boolean
+
+LOjump		bsr	tstTOSbool
+		bne	Ljump
+		db	_ldx_
+
+; ------- Long And then JuMP -------
+; mnemonic: LAjmp word
+; Stack:    { b } -> { } / { b }
+; Action:   if boolean TOS is false
+;	      then perform a long jump and leave boolean in stack
+;	      else don't jump but pop boolean
+
+LAjump		bsr	tstTOSbool
+		beq	Ljump
+		ins
+		ins
+		bra	Bump2IPC	; and continue (don't jump)
+
+; ------- Short Or else JuMP -------
+; mnemonic: sOjmp word
+; Stack:    { b } -> { } / { b }
+; Action:   if boolean TOS is true
+;	      then perform a short forward jump and leave boolean in stack
+;	      else don't jump but pop boolean
+
+SOjump		bsr	tstTOSbool
+		bne	SFjump
+		db	_ldx_
+
+; ------- Short And then JuMP -------
+; mnemonic: sAjmp word
+; Stack:    { b } -> { } / { b }
+; Action:   if boolean TOS is false
+;	      then perform a short forward jump and leave boolean in stack
+;	      else don't jump but pop boolean
+
+SAjump		bsr	tstTOSbool
+		beq	SFjump
+		ins
+		ins
+		bra	BumpIPC 	; and continue (don't jump)
+
+; ------- Forward unconditional JUMP -------
+; mnemonic: SJUMP+ byte
+; Stack:    no change
+; Action:   perform a short relative forward jump
+
+SFjump		clrb
+		db	_cpx_		; trick to jump over next instruction
+
+; ------- Backward unconditional JUMP -------
+; mnemonic: SJUMP- byte
+; Stack:    no change
+; Action:   perform a short relative backward jump
+
+SBjump		ldb	#$ff		; constant for backword jump
+		ldx	ipc
+		dex
+		bra	ShortJumps
+
+; ------- Long True JUMP -------
+; mnemonic: LTJUMP word
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is true
+;	    then perform a relative long jump
+
+LTjump		bsr	popTOSbool
+		bne	Ljump
+		bra	Bump2ipc
+
+; ------- Long False JUMP -------
+; mnemonic: LFJUMP word
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is false
+;	    then perform a relative long jump
+
+LFjump		bsr	popTOSbool
+		beq	Ljump		; if false => long jump
+Bump2ipc			      =*; Inc(ipc, 2); goto MainLoop;
+		ldx	ipc
+		inx
+		inx
+		jmp	MLoop
+
+; ------- pop Boolean -------
+; import: ни╣о
+; export: A = Hi(TOS(word)) or Lo(TOS(word))
+
+popTOSbool	tsx
+		ldx	x, 0
+		ins
+		ins
+		pla
+		sta	wrk
+		pla
+		ora	wrk
+		jmp	x, 0
+
+; ------- Backword True JUMP --------
+; mnemonic: STJUMP- byte
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is true
+;	    then perform a short relative backward jump
+
+STBjump 	bsr	popTOSbool
+		bne	SBjump
+		db	_ldx_
+
+; ------- Backword False JUMP --------
+; mnemonic: SFJUMP- byte
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is false
+;	    then perform a short relative backward jump
+
+SFBjump 	bsr	popTOSbool
+		bne	BumpIPC
+		bra	SBjump
+
+; ------- Long unconditional JUMP -------
+; mnemonic: LJUMP word
+; Stack:    no change
+; Action:   perform a relative long jump
+
+Ljump		ldx	ipc
+		dex
+LongJumps	ldb	x, 2
+ShortJumps	lda	x, 1
+		stx	ipc
+BumpBAipc			      =*; Inc(ipc, BA); goto MainLoop
+		adda	ipc + 1
+		adcb	ipc
+		sta	ipc + 1
+		stb	ipc
+		jmp	MainLoop
+
+; ------- Forward True JUMP --------
+; mnemonic: STJUMP+ byte
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is true
+;	    then perform a short relative forward jump
+
+STFjump 	bsr	popTOSbool
+		bne	SFjump
+		db	_ldx_
+
+; ------- Forward False JUMP --------
+; mnemonic: SFJUMP+ byte
+; Stack:    { b } -> { }
+; Action:   TOS is boolean, pop it and if boolean is false
+;	    then perform a short relative forward jump
+
+SFFjump 	bsr	popTOSbool
+		beq	SFjump
+BumpIPC 				; Inc(ipc); goto MainLoop
+		ldx	ipc
+		inx
+		jmp	MLoop
+
+;----------------------- For jump handling instructions -----------------------
+
+; ------- Initialize ForLoop -------
+; mnemonic: InitFor big, byte, (byte+ | word)
+; Stack:    {e2, e1} -> { e2 } / { }
+; Action:   На в║░╡а на ▒▓ека има два из░аза
+;	    кои▓о ▒а из░ази▓е о▓ for ?:= <e1> to/downto <e2> do
+;	    па░аме▓║░а <byte> е па░аме▓║░ │казва╣ ▒ледно▓о: %ABCDEFGH
+;	      ABCD - 0000 always.
+;	      EF - integer (11), cardinal (10) or LongInt (01)
+;	      G - to (0) or downto (1) for loop
+;	      H - short forward (1) or long (0) jump
+;	      Па░аме▓║░а big е номе░ на локална▓а п░оменлива дадена за
+;	    па░аме║░ на ╢ик║ла.
+;	      И по▒ледни┐ па░аме▓║░ (byte+ | word) е к║де да ▒е ▒ко╖и
+;	    ако for loop-а не ▒е изп║лн┐ва.
+;	      Ако forloop не ▓░┐бва да ▒е изп║лни ▓о в ▒▓ека не о▒▓ава
+;	    ни╣о и ▒е ▒ка╖а по (byte+ | word).
+;	      А ако ▒е изп║лн┐ва ▓┐ло▓о <e1> ▒е запи▒ва в <big> локална д│ма,
+;	    a <e2> о▒▓ава в ▒▓ека.
+
+InitFor 	proc
+		jsr	GetBig		; get for loop parameter
+		adda	lcl+1		; add start of local area
+		adcb	lcl
+		sta	wrk3+1		; save address
+		stb	wrk3
+		lda	x		; get 2 param of an instruction <byte>
+		bita	#%00001000	; integer or cardinal compare?
+		bne	IntCard
+		jmp	UnImp		; UnImplemented LongInteger
+
+IntCard 	sta	wrk2		; save for later check
+		pla			; get <e2> (one word)
+		plb
+		tsx			; get <e1>
+		ldx	x
+		stx	wrk		; save in Bsex-
+		tsx
+		sta	x, 0		; <e2> ▓║й и ▓║й ▓░┐бва да о▒▓ане
+		stb	x, 1
+		cmpb	wrk+1		; не заб░ав┐й ╖е ▓ози п║▓ е Bsex-
+		bne	MSBdiffer
+		cmpa	wrk		; ако ▒▓а░╕и▓е бай▓ове ▒а ░авни
+		beq	MakeForLoop	; ▓о млад╕и▓е ▒е ▒░авн┐ва▓ винаги
+		bhi	MakeIFto	; беззнаково
+
+MakeIFdownto	clra	;#%00000000	; подго▓овка за пове░е░ка на to/downto
+		db	_cpx_		; trick to jump over next lda
+MakeIFto	lda	#%00000010
+		xora	wrk2		; в п░едпо▒ледни┐ би▓ пол│╖аваме 0/1
+		anda	#%00000010	; ако не ▓░┐бва или ▓░┐бва да ▒е дей▒▓ва
+		beq	DontMake
+
+MakeForLoop	lda	wrk		; <e1> е в Bsex-
+		ldb	wrk+1		; ▓░┐бва да ини╢иализи░аме loop param
+		ldx	wrk3		; address of for loop parameter
+		sta	x, 0		; го▓ово ини╢иализиан е
+		stb	x, 1
+		clrb			; ▒ега ▓░┐бва да п░е▒ко╖им н│жно▓о
+		lda	wrk2		; коли╖е▒▓во бай▓ове
+		anda	#1		; пол│╖аваме 0 - long 1 - short
+		nega
+		adda	#3		; BA:= 2 (short) / 3 (long)
+		bra	BumpBAipc
+
+DontMake	ins			; не ▓░┐бва да ▒е п░ави ╢ик║ла!
+		ins			; изпомпваме о▓ ▒▓ека <e2>
+		ldx	ipc		; подго▓вка за Unconditional jump
+		lda	wrk2		; как║в jump ▒ледва
+		bita	#%00000001	; ако по▒ледни┐ би▓ е 0 => long
+		beq	LongJumps	; make long jump
+		clrb			; prepare for short jump
+		bra	ShortJumps	; make short jump
+
+MSBdiffer	lda	wrk2		; ▓░┐бва да видим как║в вид Int/Card
+		bita	#%00000100	; 1100 - integer, 1000 - cardinal
+		bne	Signed
+		cmpb	wrk+1		; пак ▒░авн┐ваме MSBytes ╣о▓о ве╖е ▒ме
+		bhi	MakeIFto	; заг│били ░ез│л▓а▓а о▓ ▒▓░авнение▓о
+		bra	MakeIFdownto
+Signed		cmpb	wrk+1		; аналоги╖но на unsigned
+		bgt	MakeIFto	; ░азлика▓а е ▒амо в ▓ипа на branch-a
+		bra	MakeIFdownto
+		endp;	InitFor
+
+; ------- Short FOR downto jump -------
+; mnemonic: SFDJMP big, byte
+; Stack:    { w } -> { }
+; Action:   П░ове░┐ваме дали д│ма▓а на в║░╡а на ▒▓ека ▒║впада ▒ локална▓а
+;	    п░оменлива ▒ номе░ <big> и ако не ▒║впада намал┐ваме ▒ едини╢а
+;	    локална▓а п░оменлива и ▒ка╖аме. Ина╖е не ▒ка╖аме.
+
+sfdjmp		lda	#$81
+		db	_cpx_		; trick to jump over clra
+
+; ------- Long FOR downto jump -------
+; mnemonic: LFDJMP big, word
+; Stack:    { w } -> { }
+; Action:   П░ове░┐ваме дали д│ма▓а на в║░╡а на ▒▓ека ▒║впада ▒ локална▓а
+;	    п░оменлива ▒ номе░ <big> и ако не ▒║впада намал┐ваме ▒ едини╢а
+;	    локална▓а п░оменлива и ▒ка╖аме. Ина╖е не ▒ка╖аме.
+
+lfdjmp		lda	#$82
+		db	_cpx_		; trick to jump over clra
+
+; ------- Long FOR to jump -------
+; mnemonic: LFTJMP big, word
+; Stack:    { w } -> { }
+; Action:   П░ове░┐ваме дали д│ма▓а на в║░╡а на ▒▓ека ▒║впада ▒ локална▓а
+;	    п░оменлива ▒ номе░ <big> и ако не ▒║впада │вели╖аваме ▒ едини╢а
+;	    локална▓а п░оменлива и ▒ка╖аме. Ина╖е не ▒ка╖аме.
+
+lftjmp		lda	#2
+		db	$ce		; trick to jump over clra (ldb #clra)
+
+; ------- Short FOR to jump -------
+; mnemonic: SFTJMP big, byte
+; Stack:    { w } -> { }
+; Action:   П░ове░┐ваме дали д│ма▓а на в║░╡а на ▒▓ека ▒║впада ▒ локална▓а
+;	    п░оменлива ▒ номе░ <big> и ако не ▒║впада │вели╖аваме ▒ едини╢а
+;	    локална▓а п░оменлива и ▒ка╖аме. Ина╖е не ▒ка╖аме.
+
+sftjmp		proc
+		lda	#1		; В║▓░е╕на п░оменлива о▓ ко┐▓о ▓░и
+		sta	wrk3		; би▓а ▒а %A.....xx, to(A=0)
+					; xx - 1 short, xx - 2 long.
+		ldx	ipc		; preserve ipc before instruction
+		dex
+		dex
+		stx	wrk1
+
+		jsr	GetBig
+		adda	lcl+1		; add local's start
+		adcb	lcl
+		sta	wrk+1		; save variable address
+		stb	wrk
+		pla			; pop final value
+		plb
+		ldx	wrk
+		cmpa	x, 0		; compare with current one
+		bne	NotMatch
+		cmpb	x, 1
+		bne	NotMatch
+		lda	wrk3		; в A пол│╖аваме 3 или 2 взави▒имо▒▓ о▓
+		anda	#3		; ▓ова колко бай▓а ▓░┐бва да п░е▒ко╖им
+		clrb			; 3 - long / 2 - short jump
+		jmp	BumpBAipc	; macth terminate loop
+
+NotMatch	lda	wrk3
+		bpl	Increment
+		lda	x, 0		; test LSByte
+		bne	DontDECmsb	; <> 0 dont decrement MSByte
+		dec	x, 1
+DontDECmsb	dec	x, 0
+		bra	MakeJump
+Increment	inc	x, 0
+		bne	MakeJump	; don't increment MSByte
+		inc	x, 1
+
+MakeJump	ldx	ipc		; to make jump must calculate relative
+		lda	0, x		; address of a new instructions
+		ldb	wrk3		; test long or short
+		andb	#%00000001
+		bne	ISshort
+		ldb	x, 1
+		db	_cpx_		; trick to jump over (ldx #ldb #$ff)
+ISshort 	ldb	#$ff
+		adda	wrk1+1
+		adcb	wrk1
+		sta	ipc+1
+		stb	ipc
+		jmp	MainLoop
+		endp;	sftjmp
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,221 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Bank 2 errors & Error Handler.	    (c) 1989, 1990 YGP.
+
+MemFull 	lda	#MemFull_
+		db	_cpx_		; trick to jump over next lda(cpx #lda)
+
+s2long		lda	#s2long_
+		db	_cpx_
+
+StrIndx 	lda	#StrIndx_
+		db	_cpx_
+
+FatalMemory	lda	#FatalMemory_
+		db	_cpx_
+
+FatalIOerr	lda	#FatalIOerr_
+		db	_cpx_
+
+SegmentLost	lda	#SegmentLost_
+		db	_cpx_
+
+VersionError	lda	#VersionError_
+		db	_cpx_
+
+WszBsexError	lda	#WszBsexError_
+		db	_cpx_
+
+NoLanguage	lda	#NoLanguage_
+		db	_cpx_
+
+RelocateErr	lda	#RelocateErr_
+		db	_cpx_
+
+RecursiveLoad	lda	#RecursiveLoad_
+		db	_cpx_
+
+InvalidLibrary	lda	#InvalidLibrary_
+		db	_cpx_
+
+InvalidBDY	lda	#InvalidBDY_
+		db	_cpx_
+
+CantFindBDY	lda	#CantFindBDY_
+		db	_cpx_
+
+ErrorClosed	lda	#ErrorClosed_
+		db	_cpx_
+
+Segs2many	lda	#Segs2many_
+		db	_cpx_
+
+InvalidBlockSz  lda     #InvalidBlockSz_        ; block size is not a
+                db      _cpx_                   ; power of 2
+
+;CantProcess     lda     #CantProcess_          ; unused (never genereted)
+;                db      _cpx_
+
+UnImp		lda	#UnImp_
+
+		int	_RunTimeError
+
+;------------------------------- Error Handler --------------------------------
+
+ErrorMessage	proc
+
+		cmpa	#IOerror_	; Special action is taken when IO error
+		bne	NotIOerr
+
+		ldx	#IOerrorMsg
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		ldx	IOresult
+		bra	WriteDecimal
+NotIOerr
+		ldx	#ErrorMsg	; Run Time Error ...
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		sta	wrk+1		; ╣е пе╖а▓аме де▒е▓и╖но
+		clr	wrk
+		ldx	wrk
+WriteDecimal	int	_Wcard
+		;tst	 IsRunning	; ▓ака не е доб░е, в▒║╣но▒▓ важно е
+		ldx	SegPtr		; да не напи╕ем боза за име на ▒егмен▓
+		beq	rts		; за░ад ▓ова е в║веден ┤лага IsRunning
+					; но ▓ой не ни помага в на╖ало▓о
+		ldx	#segmentMsg
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		ldx	SegPtr
+                lda     x, 8            ; save byte after name & clear byte
+                clr     x, 8            ; after name, so BIOS is happy
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		sta	x, 8		; restore it
+		int	_GetScrSize	; ▓░┐бва да ▒е ▒║об░аз┐ваме ▒ д║лжина▓а
+		cmpa	#77		; 80 columns?
+		bcc	_80
+		lda	#10		; write <lf> (BIOS expands it
+		int	_Wchar		;		   to <cr> <lf>)
+_80
+		ldx	#ProcMsg
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		ldb	ProcNo-1	; save value before ProcNo
+		clr	ProcNo-1	; за да го пи╕ем в decimal
+		ldx	ProcNo-1
+		int	_Wcard
+		stb	ProcNo-1	; restore value before ProcNo
+		lda	#'('
+		int	_Wchar
+		lda	ProcNo
+		int	_Whex
+		tsta
+		beq	Proc_0
+		ldx	#IPCMsg
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+
+		lda	ipc+1
+		ldb	ipc
+		suba	ATptr+1
+		sbcb	ATptr
+		suba	#AT_size+1	   ; +1 за╣о▓о IPC-▓о е increment-на▓о
+		sbcb	#/AT_size+1
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		int	_Wcard
+		lda	#'('
+		int	_Wchar
+		lda	wrk
+		int	_Whex
+		lda	wrk+1
+		int	_Whex
+Proc_0		ldx	#EndMsg
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+rts		rts
+
+ErrorMsg	db	10, 'Run Time Error ', 0
+segmentMsg	db	' in segment: ', 0
+ProcMsg 	db	' Proc ', 0
+IPCMsg		db	') byte ', 0
+IOerrorMsg	db	10, 'I/O error No ', 0
+EndMsg		db	')', 10, 0
+		endp;	ErrorMessage
+
+                .ifdef  PControler
+proc_wstr       proc
+                pha             ; preserve A
+                lda     wrk     ; preserve wrk
+                pha
+                lda     wrk+1
+                pha
+                stx     wrk     ; preserve X
+loop            lda     x, 0
+                beq     quit
+                int     _Wchar
+                inx
+                bra     loop
+quit            ldx     wrk     ; restore X
+                pla             ; resotre wrk
+                sta     wrk+1
+                pla
+                sta     wrk
+                pla             ; restore A
+                rts             ; return to caller
+                endp; proc_wstr
+                .endif
+
+; ------- Run Time errors handling -------
+RTError 	proc
+
+		ldb	#$fe
+		stb	SaveSWI_Area+1
+		cmpa	#FatalErrors
+		bcc	terminate
+		ldx	StdVarsPtr
+		ldb	x, SpecialFlags
+		bmi	NoMessage
+		bitb	#%01000000
+		beq	WithMessage
+		cmpa	#1
+		beq	NoMessage
+WithMessage	int	_RTErrorMsg
+		ldx	SegPtr		; ако ▒ме изг║░мели п░еди да е ▓░║гнала
+		beq	Qterminate	; главна▓а п░ог░ама ▒е г░║мва ▒▓░а╕но
+NoMessage
+		ldx	SegPtr		; ако ▒ме изг║░мели п░еди да е ▓░║гнала
+		beq	terminate	; главна▓а п░ог░ама ▒е г░║мва ▒▓░а╕но
+		ldx	StdVarsPtr
+		sta	x, RTEno
+		int	_terminate	; ина╖е ▒е п░ави halt
+terminate
+		int	_RTErrorMsg
+Qterminate
+		int	_ExitYcode
+		endp;	RTerror
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,54 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. ROM Bank 2 header. 		    (c) 1989, 1990 YGP.
+
+		dw	$5aa5		; ROM magic constant (for bank2)
+		db	'YGPascal'      ; ROM name
+		jmp	InitBank2	; ROM Cold initialize
+		jmp	DoNothing	; ROM Hot initialize
+
+		db	_CallYcode
+		dw	CallYcode	; StartUp program execution
+
+		db	_ExitYcode
+		dw	ExitYcode
+
+		db	_RTErrorMsg
+		dw	ErrorMessage
+
+		db	_RunTimeError
+		dw	RTError
+
+		db	_LoadSlot
+		dw	LoadSlot
+
+		db	0		; end of interrupt table
+		checksum
+
+InitBank2	proc
+
+		lda	ROMswitch	; set Bank 2 page No
+		sta	Bank2page
+
+		ldx	#StdPF
+		stx	StdAddress
+
+		ldx	#LYCodes
+		stx	LYCaddress
+
+                .ifNdef PControler
+                 ldx     #Hello
+                 int     _Wstr
+                .endif
+
+DoNothing	=	*		; make it global address
+		rts
+
+                .ifNdef PControler
+Hello            db      10, 'UniPASCAL (R) Interpreter  Version '
+                 db      $30 + Version, '.'                      ; Version.
+                 db      $30 + Flavour/10, $30 + Flavour\10      ; Flavour
+                 db      0
+                .endif
+		endp;	InitBank2
+
+;------------------------------------------------------------------------------

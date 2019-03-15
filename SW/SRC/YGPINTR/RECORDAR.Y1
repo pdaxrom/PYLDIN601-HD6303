@@ -1,0 +1,298 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Record & Array handling instructions.  (c) 1989, 1990 YGP.
+
+; ------- Index Formal Packed Array -------
+
+ixfpa		ldx	#sixa_2 	; виж IXFA
+		bra	IXFA_common
+
+; ------- Index Formal Array -------
+; mnemonic: IXFA byte
+; Stack:    { at, xN, ... x2, x1, a } -> { A }
+; Action:   индек▒и░ане на ┤о░мален ма▒ив ▓ова зна╖и ▒ледно▓о:
+;	    x1, x2, ..., xN ▒а индек▒и▓е в ма▒ив кои▓о ▒а на б░ой <byte>
+;	    at е ад░е▒ на ▓абли╢а о▓ вида: m1, s1, m2, s2, ...
+;	    к║де▓о m1, m2, ... ▒а долни▓е г░ани╢и в ма▒ива, а s1, s2, ...
+;	    ▒а големини▓е на подма▒иви▓е за ▒║о▓ве▓на▓а ░азме░но▒▓.
+;	    <a> е на╖ални┐ ад░е▒ на ма▒ива. <A> е пол│╖ени┐ ад░е▒.
+;	    ▒ме▓ка▓а е: A = a + [ (m1-x1)*s1 + ... + (mN - xN) * sN ];
+;	    ка▓о ▓ова кое▓о е в ▒╖│пени ▒коби ▓░┐бва да ▒е │множи по 2
+;	    ако ▒▓ава в║п░о▒ за д│мови не╣а, ╣о▓о m1, m2, ... ▒а дадени в д│ми
+
+ixfa		ldx	#sixa_ld
+
+IXFA_common	proc
+		stx	Src
+		plb			; вземаме ад░е▒а на ▓абли╢а▓а
+		pla
+		sta	wrkF+3		; wrkF+2 ╣е б║де ад░е▒а на ▓абли╢а▓а
+		stb	wrkF+2		; а в wrkF к║м ▓ек│╣и┐ индек▒ опи▒а▓ел
+		ldx	ipc
+		lda	x, 0		; б░ой индек▒и
+		inx
+		stx	ipc		; ╣е ▒е ▒ка╖а на MainLoop
+
+		clrb
+		asla			; │множаваме по 4 ╣о▓о елемен▓и▓е на
+		rolb			; ▓абли╢а▓а ▒а големи 4 бай▓а
+		asla			; а п║к индек▒и▓е ни идва▓ об░а▓но
+		rolb
+		adda	wrkF+3
+		adcb	wrkF+2
+		sta	wrkF+1
+		stb	wrkF
+		clra			; запо╖ваме да ▒м┐▓аме ▒│ма▓а ...
+		clrb			; (xN - mN) * sN + ... + (x1 - m1) * s1
+		bra	start_loop
+loop
+		dex
+		dex
+		dex
+		dex
+		stx	wrkF
+		sta	LongWork+1
+		stb	LongWork	; ▓│ка е ▒│ма▓а
+		pla
+		plb			; индек▒а о▓ в║░╡а на ▒▓ека е по▒леден
+		suba	x, 0		; ▒м┐▓аме (xN - mN)
+		sbcb	x, 1
+		sta	wrk+1
+		stb	wrk
+		lda	x, 2		; п░иго▓в┐ме ▒е да │множим по sN
+		ldb	x, 3
+		jsr	mply_16 	; ▒ега в BA имаме (xN - mn) * sN
+		adda	LongWork+1	; добав┐ме какво▓о ▒ме пол│╖или до ▒ега
+		adcb	LongWork	; и имаме BA= (xN-mN)*sN+...+(xK-mK)*sK
+start_loop
+		ldx	wrkF
+		cpx	wrkF+2
+		bne	loop
+		ldx	Src
+		jmp	x, 0
+		endp;	IXFA_common
+
+
+; ------- Short IndeX zero based Array with element size 4 words -------
+; mnemonic: SIXA_4
+; Stack:    { w, addr1 } -> { addr2 }
+; Action:   calculate address of element with index <w>
+;	    addr2:= addr1 + 4 * 2 * w
+
+sixa4		pla
+		plb			; get index
+		asla
+		rolb			; mply by 2
+		bra	sixa_4
+
+; ------- Short IndeX zero based Array with element size 2 words -------
+; mnemonic: SIXA_2
+; Stack:    { w, addr1 } -> { addr2 }
+; Action:   calculate address of element with index <w>
+;	    addr2:= addr1 + 2 * 2 * w
+
+sixa2		pla
+		plb			; get index
+sixa_4
+		asla
+		rolb			; mply by 2
+		bra	sixa_2
+
+; ------- Short IndeX zero based Array with element size 1 word -------
+; mnemonic: SIXA_1
+; Stack:    { w, addr1 } -> { addr2 }
+; Action:   calculate address of element with index <w>
+;	    addr2:= addr1 + 1 * 2 * w
+
+sixa1		pla
+		plb			; get index
+sixa_2		asla			; common code for sixa1 & sixa2
+		rolb			; mply by 2
+sixa_ld 	=	*
+		tsx			; add base to offset
+		adda	x, 1		; pointers are represented
+		adcb	x, 0		; in positive byte sex
+		sta	x, 1
+		stb	x, 0
+		jmp	MainLoop
+
+; ------- Index zero based array -------
+; mnemonic: IXA big
+; Stack:    { w, addr1 } -> { addr2 }
+; Action:   calculate address of element with index <w>
+;	    addr2:= addr1 + big * 2 * w
+
+ixa		pla			; get first parameter
+		plb
+		sta	wrk+1
+		stb	wrk
+		bsr	GetBig		; get second (BIG) operand
+		jsr	mply_16 	; (size of element * 2)
+		bra	sixa_ld
+
+; ------- Get Big parameter -------
+; Import: ipc points to start of BIG operand
+; Export: ipc & X reg points to next operand (or instruction)
+;	  BA = calculated BIG operand (times 2)
+
+GetBig          proc                    ;???> ▓│к ▒е п░опада о▓ GetInterm <???
+                ldx     ipc             ; го░ни┐ комен▓а░ ве╖е не важи о▓давна
+		clrb			; prepare if small parameter
+		lda	x
+		bpl	SingleByte
+		tab			; this is the MSbyte
+		inx			; н┐ма н│жда да ма╡аме MSBit
+		lda	x		; за╣о▓о п░и rol ▓ой ▒и о▓ива
+SingleByte	inx
+		stx	ipc
+		asla
+		rolb
+		rts
+		endp;	GetBig
+
+; ------- Increment Field pointer -------
+; mnemonic: INC big
+; Stack:    { addr1 } -> { addr2 }
+; Action:   calculate address of field with offset <big>
+;	    addr2:= addr1 + big * 2
+
+incfp           bsr     GetBig          ; get and * 2 big parameter
+                bra     sixa_ld         ; <addr> -> <addr + big*2>
+
+; ------- STOre indirect word -------
+; mnemonic: STO big
+; Stack:    { w, addr } -> { }
+; Action:   store word from TOS in word pointed at by TOS -1
+
+sto		tsx
+		ldx	x, 2		; get base address
+		jsr	AddBigOffset	; get static offset
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		bra	ssto_
+
+; ------- Load indirect word -------
+; mnemonic: IND big
+; Stack:    { addr } -> { w }
+; Action:   load word pointed at by TOS + <big> * 2
+
+ind		bsr	GetBig
+		bra	sind_
+
+; ------- Short load indirect word (offset 0)-------
+; mnemonic: SIND_0
+; Stack:    { addr } -> { w }
+; Action:   load word pointed at by TOS
+
+sind0		tsx
+		ldx	x		; get address
+		lda	x, 0		; get indirect value
+		ldb	x, 1
+                jmp     fixS_BA         ; corrected in ver 1.65
+                ;tsx
+                ;jmp     FixX_BA
+
+; ------- Short load  indirect word (offset 1..7)-------
+; mnemonic: SIND_x
+; Stack:    { addr } -> { w }
+; Action:   load word pointed at by TOS + <x> * 2
+
+sind		suba	#$38 * 2	; sind0 opcode is $38
+		clrb			; ние ▒и го пол│╖аваме наго▓ово * 2
+sind_		tsx
+		ldx	x		; get address
+		stx	wrk
+		adda	wrk+1		; add static index
+		adcb	wrk
+		ins
+		ins
+		jmp	LoadBA
+
+; ------- Short STOre indirect word (offset 0)-------
+; mnemonic: SSTO
+; Stack:    { w, addr } -> { }
+; Action:   store word from TOS in word pointed at by TOS -1
+
+ssto		tsx
+		ldx	x, 2		; get address
+ssto_
+		pla			; get value to store
+		plb
+		ins			; pop address from stack
+		ins
+		jmp	FixX_BA
+
+; ------- Load indirect double word -------
+; mnemonic: INDD big
+; Stack:    { addr } -> { d }
+; Action:   load double word pointed at by TOS + <big> * 2
+
+indd		tsx
+		ldx	x, 0
+		ins
+		ins
+		jsr	AddBigOffset
+		db	_cpx_
+
+; ------- Short load indirect double word (offset 0)-------
+; mnemonic: SINDD_0
+; Stack:    { addr } -> { d }
+; Action:   load double word pointed at by TOS
+
+sindd0		plb
+		pla
+		jmp	LoadBAdbl
+
+; ------- Short STOre indirect Double word (offset 0)-------
+; mnemonic: SSTOD
+; Stack:    { d, addr } -> { }
+; Action:   store double word from TOS in word pointed at by TOS -1
+
+sstod		tsx
+		ldx	x, 4		; get address
+sstod_
+		pla			; get value to store (LSWord)
+		plb
+		sta	x, 0
+		stb	x, 1
+		pla			; get value to store (MSWord)
+		plb
+		sta	x, 2
+		stb	x, 3
+		ins			; pop address from stack
+		ins
+		jmp	MainLoop
+
+; ------- STOre indirect double word -------
+; mnemonic: STOD big
+; Stack:    { d, addr } -> { }
+; Action:   store double word from TOS in word pointed at by TOS -1
+
+stod		tsx
+		ldx	x, 4		; get base address
+		jsr	AddBigOffset	; add static offset
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		bra	sstod_
+
+; ------- MOVe words -------
+; mnemonic: MOV big
+; Stack:    { Src, Dest } -> { }
+; Action    Transfer a source block of <big> words, pointed to by <Src>,
+;	    to a similar destination block pointed to by <dest>.
+
+MOV		plb			; get Source address (BSex-)
+		pla
+		sta	Src+1
+		stb	Src
+		plb			; get Destination address (BSex-)
+		pla
+		sta	Dest+1
+		stb	Dest
+		jsr	GetBig
+MVmem_MNloop
+		jsr	MoveMemory
+		jmp	MainLoop
+
+;------------------------------------------------------------------------------

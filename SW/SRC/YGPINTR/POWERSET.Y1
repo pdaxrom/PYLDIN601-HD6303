@@ -1,0 +1,686 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Power Sets handling instructions.	    (c) 1989, 1990 YGP.
+
+;    В▒и╖ки ин▒▓░│к╢ии об░або▓ва╣и множе▒▓ва п░едполага▓ ╖е на в║░╡а на ▒▓ека
+; множе▒▓во▓о е п░ед▒▓авено ка▓о по░еди╢а о▓ бай▓ове нап║╡ани по но░мални┐ за
+; ин▓е░п░е▓а▓о░а на╖ин	(▓.е. най-о▓го░е ▒е млад╕и▓е)  и о▒вен множе▒▓во▓о на
+; в║░╡а има нап║╡ан опи▒а▓ел за ▓ова множе▒▓во.   Опи▒а▓ел┐ ▒е ▒║▒▓ои о▓ един
+; бай▓, дава╣ д║лжина▓а на множе▒▓во▓о в ▒▓ека (в бай▓ове).
+
+; ------- Store Set -------
+; mnemonic StoSet <byte>
+; stack:   { set, addr } -> { }
+; Action   На в║░╡а на ▒▓ека е мн-во и ад░е▒а к║де▓о ▓░┐бва да ▒е запи╕е
+;	   големина▓а м│ (ка▓о п░оменлива) е <byte> бай▓а.
+
+StoSet		proc
+		pla			; get set size
+		sta	wrk2
+		ldx	ipc
+		ldb	x		; get size of set variable in bytes
+		stb	wrk2+1
+		sts	wrk
+		clrb
+		adda	wrk+1		; п░е▒м┐▓аме ад░е▒а на ад░е▒а
+		adcb	wrk		; кой▓о ▒е нами░а ▒лед множе▒▓во▓о
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldx	x, 1		; ползваме sts а п║к SP ▒о╖и 1 назад
+
+		ldb	wrk2+1
+		cmpb	wrk2		; B:= min(VarSize, SetSize);
+		bls	Less
+		ldb	wrk2
+Less		bra	decB
+PopLoop 	pla
+		sta	x
+		inx
+decB		decb
+		bpl	PopLoop
+
+NoMore		ldb	wrk2+1		; ▓ова ▒а малки + ╖и▒ла (<= $20)
+		subb	wrk2		; B:= VarSize - SetSize
+		bmi	PopOther	; < 0 взели ▒ме по-малко,д░│ги▓е ма╡аме
+		beq	EndStoSet	; 0 взели ▒ме ▓о╖но колко▓о ▓░┐бва
+		clra			; > 0 ▓░┐бва да н│ли░аме о▒▓анали▓е
+ZeroLoop	sta	x
+		inx
+		decb
+		bne	ZeroLoop
+EndStoSet	ins			; pop Var address
+		ins
+		jmp	BumpIPC
+
+PopOther	negb			; из╡в║░л┐ме о▒▓анали▓е бай▓ове о▓
+Flush		ins			; мн-во▓о о▓ ▒▓ека
+		decb
+		bne	Flush
+		bra	EndStoSet
+		endp;	StoSet
+
+; ------- Load Set -------
+; mnemonic LdSet <byte>
+; stack:   { addr } -> { set }
+; Action   На в║░╡а на ▒▓ека е ад░е▒а на множе▒▓во▓о
+;	   големина▓а м│ е <byte> бай▓а. Т░┐бва да ▒е нап║╡а в ▒▓ека
+;	   ба░аба░ ▒ опи▒а▓ел┐ ▒и.
+
+LdSet		proc
+		ldx	ipc
+		lda	x
+		inx
+		stx	ipc
+		tsx			; get  & pop address
+		ldx	x
+		ins
+		ins
+		bra	PushSet
+		endp;	LdSet
+
+; ------- Load constant set -------
+; mnemomic LDCset
+; stack    { addr } -> { set }
+; Action   Push set pointed at by <addr> in stack
+
+LCSet		proc
+		tsx
+		ldx	x		; get and pop address
+		ins
+		ins
+
+		lda	x		; get set size
+		inx
+
+; ------- Push Set -------
+; import X = address of set (без size descriptor)
+;	 A = set size
+
+PushSet 	=	*
+		stx	wrk
+		tab
+		adda	wrk+1		; add size to start address
+		sta	wrk+1
+		bcc	NoCarry
+		inc	wrk
+NoCarry 	ldx	wrk
+		stb	wrk1		; preserve Size
+		beq	IsEmpty
+loop		dex
+		lda	x		; push set backword
+		pha			; i.e. move it to TOS
+		decb
+		bne	loop
+		ldb	wrk1		; push set size on TOS
+		db	_cmpa_
+
+; ------- Push Empty Set -------
+; mnemnic EmptySet
+; Stack:  { } -> { [] }
+; Action  Push Empty set in stack.
+
+EmptSet 	=	*
+		clrb			; Т░┐бва да нап║╡аме опи▒а▓ел $00
+IsEmpty
+		phb
+		jmp	MainLoop
+
+		endp;	LCset
+
+; ------- Build a Singleton Set -------
+; mnemonic SGS
+; stack:   { i } -> { [i] }
+; Action   TOS is integer (word). Да ▒е нап░ави множе▒▓во ▒
+;	   един▒▓вен елемен▓ ▓ози integer(word);
+; Note	   ем│ли░а ▒е SRS    { i, i } -> { [i..i] } = { [i] }
+
+sgs		pla			; get TOS
+		plb
+		phb
+		pha
+		db	_cpx_		; п░е▒ка╖аме pla, plb
+
+; ------- Build Subrange Set -------
+; mnemonic SRS
+; stack:   { hi, lo } -> { [lo..hi] }
+; Action   В ▒▓еак има две ╖и▒ла. Да ▒е нап░ави множе▒▓во
+;	   ▒ г░ани╢и ▓ези две ╖и▒ла
+
+srs		proc
+		pla
+		plb			; MSByte ▓░┐бва да е = 0
+		tstb
+		beq	HiOK
+BoundError	jmp	Large255
+HiOK		plb			; pop Lo bound
+		stb	wrk1
+		plb
+		tstb
+		bne	BoundError
+
+		cmpa	wrk1		; ▒░авн┐ваме ▒ долна▓а г░ани╢а
+		bcs	EmptSet 	; Lo <= Hi, и ▒по░ед ISO ▒▓анда░▓а в
+					; ▓ози ▒л│╖ай ▓░┐бва да нап║╡аме []
+
+BoundsOK
+		tab
+		andb	#%00000111
+		addb	#SetMasks1	; в wrk2 ╣е пол│╖им ад░е▒а на ма▒ка▓а
+		stb	wrk2+1
+		ldb	#/SetMasks1
+		adcb	#0
+		stb	wrk2
+		ldx	wrk2
+		ldb	x		; пол│╖аваме ма▒ка▓а (last byte of set)
+		phb			; и го нап║╡ваме
+
+		lsra
+		lsra
+		lsra			; total set size-1
+		sta	wrk		; save size-1
+		sta	wrk+1
+		beq	OKpushed
+
+		ldb	wrk1		; get Lo bound
+		lsrb
+		lsrb
+		lsrb			; Lo div 8
+		stb	wrk+1		; ▓олкоз бай▓а 0 ▓░┐бва да има нак░а┐
+		sba			; A:= (Hi div 8) - (Lo div 8)
+					; ▓олкоз бай▓а $FF ▓░┐бва да нам║╡аме
+		beq	OKpushed
+
+		ldb	#$ff
+FFloop		phb			; нап║╡ваме д░│ги▓е $FF
+		deca
+		bne	FFloop
+
+; по▒ледни┐ п║╡на▓ бай▓ ▓░бва да ▒е ко░иги░а ▒║▒ SetMasks2
+OKpushed	ldb	wrk1
+		andb	#%00000111
+		addb	#SetMasks2	; в wrk2 ╣е пол│╖им ад░е▒а на ма▒ка▓а
+		stb	wrk2+1
+		ldb	#/SetMasks2
+		adcb	#0
+		stb	wrk2
+		ldx	wrk2
+		pla			; get mask (last byte from set)
+		anda	x		; ко░иги░аме по▒ледни┐ п║╡на▓ бай▓
+		pha
+
+		lda	wrk+1		; колко 0 да нап║╡аме о╣е
+		beq	NoMore
+
+		clrb
+Zeroloop	phb			; нап║╡ваме д░│ги▓е $0
+		deca
+		bne	Zeroloop
+
+
+NoMore		lda	wrk
+		inca
+		pha			; push Total Size
+		jmp	MainLoop
+		endp;	srs
+
+; ------- Include/Exclude element in/from set -------
+; mnemomic Incl <byte>
+; stack    { w, addr } -> { }
+; Action   Include/Exclude word <w> in/from set pointed at by addr
+;	   if MSBit of <byte> = 1 then Exclude else Include
+;	   <byte> and $7f is destination set size in bytes
+
+InExcl		proc
+		ldx	ipc
+		lda	x, 0
+		sta	wrk1		; < 0 - exclude, > 0 - include
+		anda	#%01111111	; amsk off MSBit (calc set's size)
+		sta	wrk1+1
+
+		pla			; get TOS
+		plb
+		tstb
+		beq	OKcont
+		jmp	Large255
+
+OKcont		tab
+		andb	#%111		; LSByte of integer mod 8
+		addb	#SetMasks	; ад░е▒а на ▒║о▓ве▓на▓а ма▒ка
+		stb	wrk3+1
+		ldb	#/SetMasks
+		adcb	#0
+		stb	wrk3
+		ldx	wrk3		; ад░е▒а на ▒║о▓ве▓на▓а ма▒ка
+		ldb	x		; вземаме ▒и ┐
+		phb			; и ┐ запазваме
+
+		lsra			; в A имаме в▒е о╣е LSByte of integer
+		lsra			; A:= A div 8
+		lsra			; ▓.е. ▓ова е offset in set
+		cmpa	wrk1+1		; compare with set size
+		bcs	OKoffset
+		jmp	Large255
+OKoffset
+		clrb
+		tsx
+		adda	x, 2		; calc offset in set
+		adcb	x, 1
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		pla			; mask
+		ins			; pop set address
+		ins
+		ldb	wrk1		; какво да ▒е п░ави? (Incl, Excl)
+		bpl	MakeIncl
+		xora	#$ff
+		anda	x, 0
+		db	_cpx_		; trick to jump over ora
+MakeIncl	ora	x, 0
+		sta	x, 0
+		jmp	BumpIPC
+		endp;	InExcl
+
+; ------- word / long word IN set -------
+; mnemonic in byte
+; stack:    { set, x } -> { b } or
+;	   { addr, x } -> { b }
+; Action   Push result of <x> in <set>
+;	   <byte> and $80 = 0 => x is integer
+;			    1 => x is long
+;	   <byte> and $7f = 0 => set is on TOS
+;			 <> 0 => TOS is set addr,(<byte> and $7f) is set size
+;
+; Usage of Zpage:  Src	  = address of Set
+;		   wrk	  = address - 1 of integer / long integer
+;		   wrk1+1 = set's size
+;		   wrk1   = < 0 long, > 0 integer
+
+in		proc
+		ldx	ipc		; get <byte> parameter
+		lda	x, 0
+		inx			; bump IPC ╣о▓о ╣е полз│ваме fixX_BA
+		stx	ipc
+		sta	wrk1		; positive, negative - int/long
+		anda	#$7f
+		sta	wrk1+1		; possible set's size
+		beq	OnStack
+		plb			; address of Set
+		pla
+		sta	Src+1
+		stb	Src
+		sts	wrk		; int/long is on TOS
+		bra	continue
+OnStack 	pla
+		sta	wrk1+1		; set's size
+		tsx
+		stx	Src		; set is on TOS
+		sts	wrk		; ▒м┐▓аме ад░е▒а на int/long кой▓о е
+		adda	wrk+1		; ▒лед мн-во▓о в ▒▓ека
+		sta	wrk+1
+		bcc	continue	; no carry to MSByte
+		inc	wrk
+continue
+		ldx	wrk		; address-1 of int/long
+		lda	x, 1		; LSByte of int/long
+		ldb	x, 2		; MSByte
+		tst	wrk1		; integer or longint?
+		bpl	NotLong
+		orb	x, 3		; и д░│ги▓е MSByte-ове
+		orb	x, 4		; ▓░┐бва да б║да▓ п░ове░ени
+		inx
+		inx			; нак░а┐ ▒е п░ави cut на ▒▓ека
+		stx	wrk		; ╖░ез lds wrk
+NotLong 	tstb			; ▒▓а░╕и┐ (▒▓а░╕и▓е) бай▓ове ▒а 0?
+		bne	NOTin		; MSByte <> 0 => not in set
+		tab
+		lsra			; div 8
+		lsra			; ▒м┐▓аме номе░а на бай▓а в кой▓о
+		lsra			; ▓░┐бва да ▒е нами░а би▓а (о▓ 0)
+		cmpa	wrk1+1		; >= на б░о┐ бай▓ове в множе▒▓во▓о
+		bcc	NOTin		; да ▒ледов. не е в множе▒▓во▓о
+		adda	Src+1
+		sta	Src+1
+		bcc	NOcarry
+		inc	Src
+NOcarry 				; ▒ега в Src имаме addr на бай▓а в
+		clra			; кой▓о ▓░┐бва да ▒е види би▓а
+		andb	#%00000111	; номе░ на ма▒ка▓а
+		addb	#SetMasks	; в wrk2 ╣е пол│╖им ад░е▒а на ма▒ка▓а
+		adca	#/SetMasks
+		stb	wrk2+1		; ▓│к полз│ваме AB, а не BA, ╣о▓о е
+		sta	wrk2		; по-│добно
+
+		ldx	wrk2
+		lda	x, 0		; вземаме ма▒ка▓а
+		ldx	Src
+		anda	x, 0		; п░ове░┐ваме ▒║о▓ве▓ни┐ би▓
+		beq	NOTin
+		lda	#1
+		db	_cmpa_
+NOTin		clra
+		clrb
+		lds	wrk		; pop set (cut stack)
+                jmp     fixS_BA         ; corrected version 1.65
+                ;tsx
+                ;jmp     fixX_BA
+		endp;	in
+
+; ------- InsBytes -------
+; Common set procedure
+; да ▒е нап║╡а▓ <A> бай▓а н│ли ка▓о ▒▓а░╕и н│ли
+; на мн-во в кое▓о ве╖е има <B> бай▓а
+; Import: A - б░ой н│ли за п║╡ане
+;	  B - б░ой бай▓ове в ▒▓ека (<= 254)
+; Side effect: tempS, tempX are used
+
+InsBytes	proc
+		incb			; на в║░╡а е return ад░е▒а ▓ака ╖е
+		incb			; в▒║╣но▒▓ бай▓ове▓е ▒а ▒ два пове╖е
+		sts	tempS
+		sta	tempX
+		phb			; preserve B register
+		ldb	#$ff
+		nega
+		bcs	Not0
+		ins			; Да вм║кне 0 бай▓а,
+		rts			; е ▓огаз го▓ово
+Not0
+		adda	tempS+1 	; SP - Nbytes = newSP
+		adcb	tempS		; малко по го░е ▒ме го negate-нали
+		sta	tempS+1
+		stb	tempS
+		plb			; колко бай▓а ╣е ме▒▓им
+		ldx	tempS
+		sei			; ние в▒║╣но▒▓ ме▒▓им ▒▓ека
+loop		pla			; ▓ака ╖е к░о▓ко ▒ п░ек║▒вани┐▓а
+		sta	x, 1		; offset 1 ╣о▓о SP е ▒о╖ело по нап░ед
+		inx
+		decb
+		bne	loop
+		lds	tempS		; SP:= newSP
+		cli			; е ве╖е може да п░ек║▒ва╕
+
+		lda	tempX		; б░ой вм║кна▓и бай▓ове (<> 0)
+		;clrb			; ┐▒но е ╖е е 0 о▓ го░ни┐ loop
+Zloop		stb	x, 1		; а п║к X ▒о╖и ▓о╖но де▓о ▓░┐бва
+		inx
+		deca
+		bne	Zloop
+		rts
+		endp;	InsBytes
+
+; ------- Adjust set to occupy N bytes -------
+; mnemonic Adjust <byte>
+; Stack:   { set } -> { set' }
+; Action   Adjust set to occupy <byte> bytes, either by expansion
+;	   it (putting zeros as high bytes of set) or compression
+;	   (chopping of high bytes of set).
+;	   Finaly discard the descriptor byte.
+
+Adjust		proc
+		ldx	ipc
+		ldb	x		; колко бай▓а ▓░┐бва да заема
+		pla			; колко заема в момен▓а
+		cba
+		beq	OK		; заема колко▓о ▓░┐бва
+		bcs	Less		; заема по-малко
+					; заема пове╖е
+		sts	wrk
+		clrb
+		adda	wrk+1		; п░е▒м┐▓аме ад░е▒а на ▒▓ека
+		adcb	wrk		; ако множе▒▓во▓о го н┐ма
+		sta	wrk1+1
+		stb	wrk1
+		lda	x
+		adda	wrk+1		; п░е▒м┐▓аме ад░е▒а на по▒ледни┐
+		adcb	wrk		; бай▓ о▓ множе▒▓во▓о, кой▓о ▓░┐бва
+		sta	wrk+1		; да о▒▓ане (SP ▒о╖и един бай▓ по-нап░ед
+		stb	wrk		;	     о▓ ░еално▓о положение)
+		ldb	x		; колко бай▓а ▓░┐бва да заема (о▒▓ана▓)
+		ldx	wrk
+
+		sei			; В Н И М А В А Й
+		lds	wrk1
+		bra	decB
+loop		lda	x
+		pha
+		dex
+decB		decb
+		bpl	loop		; множе▒▓ва▓а ▒а <= $20 бай▓а
+		cli			; а ▒▓ига внимава
+
+OK		jmp	BumpIPC
+
+Less		pha			; save set size
+		sba			; колко бай▓а н│ли ▓░┐бва да ▒е вм║кна▓
+		nega			; A:= 0 - (A - B) = 0 - A + B = B - A
+		plb			; B = колко бай▓а о▓ ▒▓ека да ▒е ме▒▓┐▓
+		bsr	InsBytes
+		jmp	BumpIPC
+		endp;	Adjust
+
+; ------- Set Difference -------
+; mnemonic SetDiff
+; stack:   { s2, s1 } -> { s1 - s2 }
+; Action:  На в║░╡а има две множе▒▓ва да ▒е нап░ави ░азлика▓а им
+;	   и ░ез│л▓а▓но▓о множе▒▓во да ▒е нап║╡а в ▒▓ека
+;	     Разлика на множе▒▓ва▓а ▒е п░ави ка▓о межд│ ▒║о▓ве▓ни▓е
+;	   бай▓ове о▓ множе▒▓ва▓а ▒е п░ави bitwise s1 and not s2.
+
+SetDiff 	proc
+		bsr	CommonSet
+		bra	DecA
+loop		inx			; ░азлика на множе▒▓ва▓а
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		comb			; изваждаме (and not-ваме) го ▒ в▓о░о▓о
+		andb	x, 0
+		stb	x, 0		; и го запи▒ваме де▓о ▓░ебе
+DecA		deca
+		bpl	loop
+		jmp	MainLoop
+		endp;	SetDiff
+
+; ------- Set Union -------
+; mnemonic SetUni
+; stack:   { s2, s1 } -> { s1 + s2 }
+; Action:  На в║░╡а има две множе▒▓ва да ▒е нап░ави обединение
+;	   и ░ез│л▓а▓но▓о множе▒▓во да ▒е нап║╡а в ▒▓ека
+;	     Обединение на множе▒▓ва▓а ▒е п░ави ка▓о межд│ ▒║о▓ве▓ни▓е
+;	   бай▓ове о▓ множе▒▓ва▓а ▒е п░ави bitwise OR.
+
+SetUni		proc
+		bsr	CommonSet
+		bra	decA
+loop		inx
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		orb	x, 0		; обедин┐ваме (or-ваме) го ▒║▒ в▓о░о▓о
+		stb	x, 0		; и го запи▒ваме де▓о ▓░ебе
+decA		deca
+		bpl	loop
+		jmp	MainLoop
+		endp;	SetUni
+
+; ------- Set Intersection -------
+; mnemonic SetInt
+; stack:   { s2, s1 } -> { s1 * s2 }
+; Action:  На в║░╡а има две множе▒▓ва да ▒е нап░ави ▒е╖ение
+;	   и ░ез│л▓а▓но▓о множе▒▓во да ▒е нап║╡а в ▒▓ека
+;	     Се╖ение на множе▒▓ва▓а ▒е п░ави ка▓о межд│ ▒║о▓ве▓ни▓е
+;	   бай▓ове о▓ множе▒▓ва▓а ▒е п░ави bitwise AND.
+
+SetInt		proc
+		bsr	CommonSet
+		bra	decA
+loop		inx
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		andb	x, 0		; п░е▒и╖аме (and-ваме) го ▒║▒ в▓о░о▓о
+		stb	x, 0		; и го запи▒ваме де▓о ▓░ебе
+decA		deca
+		bpl	loop
+		jmp	MainLoop
+		endp;	SetInt
+
+;------------------------------------------------------------------------------
+; Използ│вана о▓ +, -, *, <=, >=, = <>	на множе▒▓ва
+; на излизане ▓░┐бва п║░во▓о множе▒▓во да е >= по д║лжина на в▓о░о▓о (TOS)
+; reg A - б░ой бай▓ове в по-малко▓о множе▒▓во (▓о винаги е в▓о░о)
+; reg X - ад░е▒а на ▓ова множе▒▓во (в▓о░о▓о) в ▒▓ека
+
+CommonSet	proc
+		sta	wrk3		; save operation
+
+		lda	#$7e		; jump machine code
+		sta	wrkF		; подго▓в┐ме ▒е за ем│ла╢и┐ на return
+		pla
+		sta	wrkF+1
+		pla
+		sta	wrkF+2
+
+		pla			; get size of second set operand
+		sta	wrk2
+		tsx
+		stx	wrk
+		tab
+		addb	wrk+1
+		stb	wrk1+1
+		ldb	wrk
+		adcb	#0
+		stb	wrk1		; wrk1 = address of second set
+		ldx	wrk1
+		ldb	x, 0		; B = size of first set operand
+		; stb	  wrk2+1 май не ни е н│жно
+		; lda	  wrk2
+		cba			; п░ове░┐ваме кой о▓ два▓а е по-гол┐м
+					; и▒каме да е ▓ози кой▓о е о▓дол│
+		bls	OK
+
+		sba			; A:= Size1 - Size2 (░азлика▓а)
+		addb	wrk2		; B:= Size1 + Size2 + 1
+		incb			; за░ади size descriptor byte
+		jsr	InsBytes	; ADJ first set (▓ози о▓дол│)
+					; а ▒ега ▓░┐бва да п░еиз╖и▒лим wrk1
+		tsx
+		stx	wrk
+		clrb
+		lda	wrk2
+		adda	wrk+1
+		adcb	wrk
+		sta	wrk1+1
+		stb	wrk1
+		lda	wrk2
+		ldx	wrk1
+		sta	x, 0		; ко░иги░аме д║лжина▓а на долно▓о мн-во
+OK
+		; в ▓ози момен▓ A = size of Set2, X = addr(Set1)
+		; (да не заб░ав┐ме ╖е в▓о░о▓о мн-во е в/│ п║░во▓о)
+		; о▒вен ▓ова ад░е▒а на Set1 е ▒║▒ size descriptor
+		jmp	wrkF
+		endp;	CommonSet
+
+;------------------------------ Set Comparisons -------------------------------
+
+; ------- Subset (Greather than or Equal) Power Sets -------
+; mnemonic GeqSets
+; stack:   { s2, s1 } -> { s1 => s2 }
+; Action:  На в║░╡а има две множе▒▓ва, да ▒е ▒░авн┐▓
+;	   за по-гол┐мо или ░авно и ░ез│л▓а▓а▓а о▓ ▒░авнение▓о
+;	   (false/true) да ▒е нап║╡а в ▒▓ека
+
+GeqSets 	proc
+		lda	#1
+		bsr	CommonSet
+		bra	DecA
+
+loop		inx
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		comb			; not (X1 and not X2) -ваме го
+		orb	x, 0		; по ▓ози на╖ин ако имаме поне една 1
+		comb			; зна╖и имаме S1 < S2
+		stb	x, 0
+DecA		deca
+		bpl	loop
+		bra	SetEmpty	; true ако имаме []
+		endp;	GeqSets
+
+; ------- Subset (Less than or Equal) Power Sets -------
+; mnemonic LeqSets
+; stack:   { s2, s1 } -> { s1 <= s2 }
+; Action:  На в║░╡а има две множе▒▓ва, да ▒е ▒░авн┐▓
+;	   за по-малко или ░авно и ░ез│л▓а▓а▓а о▓ ▒░авнение▓о
+;	   (false/true) да ▒е нап║╡а в ▒▓ека
+
+LeqSets 	proc
+		lda	#1
+		bsr	CommonSet
+		bra	DecA
+
+loop		inx
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		comb			; not (X1 and not X2) -ваме го
+		andb	x, 0		; по ▓ози на╖ин ако имаме поне една 1
+		stb	x, 0		; зна╖и имаме S1 > S2
+DecA		deca
+		bpl	loop
+		bra	SetEmpty	; true ако имаме []
+		endp;	LeqSets
+
+; ------- Equal Power Sets -------
+; mnemonic EqSet
+; stack:   { s2, s1 } -> { s1 = s2 }
+; Action:  На в║░╡а има две множе▒▓ва, да ▒е ▒░авн┐▓
+;	   за ░авен▒▓во и ░ез│л▓а▓а▓а о▓ ▒░авнение▓о
+;	   (false/true) да ▒е нап║╡а в ▒▓ека
+
+EqSets		lda	#1
+		db	_cmpa_
+
+; ------- Not Equal Power Sets -------
+; mnemonic NeqSet
+; stack:   { s2, s1 } -> { s1 <> s2 }
+; Action:  На в║░╡а има две множе▒▓ва, да ▒е ▒░авн┐▓
+;	   за не░авен▒▓во и ░ез│л▓а▓а▓а о▓ ▒░авнение▓о
+;	   (false/true) да ▒е нап║╡а в ▒▓ека
+
+NeqSets 	clra
+
+EqNeqSets	proc
+		bsr	CommonSet
+		bra	DecA
+
+loop		inx
+		plb			; вадим по░едни┐ бай▓ о▓ в▓о░о▓о мн-во
+		eorb	x, 0		; (eor-ваме) го ▒ в▓о░о▓о
+		stb	x, 0		; и го запи▒ваме де▓о ▓░ебе
+DecA		deca
+		bpl	loop
+SetEmpty	=	*		; true/false (wrk3) if set is empty
+		clra
+		plb			; get size of set
+		tsx
+		bra	DecB
+Test		ora	x, 0
+		inx
+DecB		decb
+		bpl	Test
+		txs
+
+		tsta			; в ▓ози момен▓ в A има 0 ако []
+		beq	SetIsEmpty
+		lda	#1
+SetIsEmpty	xora	wrk3		; в wrk3 има (1 - eq, 0 - neq)
+		clrb
+		jmp	PushBA
+		endp;	EqNeqSets
+
+;---------------------- Табли╖ки за ░або▓а ▒ множе▒▓ва▓а ----------------------
+
+SetMasks	db	%00000001, %00000010, %00000100, %00001000
+		db	%00010000, %00100000, %01000000, %10000000
+
+SetMasks1	db	%00000001, %00000011, %00000111, %00001111
+		db	%00011111, %00111111, %01111111, %11111111
+
+SetMasks2	db	%11111111, %11111110, %11111100, %11111000
+		db	%11110000, %11100000, %11000000, %10000000
+;------------------------------------------------------------------------------

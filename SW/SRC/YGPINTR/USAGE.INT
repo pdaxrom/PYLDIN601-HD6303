@@ -1,0 +1,233 @@
+; Използване на ин▒▓░│к╢и┐▓а INT в Ycode Interpreter
+; ▒о░▓и░ана по имена на ┤айлове▓е
+
+ARITHMET.Y      838     RandomInit      int     _GetTime
+DATETIME.Y       10                     int     _GetDate
+DATETIME.Y       46                     int     _GetTime
+DYNAMICM.Y       78                     int     _GetMem
+DYNAMICM.Y      173                     int     _Release
+DYNAMICM.Y      349                     int     _Release
+ERRORS1.Y        75                     int     _RunTimeError
+ERRORS2.Y        57                     int     _RunTimeError
+ERRORS2.Y        67                     int     _Wstr
+ERRORS2.Y        72                     int     _Wstr
+ERRORS2.Y        76     WriteDecimal    int     _Wcard
+ERRORS2.Y        82                     int     _Wstr
+ERRORS2.Y        86                     int     _Wstr           ; so BIOS is happy
+ERRORS2.Y        88                     int     _GetScrSize     ; ▓░┐бва да ▒е ▒║об░аз┐ваме ▒ д║лжина▓а
+ERRORS2.Y        92                     int     _Wchar          ;                  to <cr> <lf>)
+ERRORS2.Y        95                     int     _Wstr
+ERRORS2.Y        99                     int     _Wcard
+ERRORS2.Y       102                     int     _Wchar
+ERRORS2.Y       104                     int     _Whex
+ERRORS2.Y       108                     int     _Wstr
+ERRORS2.Y       119                     int     _Wcard
+ERRORS2.Y       121                     int     _Wchar
+ERRORS2.Y       123                     int     _Whex
+ERRORS2.Y       125                     int     _Whex
+ERRORS2.Y       127                     int     _Wstr
+ERRORS2.Y       152     WithMessage     int     _RTErrorMsg
+ERRORS2.Y       160                     int     _terminate      ; ина╖е ▒е п░ави halt
+ERRORS2.Y       162                     int     _RTErrorMsg
+ERRORS2.Y       164                     int     _ExitYcode
+EXITYCOD.Y       11                     int     _GetIntVec
+EXITYCOD.Y       12                     int     _ChainIntrpt    ; Halt program execution
+EXITYCOD.Y       15                     int     _ChainIntrpt    ; п░ог░ама▓а не в║░ви
+EXITYCOD.Y       42                     int     _SetIntVec
+LINKUP.Y        171                     int     _MoveMem
+LINKUP.Y        208                     int     _Wstr
+LINKUP.Y        272                     int     _Fseek          ; seek(__Fhandle, LongWork);
+LINKUP.Y        281                     int     _Fread          ; BlockRead(__Fhandle, __Ph);
+LINKUP.Y        386                     int     _MoveMem
+LINKUP.Y        471                     int     _MoveMem        ; Move library Name
+LINKUP.Y        474                     int     _Fopen
+LINKUP.Y        487                     int     _Fopen
+LINKUP.Y        563                     int     _Fopen
+LINKUP.Y        578                     int     _Fclose
+LYCODES2.Y       56                     int     _DbgBreak
+MISCIO.Y         29     Pcount          int     _ParamCount
+MISCIO.Y         38     MsgLmt          int     _GetScrSize
+MISCIO.Y         77                     int     _ParamStr       ; Src^:= ParamStr(n);
+MISCIO.Y        135                     int     _Fseek
+MISCIO.Y        162                     int     _Fsize          ; ▓░┐бва да вземем д║лжина▓а на ┤иле▓о
+MISCIO.Y        168                     int     _Fseek          ; jump to end of file
+MISCIO.Y        204                     int     _Fwrite
+MISCIO.Y        216                     int     _Fwrite
+MISCIO.Y        239                     int     _Fposition
+MISCIO.Y        280                     int     _Fsize
+MISCIO.Y        341                     int     _Fremove        ; remove it
+MISCIO.Y        370                     int     _Frename        ; rename
+OPENCLOS.Y      111                     int     _Fseek          ; дали не ▓░┐бва да ▒е каже truncate
+OPENCLOS.Y      142                     int     _Fcreatenew
+OPENCLOS.Y      147                     int     _Fcreatetemp
+OPENCLOS.Y      154                     int     _Fclose         ; и по▒ле го о▓ва░┐ме пак
+OPENCLOS.Y      162                     int     _Fopen          ; в ▓ози момен▓ Breg не ни ▓░┐бва
+OPENCLOS.Y      170                     int     _Fcreate
+OPENCLOS.Y      181                     int     _Fseek          ; за │╕и▓и на ИВО)
+OPENCLOS.Y      276                     int     _Ftruncate      ; има н┐ма truncate
+OPENCLOS.Y      282                     int     _Fclose
+OTHERIO.Y        49                     int     _eof
+OTHERIO.Y       189                     int     _FWrite
+OTHERIO.Y       191     MakeRead        int     _FRead
+OVERLAY.Y        22                     int     _Fread
+OVERLAY.Y        70                     int     _Fseek
+OVERLAY.Y       285                     int     _FClose         ; в A имаме FileHandle
+PROCCALL.Y      124                     int     _DbgPFcall      ; да не викаме не╣о кое▓о го н┐ма
+PROCCALL.Y      387                     int     _LoadSlot       ; да ама не (▓.е. не е в паме▓▓а)
+PROCEXIT.Y      206                     int     _DbgPFrtrn      ; да не викаме не╣о кое▓о го н┐ма
+PROCEXIT.Y      259                     int     _ExitYcode      ; нали ▓ака, а!
+READ.Y           35                     int     _Fread
+READ.Y          168                     int     _WhereXY
+READ.Y          175                     int     _GotoXY
+READ.Y          179                     int     _EditLine
+READ.Y          334                     int     _WhereXY
+READ.Y          341                     int     _GotoXY
+READ.Y          345                     int     _EditLine
+READ.Y          392                     int     _mply10addA
+READ.Y          468                     int     _fp_10_pwr
+READ.Y          526                     int     _GetChar        ; get char from BIOS
+READ.Y          542                     int     _Wchar
+READ.Y          550                     int     _Wchar
+READ.Y          589     waitCR          int     _GetChar
+READ.Y          593                     int     _Wchar
+READ.Y          664                     int     _FRead
+READ.Y          780     viaBIOS         int     _WhereXY        ; preserve X, Y position
+READ.Y          786                     int     _GetLine
+READ.Y          810                     int     _GetScrSize     ; а колко е гол┐м ек░ана
+READ.Y          818                     int     _GotoXY
+ROMHEAD1.Y       43                     int     _MoveMem
+ROMHEAD2.Y       39                     int     _Wstr
+STARTUP.Y        31                     int     _UniDOSversion  ; Get UniDOS version (accept 3.00+)
+STARTUP.Y        32                     int     _UniDOSversion  ; Get again to make sure
+STARTUP.Y        45                     int     _MoveMem
+STARTUP.Y       112                     int     _Fclose         ; и ┐ за▓ва░┐ме наи▒▓ина
+STARTUP.Y       182                     int     _GetIntVec
+STARTUP.Y       187                     int     _SetIntVec
+STARTUP.Y       213                     int     _DbgActivate    ; ин┤о░ми░аме о▒▓анали┐ UniPascal ▒в┐▓
+STARTUP.Y       216                     int     _GetIntVec
+STARTUP.Y       217                     int     _ChainIntrpt    ; execute ProgramSlot.Procedure(1)
+STRVAL.Y        134                     int     _prepareFP
+STRVAL.Y        591                     int     _mply10addA
+STRVAL.Y        663                     int     _fp_10_pwr
+WRITE.Y          35                     int     _Fwrite
+WRITE.Y         394     BIOSloop        int     _Wchar
+WRITE.Y         414                     int     _Fwrite
+WRITE.Y         443                     int     _Wchar
+WRITE.Y         453                     int     _Fwrite         ; пи╕ем го б░е
+
+; Използване на ин▒▓░│к╢и┐▓а INT в Ycode Interpreter
+; ▒о░▓и░ана по имена на ин▒▓░│к╢и┐▓а
+
+EXITYCOD.Y       12                     int     _ChainIntrpt    ; Halt program execution
+EXITYCOD.Y       15                     int     _ChainIntrpt    ; п░ог░ама▓а не в║░ви
+STARTUP.Y       217                     int     _ChainIntrpt    ; execute ProgramSlot.Procedure(1)
+STARTUP.Y       213                     int     _DbgActivate    ; ин┤о░ми░аме о▒▓анали┐ UniPascal ▒в┐▓
+LYCODES2.Y       56                     int     _DbgBreak
+PROCCALL.Y      124                     int     _DbgPFcall      ; да не викаме не╣о кое▓о го н┐ма
+PROCEXIT.Y      206                     int     _DbgPFrtrn      ; да не викаме не╣о кое▓о го н┐ма
+READ.Y          179                     int     _EditLine
+READ.Y          345                     int     _EditLine
+OTHERIO.Y        49                     int     _eof
+ERRORS2.Y       164                     int     _ExitYcode
+PROCEXIT.Y      259                     int     _ExitYcode      ; нали ▓ака, а!
+LINKUP.Y        578                     int     _Fclose
+OPENCLOS.Y      282                     int     _Fclose
+OPENCLOS.Y      154                     int     _Fclose         ; и по▒ле го о▓ва░┐ме пак
+OVERLAY.Y       285                     int     _FClose         ; в A имаме FileHandle
+STARTUP.Y       112                     int     _Fclose         ; и ┐ за▓ва░┐ме наи▒▓ина
+OPENCLOS.Y      170                     int     _Fcreate
+OPENCLOS.Y      142                     int     _Fcreatenew
+OPENCLOS.Y      147                     int     _Fcreatetemp
+LINKUP.Y        474                     int     _Fopen
+LINKUP.Y        487                     int     _Fopen
+LINKUP.Y        563                     int     _Fopen
+OPENCLOS.Y      162                     int     _Fopen          ; в ▓ози момен▓ Breg не ни ▓░┐бва
+MISCIO.Y        239                     int     _Fposition
+READ.Y          468                     int     _fp_10_pwr
+STRVAL.Y        663                     int     _fp_10_pwr
+OTHERIO.Y       191     MakeRead        int     _FRead
+OVERLAY.Y        22                     int     _Fread
+READ.Y           35                     int     _Fread
+READ.Y          664                     int     _FRead
+LINKUP.Y        281                     int     _Fread          ; BlockRead(__Fhandle, __Ph);
+MISCIO.Y        341                     int     _Fremove        ; remove it
+MISCIO.Y        370                     int     _Frename        ; rename
+MISCIO.Y        135                     int     _Fseek
+OVERLAY.Y        70                     int     _Fseek
+LINKUP.Y        272                     int     _Fseek          ; seek(__Fhandle, LongWork);
+MISCIO.Y        168                     int     _Fseek          ; jump to end of file
+OPENCLOS.Y      111                     int     _Fseek          ; дали не ▓░┐бва да ▒е каже truncate
+OPENCLOS.Y      181                     int     _Fseek          ; за │╕и▓и на ИВО)
+MISCIO.Y        280                     int     _Fsize
+MISCIO.Y        162                     int     _Fsize          ; ▓░┐бва да вземем д║лжина▓а на ┤иле▓о
+OPENCLOS.Y      276                     int     _Ftruncate      ; има н┐ма truncate
+MISCIO.Y        204                     int     _Fwrite
+MISCIO.Y        216                     int     _Fwrite
+OTHERIO.Y       189                     int     _FWrite
+WRITE.Y          35                     int     _Fwrite
+WRITE.Y         414                     int     _Fwrite
+WRITE.Y         453                     int     _Fwrite         ; пи╕ем го б░е
+READ.Y          589     waitCR          int     _GetChar
+READ.Y          526                     int     _GetChar        ; get char from BIOS
+DATETIME.Y       10                     int     _GetDate
+EXITYCOD.Y       11                     int     _GetIntVec
+STARTUP.Y       182                     int     _GetIntVec
+STARTUP.Y       216                     int     _GetIntVec
+READ.Y          786                     int     _GetLine
+DYNAMICM.Y       78                     int     _GetMem
+MISCIO.Y         38     MsgLmt          int     _GetScrSize
+ERRORS2.Y        88                     int     _GetScrSize     ; ▓░┐бва да ▒е ▒║об░аз┐ваме ▒ д║лжина▓а
+READ.Y          810                     int     _GetScrSize     ; а колко е гол┐м ек░ана
+ARITHMET.Y      838     RandomInit      int     _GetTime
+DATETIME.Y       46                     int     _GetTime
+READ.Y          175                     int     _GotoXY
+READ.Y          341                     int     _GotoXY
+READ.Y          818                     int     _GotoXY
+PROCCALL.Y      387                     int     _LoadSlot       ; да ама не (▓.е. не е в паме▓▓а)
+LINKUP.Y        171                     int     _MoveMem
+LINKUP.Y        386                     int     _MoveMem
+ROMHEAD1.Y       43                     int     _MoveMem
+STARTUP.Y        45                     int     _MoveMem
+LINKUP.Y        471                     int     _MoveMem        ; Move library Name
+READ.Y          392                     int     _mply10addA
+STRVAL.Y        591                     int     _mply10addA
+MISCIO.Y         29     Pcount          int     _ParamCount
+MISCIO.Y         77                     int     _ParamStr       ; Src^:= ParamStr(n);
+STRVAL.Y        134                     int     _prepareFP
+DYNAMICM.Y      173                     int     _Release
+DYNAMICM.Y      349                     int     _Release
+ERRORS2.Y       152     WithMessage     int     _RTErrorMsg
+ERRORS2.Y       162                     int     _RTErrorMsg
+ERRORS1.Y        75                     int     _RunTimeError
+ERRORS2.Y        57                     int     _RunTimeError
+EXITYCOD.Y       42                     int     _SetIntVec
+STARTUP.Y       187                     int     _SetIntVec
+ERRORS2.Y       160                     int     _terminate      ; ина╖е ▒е п░ави halt
+STARTUP.Y        31                     int     _UniDOSversion  ; Get UniDOS version (accept 3.00+)
+STARTUP.Y        32                     int     _UniDOSversion  ; Get again to make sure
+ERRORS2.Y        76     WriteDecimal    int     _Wcard
+ERRORS2.Y        99                     int     _Wcard
+ERRORS2.Y       119                     int     _Wcard
+ERRORS2.Y       102                     int     _Wchar
+ERRORS2.Y       121                     int     _Wchar
+READ.Y          542                     int     _Wchar
+READ.Y          550                     int     _Wchar
+READ.Y          593                     int     _Wchar
+WRITE.Y         394     BIOSloop        int     _Wchar
+WRITE.Y         443                     int     _Wchar
+ERRORS2.Y        92                     int     _Wchar          ; to <cr> <lf>)
+READ.Y          168                     int     _WhereXY
+READ.Y          334                     int     _WhereXY
+READ.Y          780     viaBIOS         int     _WhereXY        ; preserve X, Y position
+ERRORS2.Y       104                     int     _Whex
+ERRORS2.Y       123                     int     _Whex
+ERRORS2.Y       125                     int     _Whex
+ERRORS2.Y        67                     int     _Wstr
+ERRORS2.Y        72                     int     _Wstr
+ERRORS2.Y        82                     int     _Wstr
+ERRORS2.Y        95                     int     _Wstr
+ERRORS2.Y       108                     int     _Wstr
+ERRORS2.Y       127                     int     _Wstr
+LINKUP.Y        208                     int     _Wstr
+ROMHEAD2.Y       39                     int     _Wstr
+ERRORS2.Y        86                     int     _Wstr           ; so BIOS is happy

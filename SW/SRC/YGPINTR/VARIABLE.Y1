@@ -1,0 +1,527 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter.	 Load, Store & Load Address of	    (c) 1989, 1990 YGP.
+;		Local, Global, Intermediate & External variables
+
+;------------------------------------------------------------------------------
+; Get Address of SegInfo of external segment
+; Import: ipc points to <byte> (no of external seg)
+; Export: ipc is incremented
+;	  X  ptr to SegInfo of external segment
+; Side effects: wrk, B, A destroyed.
+
+GetSegInfo	proc
+		ldx	ipc
+		lda	x, 0		; get SegmentNo
+		inx
+		stx	ipc
+		cmpa	#$ff		; Standard Segment
+		bne	GetSegInfo_
+		jmp	StdSegInfo	; error try to get SegInfo of Standard
+GetSegInfo_	=	*
+		clrb
+		adda	GblSegPtr+1	; calc address of Slot Dictionaray
+		adcb	GblSegPtr	; SegInfo + offset in SegInfo + SegNo
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldb	x, SegSlotDict	; get SlotNo corresponding to segment
+		jsr	FindSD		; X:= ptr to SegInfo of external seg
+                ;cpx     #0             ; FindSD do cpx itself (v1.66)
+		bne	SlotOK
+		jmp	NoSlot
+SlotOK
+		rts
+		endp;	GetSegInfo
+
+;------------------------------------------------------------------------------
+; Get Address of Globals of external segment
+; Import: ipc points to <byte> (no of external seg)
+; Export: ipc is incremented
+;	  X  ptr to globals of external segment
+; Side effects: wrk, B, A destroyed.
+
+GetXtrnlAddr	proc
+		ldx	ipc
+		lda	x		; get SegmentNo
+		inx
+		stx	ipc
+		cmpa	#$ff		; Standard Segment
+		bne	NotStd
+		ldx	StdVarsPtr
+		rts
+
+GetXtrnlAddr_	=	*
+		lsra			; ▒м┐▓аме номе░а на ▒егмен▓а
+		anda	#%11		; има ▒е вп░едвид, ╖е A е │множено по 2
+		inca			; о▓ MainLoop-а
+NotStd
+		bsr	GetSegInfo_	; не би ▓░┐бвало ▓ози ▒егмен▓ да не е
+		ldx	x, SegGbl	; главен ▒егмен▓, н┐ма да п░авим
+					; п░ове░ка за ▓ова
+		rts
+		endp;	GetXtrnlAddr
+
+;------------------------------------------------------------------------------
+;			   Load address of variable.
+
+; ------- Short Load Address of eXternal (segments 1..4) -------
+; mnemonic: SLAXn big
+; Stack:    { } -> { addr }
+; Action:   push address of external variable
+;	    from segment <n> with offset <big>
+
+slax		bsr	GetXtrnlAddr_	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next bsr
+
+; ------- Load Address of eXternal -------
+; mnemonic: LAX byte, big
+; Stack:    { } -> { addr }
+; Action:   push address of external variable
+;	    from segment <byte> with offset <big>
+
+lax		bsr	GetXtrnlAddr	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next lda
+
+; ------- Load Address of Global -------
+; mnemonic: LAG big
+; Stack:    { } -> { addr }
+; Action:   push address of global variable with offset <big>
+
+lag		ldx	gbl		; и п░опадаме по-на▓а▓║к
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- Load Address of Local -------
+; mnemonic: LAL big
+; Stack:    { } -> { addr }
+; Action:   push address of local variable with offset <big>
+
+lal		ldx	lcl
+		jsr	AddBigOffset
+PushABml			      =*; Push AB and jump to MLoop
+		pha			; pointers are represented in BSex+
+		phb
+		jmp	MLoop
+
+; ------- Load Address of Intermediate -------
+; mnemonic: LAI byte, big
+; Stack:    { } -> { addr }
+; Action:   push address of intermediate variable (<byte> lexs out)
+;	    with offset <big>
+
+lai		bsr	AddBigInterm
+		bra	slai__
+
+; ------- Load Address of Intermediate1 -------
+; mnemonic: SLAI_1 big
+; Stack:    { } -> { addr }
+; Action:   push address of intermediate variable (one lex out)
+;	    with offset <big>
+
+slai1		ldx	stat
+		bra	slai_
+
+; ------- Load Address of Intermediate2 -------
+; mnemonic: SLAI_2 big
+; Stack:    { } -> { addr }
+; Action:   push address of intermediate variable (two lex out)
+;	    with offset <big>
+
+slai2		ldx	stat
+		ldx	x, 0
+slai_
+		bsr	AddBigOffset
+slai__
+		adda	#MSsz
+		adcb	#0
+		bra	PushABml
+
+;------------------------------------------------------------------------------
+;				Store Variable.
+
+; ------- Short Store eXternal word -------
+; mnemonic: SSTXn big
+; Stack:    { w } -> { }
+; Action:   store external word
+;	    from segment <n> with offset <big>
+
+sstx		bsr	GetXtrnlAddr_	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- Store eXternal word -------
+; mnemonic: STX byte, big
+; Stack:    { w } -> { }
+; Action:   store external word
+;	    from segment <byte> with offset <big>
+
+stx		bsr	GetXtrnlAddr	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- STore Global word -------
+; mnemonic: STG big
+; Stack:    { w } -> { }
+; Action:   store TOS in global word
+;	    (offset from start of global area is <big> words)
+
+stg		ldx	gbl
+		db	_cpx_
+
+; ------- STore Local word -------
+; mnemonic: STL big
+; Stack:    { w } -> { }
+; Action:   store TOS in local word
+;	    (offset from start of local area is <big> words)
+
+stl		ldx	lcl
+		bsr	AddBigOffset
+StoreBA 			      =*; Store TOS in (BA) & jump to MainLoop
+		sta	wrk+1		; store BA in wrk to load
+		stb	wrk		; 6800 index register
+		ldx	wrk
+		pla			; pop TOS word
+		plb
+                jmp     fixX_BA         ; store in local cell
+                                        ; (jmp added in v1.65)
+
+;--------- moved to MISC.Y1 in version 1.65
+;FixX_BA                               =*; Store BA in (X) and jump to MainLoop
+;                sta     x, 0            ; store in local cell
+;                stb     x, 1
+;                jmp     MainLoop
+;----------------------------------------
+
+; ------- Short Store Double eXternal word -------
+; mnemonic: SSTDXn big
+; Stack:    { dw } -> { }
+; Action:   store external double word
+;	    from segment <n> with offset <big>
+
+sstdx		bsr	GetXtrnlAddr_	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- Store Double eXternal word -------
+; mnemonic: STDX byte, big
+; Stack:    { dw } -> { }
+; Action:   store external double word
+;	    from segment <byte> with offset <big>
+
+stdx		bsr	GetXtrnlAddr	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- STore Double Global word -------
+; mnemonic: STDG big
+; Stack:    { dw } -> { }
+; Action:   store TOS in long global word
+;	    (offset from start of global area is <big> words)
+
+stdg		ldx	gbl
+		db	_cpx_
+
+; ------- STore Double Local word -------
+; mnemonic: STDL big
+; Stack:    { dw } -> { }
+; Action:   store TOS in long local word
+;	    (offset from start of local area is <big> words)
+
+stdl		ldx	lcl
+		bsr	AddBigOffset
+StoreBAdbl			      =*; Store TOS_32 in (BA) & goto MainLoop
+		sta	wrk+1		; store BA in wrk to load
+		stb	wrk		; 6800 index register
+		ldx	wrk
+		pla			; pop LSWord
+		plb
+		sta	x, 0		; store in local cell
+		stb	x, 1
+		pla			; pop MSWord
+		plb
+		sta	x, 2		; store in local cell
+		stb	x, 3
+		jmp	MainLoop
+
+; ------- Store Intermediate -------
+; mnemonic: STI byte, big
+; Stack:    { w } -> { }
+; Action:   store intermediate (<byte> levels out) word <big> onto stack
+
+sti		bsr	AddBigInterm
+		bra	ssti__
+
+; ------- Short STore Intermediate1 -------
+; mnemonic: SSTI_1 big
+; Stack:    { w } -> { }
+; Action:   store intermediate (1 level out) word <big> onto stack
+
+ssti1		ldx	stat
+		bra	ssti_
+
+; ------- Short STore Intermediate2 -------
+; mnemonic: SSTI_2 byte, big
+; Stack:    { w } -> { }
+; Action:   store intermediate (2 levels out) word <big> onto stack
+
+ssti2		ldx	stat
+		ldx	x
+ssti_
+		bsr	AddBigOffset
+ssti__
+		adda	#MSsz
+		adcb	#0
+		bra	StoreBA
+
+; ------- Store Double Intermediate -------
+; mnemonic: STDI byte, big
+; Stack:    { dw } -> { }
+; Action:   store intermediate (<byte> levels out) double word <big> onto stack
+
+stdi		bsr	AddBigInterm
+		bra	sstdi__
+
+; ------- Short STore Double Intermediate1 -------
+; mnemonic: SSTDI_1 big
+; Stack:    { dw } -> { }
+; Action:   store intermediate (1 level out) double word <big> onto stack
+
+sstdi1		ldx	stat
+		bra	sstdi_
+
+; ------- Short STore Double Intermediate2 -------
+; mnemonic: SSTDI_2 byte, big
+; Stack:    { dw } -> { }
+; Action:   store intermediate (2 levels out) double word <big> onto stack
+
+sstdi2		ldx	stat
+		ldx	x
+sstdi_
+		bsr	AddBigOffset
+sstdi__
+		adda	#MSsz
+		adcb	#0
+		bra	StoreBAdbl
+
+;------------------------------------------------------------------------------
+
+; ------- Add BIG*2 with static link -------
+; Import: IPC ▒о╖и intermediate byte
+; Export: С║╣о▓о как▓о п░и AddBigOffset.
+
+AddBIGInterm	proc
+		ldx	ipc		; X:= IPC; за да за░еждаме инди░ек▓но
+		lda	x		; get lex number of levels to traverse
+		inx			; bump ipc ▓ака ╖е да ▒о╖и ▒лед
+		stx	ipc		; intermediate byte (ве╖е е об░або▓ен)
+
+		ldx	stat		; traverse A lex levels out
+Loop		deca			; if A = 0 => 256 levels out
+		beq	OK		; до╕ли ли ▒ме до н│жни┐ lex level
+		ldx	x		; не, ▒ледва╣и┐ мол┐. X:= X^
+		bne	Loop		; п░ове░ка▓а за неп░авилен б░ой lex-ове
+		jmp	BadInterm	; ▒и идва о▓ ▒амо▒ебе ▒и
+OK
+		endp;	AddBigInterm
+
+; ------- Add Big * 2 Offset -------
+; import: X - base address
+; export: BA = X + BIG*2
+;	  X & ipc = address of next instruction
+; uses:   wrk
+
+AddBigOffset	proc
+		stx	wrk		; preserve base address
+		ldx	ipc
+		clrb			; prepare if small parameter
+		lda	x
+		bpl	SingleByte
+		tab			; this is the MSbyte
+		inx			; н┐ма н│жда да ма╡аме MSBit
+		lda	x		; за╣о▓о п░и rol ▓ой ▒и о▓ива
+SingleByte	inx
+		stx	ipc
+		asla
+		rolb
+		adda	wrk+1
+		adcb	wrk
+		rts
+		endp;	AddBigOffset
+
+;------------------------------------------------------------------------------
+;				 Load Variable.
+
+; ------- Short Load eXternal word -------
+; mnemonic: SLDXn big
+; Stack:    { } -> { w }
+; Action:   load external word
+;	    from segment <n> with offset <big>
+
+sldx		jsr	GetXtrnlAddr_	; X:= SegInfo of external segment
+		bra	ldl_
+
+; ------- Load eXternal word -------
+; mnemonic: LDX byte, big
+; Stack:    { } -> { w }
+; Action:   load external word
+;	    from segment <byte> with offset <big>
+
+ldx		jsr	GetXtrnlAddr	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- LoaD Global -------
+; mnemonic: LDG big
+; Stack:    { } -> { w }
+; Action:   push global word <big> onto stack
+
+ldg		ldx	gbl
+		db	_cpx_
+
+; ------- LoaD Local -------
+; mnemonic: LDL big
+; Stack:    { } -> { w }
+; Action:   push local word <big> onto stack
+
+ldl		ldx	lcl
+ldl_
+		bsr	AddBigOffset
+LoadBA				      =*; Load (BA) and jump to MainLoop
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+LoadX				      =*; push (X) and jump to MainLoop
+		lda	x, 0
+		ldb	x, 1
+PushBA				      =*; push BA and jump to MainLoop (Bsex-)
+		phb
+		pha
+		jmp	MainLoop	; and jump to MainLoop
+
+; ------- Short Load Double eXternal word -------
+; mnemonic: SLDDXn big
+; Stack:    { } -> { dw }
+; Action:   load external double word
+;	    from segment <n> with offset <big>
+
+slddx		jsr	GetXtrnlAddr_	; X:= SegInfo of external segment
+		bra	lddl_
+
+; ------- Load Double eXternal word -------
+; mnemonic: LDDX byte, big
+; Stack:    { } -> { dw }
+; Action:   load external double word
+;	    from segment <byte> with offset <big>
+
+lddx		jsr	GetXtrnlAddr	; X:= SegInfo of external segment
+		db	_cpx_		; trick to jump over next ldx
+
+; ------- LoaD Double Global -------
+; mnemonic: LDDG big
+; Stack:    { } -> { dw }
+; Action:   push long global word <big> onto stack
+
+lddg		ldx	gbl
+		db	_cpx_
+
+; ------- LoaD Double Local -------
+; mnemonic: LDDL big
+; Stack:    { } -> { dw }
+; Action:   push long local word <big> onto stack
+
+lddl		ldx	lcl
+lddl_
+		bsr	AddBigOffset
+LoadBAdbl			      =*; Load (BA)32 and jump to MainLoop
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+		ldb	3, x		; get Double word
+		lda	2, x
+		phb			; and push it
+		pha
+		bra	LoadX
+
+; ------- Load Intermediate -------
+; mnemonic: LDI byte, big
+; Stack:    { } -> { w }
+; Action:   push intermediate (<byte> levels out) word <big> onto stack
+
+ldi		bsr	AddBigInterm
+		bra	sldi__
+
+; ------- LoaD Intermediate1 -------
+; mnemonic: SLDI_1 big
+; Stack:    { } -> { w }
+; Action:   push intermediate (1 level out) word <big> onto stack
+
+sldi1		ldx	stat
+		bra	sldi_
+
+; ------- LoaD Intermediate2 -------
+; mnemonic: SLDI_2 big
+; Stack:    { } -> { w }
+; Action:   push intermediate (2 levels out) word <big> onto stack
+
+sldi2		ldx	stat
+		ldx	x
+sldi_
+		bsr	AddBigOffset
+sldi__
+		adda	#MSsz
+		adcb	#0
+		bra	LoadBA
+
+; ------- Load Double Intermediate -------
+; mnemonic: LDDI byte, big
+; Stack:    { } -> { dw }
+; Action:   push intermediate (<byte> levels out) double word <big> onto stack
+
+lddi		bsr	AddBigInterm
+		bra	slddi__
+
+; ------- LoaD Double Intermediate1 -------
+; mnemonic: SLDDI_1 big
+; Stack:    { } -> { dw }
+; Action:   push intermediate (1 level out) double word <big> onto stack
+
+slddi1		ldx	stat
+		bra	slddi_
+
+; ------- LoaD Double Intermediate2 -------
+; mnemonic: SLDDI_2 big
+; Stack:    { } -> { dw }
+; Action:   push intermediate (2 levels out) double word <big> onto stack
+
+slddi2		ldx	stat
+		ldx	x
+slddi_
+		bsr	AddBigOffset
+slddi__
+		adda	#MSsz
+		adcb	#0
+		bra	LoadBAdbl
+
+; ------- Short LoaD Global word -------
+; mnemonic: SLDG_x
+; Stack:    { } -> { w }
+; Action:   push global word <x> onto stack
+;	    (offset from start of global area is <x> words)
+
+sldg			; използ│ва ▒е ┤ак▓а ╖е на влизане A in [$40..$5e]
+
+		suba	#$20*2		; sldg0 = $20 (A in [$40..$5e])
+		clrb
+		adda	gbl+1		; add base to calc
+		adcb	gbl		; offset in global area
+		bra	LoadBA
+
+; ------- Short LoaD Local -------
+; mnemonic: SLDL_x
+; Stack:    { } -> { w }
+; Action:   push local word <x> onto stack
+;	    (offset from start of local area is <x> words)
+
+sldl			; използ│ва ▒е ┤ак▓а ╖е на влизане A in [$20..$3e]
+
+		suba	#$10*2		; sldl_X in [$10..$1f]
+		clrb			; i.e. A = opcode * 2
+		adda	lcl+1		; add base to calc offset in local area
+		adcb	lcl
+		bra	LoadBA
+
+;------------------------------------------------------------------------------

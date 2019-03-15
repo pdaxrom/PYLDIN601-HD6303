@@ -1,0 +1,104 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Long Ycode instructions.		    (c) 1989, 1990 YGP.
+
+; ------- Long Ycode instructions handling -------
+; mnemonic: LYC No
+; Stack:    depends on Long Y instruction
+; Action:   Switch to Bank2 and call Long Y instruction <No>.
+
+LYCodes 	proc
+; ▓ака изглежда ldx	ipc		; X ▒о╖и к║м опе░анда
+; кода в Bank1	lda	x		;   ▓.е. в ▒л│╖а┐ к║м extended OpCode
+; кой▓о ни вика inx			; Bump IPC
+;		stx	ipc
+;		asla			; times 2 for offset
+;		bcs	UnknownLYcode
+;		bmi	InThisRom	; $40..$7f ▒а в ▓ози ROM
+;
+;		ldx	LYCaddress
+;		bra	ToBank2
+
+                .ifdef  shorten_TBL     ; vrom version 1.66
+                 suba    #2*8           ; дали не е межд│ 0..7 (▓.е. ни╣о)
+                 bcs     emulate_A      ; ако да ем│ли░аме код $A (▓.е. ни╣о)
+                 cmpa    #2*($28-8)     ; а да не би да е ▒лед $28
+                 bcs     do_code        ; не, не е и ╣е го п░авим
+                 suba    #2*($34-$28)   ; ▓огаз вадим големина▓а на д│пка▓а
+                 cmpa    #2*($28-8)     ; о▒▓ава да видим дали е в д│пка▓а
+                 bcc     do_code        ; да ама не е и ╣е го п░авим
+emulate_A        lda     #2*($a-8)      ; казваме ╖е е код $0a (▓.е. ни╣о)
+do_code         .endif
+
+                 clrb                    ; боза▓а е ко▒ма▓а,
+                 adda    #LYCodeTable
+                 adcb    #/LYCodeTable
+                 sta     wrk+1
+                 stb     wrk
+                 ldx     wrk
+                 ldx     x
+                 jmp     x
+                 endp;   LYCodes
+
+LYCodeTable      trunc   off
+                .ifNdef shorten_TBL     
+                 dw      _____,  _____,  _____,  _____   ; 00..03
+                 dw      _____,  _____,  _____,  _____   ; 04..07
+                .endif
+                dw      IOrslt, SetIO,  _____,  _____   ; 08..0b
+                dw      _____,  SNCI,   NCI,    UsrBPnt ; 0c..0f
+                dw      _____,  _____,  IdSrch, Scan    ; 10..13
+                dw      Str2Val,Val2Str,_____,  _____   ; 14..17
+                dw      QSearch,_____,  CompB,  _____   ; 18..1b
+                dw      _____,  _____,  _____,  _____   ; 1c..1f
+                dw      Lo_Hi,  Swap,   _____,  _____   ; 20..23
+                dw      _____,  _____,  GetDate,GetTime ; 24..27
+                .ifNdef shorten_TBL     
+                 dw      _____,  _____,  _____,  _____   ; 28..2b
+                 dw      _____,  _____,  _____,  _____   ; 2c..2f
+                 dw      _____,  _____,  _____,  _____   ; 30..33
+                .endif
+                dw      ULcase, delete, insert, pos     ; 34..37
+                dw      FillCh, FillW,  MoveB,  MoveW   ; 38..3b
+                dw      _____,  _____,  dupW,   _____   ; 3c..3f
+                trunc   on
+
+; ------- User break point -------
+; mnemonic UsrBPnt
+; Stack:   { w } -> { }
+; Action   Flush word from TOS
+
+UsrBPnt 	proc
+		int	_DbgBreak
+		ins			; user break point
+		ins			; pop up value and continue
+		jmp	MainLoop1
+		endp;	UsrBPnt
+
+; ------- (Short) Native Code instructions -------
+; mnemonic: (S)NCI byte/word <block>
+; Stack:   { ? } -> { ?? }
+; Action:   П░ави ▒е jsr на <block>, <byte> │казва колко е д║л║г + 1
+
+SNCI
+		ldx	ipc
+		lda	x, 0
+		clrb
+		bra	Common_NCI
+
+NCI		proc
+		ldx	ipc
+		ldb	x, 1
+		lda	x, 0
+		inx
+Common_NCI	=	*
+		inx
+		stx	ipc
+		adda	ipc+1
+		adcb	ipc
+		sta	ipc+1
+		stb	ipc
+		jsr	x, 0		; execute Native Code
+		jmp	MainLoop1
+		endp;	NCI
+
+;------------------------------------------------------------------------------

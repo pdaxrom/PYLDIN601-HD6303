@@ -1,0 +1,656 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. On the fly Linker. 			  (c) 1989 YGP.
+
+;     Да ▒е има п░едвид, ╖е ако ▒е п░ав┐▓ оп▓имиза╢ии ▓е ▓░┐бва да ▒а в по▒ока
+; намал┐ване големина▓а на кода, а не │вели╖аване на ▒ко░о▒▓▓а. За╣о▓о ▒ко░о▒▓
+; ▓│к не ▓░┐бва. А м┐▒▓о ни ▓░┐бва и о╣е как.
+
+		section 0		; Module Descriptor (on disk)
+MD_name 	ds	8		; Module name (8 bytes - chars)
+MD_Version	ds	2		; Module version
+MD_Date 	ds	2		; Module date (compilation)
+MD_Time 	ds	2		; Module time (compilation)
+MD_Next 	ds	2		; Next module descriptor
+MD_MainSeg	ds	2		; Main segment descriptor
+MD_Language	ds	2		; Language ($1Xyy Pascal version X.yy)
+MD_Compiler	ds	4		; Start, Size (compiler info)
+MD_Usage	ds	2		; Usage list (paragraph)
+		ds	4		; unused now
+MD_Nextrnl	ds	1		; Number of external modules/units
+MD_Nintrnl	ds	1		; Number of internal segments
+		error	* - 32 ; exactly 32 bytes long
+		ends
+
+		section 0		; Segment Descriptor (on disk)
+SD_name 	ds	8		; Segment's name (check only)
+SD_SegStart	ds	2		; Start block
+SD_SegSize	ds	2		; size in bytes
+SD_inNo         ds      2               ; internal segment No
+SD_next 	ds	2		; next segment descriptor paragraph
+		ds	16
+		error	* - 32 ; exactly 32 bytes long
+		ends
+
+		section 0		; Usage list entry
+USG_name	ds	8		; Module name (8 bytes - chars)
+USG_Version	ds	2		; Module version
+USG_Date	ds	2		; Module date (compilation)
+USG_Time	ds	2		; Module time (compilation)
+USG_next	ds	2		; paragraph of next external unit
+		error * - 16
+		ends
+
+		section 0		; Code File Header
+CFH_code	ds	2		; must be $c0de 		($c0de)
+CFH_Wsz 	ds	1		; word size of code file	  ($10)
+CFH_Bsx 	ds	1		; byte sex of code file 	  ($00)
+CFH_maj 	ds	1		; Code file major version	  ($01)
+CFH_min 	ds	1		; Code file minor version	  ($??)
+		ds	2		; unused now
+CFH_Parasz	ds	2		; Paragraph size = 32		($2000)
+CFH_BlckSz	ds	2		; Block size = 512		($0002)
+CFH_FrstMod	ds	2		; first module info paragraph No
+		ends
+
+;---------------------- Compare Modules for compatability ---------------------
+; Import: X reg - ptr to module info
+;	   __Ph - another module info
+; Export: в ░еги▒▓║░ A в░║╣аме %00000xyz X^ (x: >, y: <, c: =) __Ph
+;
+
+ModuleOK	proc
+		stx	Dest
+		stx	wrk3		; preserve Xreg
+		clr	wrk2		; в wrk2 ╣е имаме какво ╣е в║░нем
+		ldx	#__Ph
+		stx	Src
+		lda	#8
+		clrb
+		jsr	CmpBytes
+		bne	afterLG_
+
+		lda	x, 0		; в ▓ози момен▓ X ▒о╖и ▒лед к░а┐ на
+		ldb	x, 1		; име▓о ▓.е. к║м ве░▒и┐▓а, о▒▓ава да го
+		inx			; │вели╖им (п░е▒ка╖айки ве░▒и┐▓а)
+		inx
+		stx	Src
+		cmpb	__Ph+MD_Version+1
+		bne	LG
+		cmpa	__Ph+MD_Version
+		bne	LG
+		lda	#%001		; =
+		bra	afterLG
+LG		bcs	Less
+		lda	#%100		; >
+		db	_cpx_		; trick to jump over lda
+Less		lda	#%010		; <
+afterLG 	sta	wrk2
+
+		ldx	#__Ph+MD_Date
+		stx	Dest
+		lda	#4		; ╣е п░ове░┐ваме 4 бай▓а
+		clrb
+		jsr	CmpBytes
+		bne	LG_
+		lda	#%001		; =
+		bra	afterLG_
+LG_		bcs	Less_
+		lda	#%100		; >
+		db	_cpx_		; trick to jump over lda
+Less_		lda	#%010		; <
+afterLG_	anda	wrk2
+		ldx	wrk3		; restore Xreg
+		rts
+		endp;	ModuleOK
+
+; ---------------------------- Search File ----------------------------
+; Import:            A - file handle.
+;         __CurModInfo - paragraph No of searched module.
+; Export: Carry is clear if searched module is found.
+
+SearchFile	proc
+                ;ldx     #0             ;/ read CodeFileHeader
+                ;jsr     ReadParagraphA ;| v1.66
+                jsr     CheckCodeFile   ;|еквивален▓но на го░но▓о ▒ малко
+                                        ;|пове╖е п░ове░ки, но за▓ова п║к
+                                        ;|п░е▒м┐▓а __power_2, а ние не б║░заме
+                                        ;\за ник║де (и без ▓ова ди▒ка е бавен)
+
+		ldx	__PH+CFH_FrstMod ; and get paragrapn No of first Module
+loop		jsr	ReadParagraph	; ▓║░▒им в║в ┤айла за мод│л ▒ и▒кани▓е
+		ldx	__CurModInfo	; ве░▒и┐, да▓а и в░еме
+		bsr	ModuleOK	; дали е ▒║╣и┐ мод│л
+		bita	#%001
+		bne	OKfound
+		bita	#%010		; а дали е по нов, но ▒║вме▒▓им
+		bne	NewButComp
+		ldx	__Ph + MD_next	; ▓.е. може да е по-к║▒на да▓а и ве░▒и┐
+		bne	loop
+		sec
+                rts                     ; v1.65 ко▒ма▓ ▓░ик (db _ldb_)
+OKfound 	clc
+		rts
+		endp;	SearchFile
+
+; ---------------------------- Create Module info ----------------------------
+; Import: __Fhandle - file handle
+;	   LongWork - FilePosition
+;
+; Export:	  X - ptr to ModInfo
+
+CreateMod	proc
+		jsr	RdParagraph	; read paragraph
+		ldx	ModQueue	; за╡апваме ░еди╢а▓а о▓ мод│ли и ако
+		beq	NoModule	; е п░азна ди░ек▓но го добав┐ме
+loop		bsr	ModuleOK	; ▓ова ▓ой ли е?
+		bita	#%011		; ако го има, (▒║╣и┐ или по-нов)
+		bne	rts		; да ▓│ка е
+		tsta			; ако A = 0 зна╖и абе░ ▒и н┐ма
+		beq	TryNext 	; ако A <> 0 о▒▓ава да е %100
+		jsr	IsLinked	; о▒▓ава да видим дали е link-на▓
+		bcs	fill_name	; ако не е link-на▓ замен┐ме
+TryNext 	ldx	x, ModNext
+		bne	loop
+					; н┐ма го за▓ова го ▒лагаме
+NoModule	lda	#ModInfoSz
+		clrb	;#/ModInfoSz
+		jsr	GetStackErr
+
+		lda	ModQueue+1
+		ldb	ModQueue
+		sta	x, ModNext+1
+		stb	x, ModNext
+		lda	SlotCnt
+		sta	x, ModMainSlot
+		inc	SlotCnt
+		bne	OK
+		jmp	Segs2many
+OK
+		stx	ModQueue
+NewButComp      =       *               ; ▒ка╖а ▒е о▓ SearchFile (виж по-дол│)
+fill_name                               ; ▓ези об┐▒нени┐ (вж ▓│к-▓ам) ▒а за CLC
+		stx	wrkF+2		; wrkF е за░едено о▓ RdPara...
+		lda	#MD_Next
+		clrb	;#/MD_Next
+		ldx	#wrkF
+		int	_MoveMem
+		ldx	wrkF+2
+                clc                     ; ▓ова го и▒ка SearchFile (виж по-го░е)
+rts		rts
+
+		endp;	CreateMod
+
+; ---------------------------- Link Segments ----------------------------
+; Import: X - ptr to ModInfo to link
+
+LinkSegments	proc
+		stx	__CurModInfo
+
+		lda	__Fhandle
+		jsr	SearchFile	; П║░во ▓║░▒им в ▓ек│╣и┐ ┤айл
+		bcc	OK_Found	; ако е наме░ен доб░е, но ако не е?
+		lda	__ProgHandle	; ▓░┐бва да ▒е по▓║░▒и в ▒ледни▓е
+		jsr	SearchFile	; ┤айлове:
+		bcc	OK_Found	; 1) в║в ┤айла ▒ п░ог░ама▓а
+		lda	LibHandle
+		bne	HasLibrary
+		jsr	OpenLibrary	; 2) Файл ▒ п░едва░и▓елно │казано име
+                sta     LibHandle       ;    нап░име░ a:\STANDARD.upl
+		beq	NoLibrary
+HasLibrary
+		jsr	SearchFile
+		bcc	OK_Found
+NoLibrary	ldx	BDYpathsPtr	; 3) Файл ▒ име▓о на мод│ла и ▒│┤ик▒
+		stx	__BDYpath	;    .bdy н┐к║де ▒и (BDYpaths)
+BDYloop 	jsr	GetBDY
+		bcc	OK_Found
+		ldx	__BDYpath
+		bne	BDYloop
+		ldx	__CurModInfo
+		lda	#' '
+		sta	x, 8
+		clr	x, 9
+                .ifdef  PControler
+                 jsr     proc_wstr
+                .else
+                 int     _Wstr
+                .endif
+		jmp	CantFindBDY	; ако го н┐ма ник║де ░евем
+OK_Found
+		lda	__Ph+MD_Nextrnl
+		adda	__Ph+MD_Nintrnl ; об╣и┐ б░ой <= 255
+		ldb	__Ph+MD_Language
+		cmpb	#$11		; Това Pascal ве░▒и┐ 1.xx ли е?
+		beq	LangOK
+		jmp	NoLanguage
+LangOK
+		ldx	__Ph + MD_Usage ; process Usage list (external units)
+		stx	__Extrnl	; save it for later use
+
+                ;ldx     wrk            ; е ▓е ▓ова кв'о е ни ▒║ знай (v1.65)
+		ldx	__Ph+MD_MainSeg ; межд│ вп░о╖ем ▓░┐бва да е <> 0
+
+		ldb	#$80		; MainSegment
+LinkNextSeg
+                bsr     CreateSeg
+		clrb			; ве╖е не ▒а главни
+		clra			; н┐ма SlotDictionary
+                ;cpx     #0             ; н┐ма за к║де да б║░заме, а инак е
+                stx     tempS           ; по-к░а▓ко (v1.66) ▒ един бай▓
+		bne	LinkNextSeg
+
+		ldx	__Extrnl	; об░або▓ка на external units
+		beq	NoExternals
+		clra
+		pha
+
+LinkLoop
+		jsr	MulParaSz
+		jsr	CreateMod	; ╡одим и об░або▓ваме използ│вани▓е
+		ldb	x, ModMainSlot	; под "об░або▓ваме" ░азби░ам ▒║би░аме
+		pla			; и по▒▓ав┐ме за по▒ледва╣о link-ване
+		inca			; добав┐ме 16 за╣о▓о ▓е ▒а по два
+                pha                     ; в║в па░аг░а┤. 21.Feb.92 ==> какви
+                bsr     PutInSlotDict   ; два в па░аг░а┤? к'ви индиан╢и, к'ви
+                                        ; пе▓ лева, к'ви ... К║де добав┐ме 16
+                                        ; изоб╣о ни╣о не ░азби░ам. Какво ▒║м
+                                        ; и▒кал да кажа ▒ ▓ози комен▓а░. <==
+
+		ldx	__PH + USG_next
+		bne	LinkLoop
+		ins
+NoExternals
+		rts
+		endp;	LinkSegments
+
+; ---------------------------- ReadParagraph ----------------------------
+; Import:	  X - paragraph No (Bsex-)
+;	  __Fhandle - file handle
+;
+; Export:      __Ph - п░о╖е▓ени┐ о▓ ди▒ка па░аг░а┤
+;	   LongWork - File Position (X * 32) in Bsex+
+;	       wrkF - #__Ph, #32
+;
+; Action: seek(__Fhandle, X * 32); BlockRead(__Fhandle, __Ph, 32);
+
+ReadParagraphA	sta	__Fhandle
+
+ReadParagraph	proc
+		bsr	MulParaSz
+RdParagraph	=	*		; entry (без ▒м┐▓ане на пози╢и┐▓а)
+
+		clrb
+		lda	__Fhandle
+		ldx	#LongWork
+		int	_Fseek		; seek(__Fhandle, LongWork);
+		bsr	CheckFatalIO
+
+		lda	__Fhandle
+		ldx	#32
+		stx	wrkF+2
+		ldx	#__Ph
+		stx	wrkF
+		ldx	#wrkF
+		int	_Fread		; BlockRead(__Fhandle, __Ph);
+		; п░опадаме в CheckFatalIO
+		endp;	ReadParagraph
+
+; ---------------------------- Check IO error ---------------------------
+CheckFatalIO	proc
+		tsta			; п░ове░┐ваме ░ез│л▓а▓а о▓ опе░а╢и┐▓а
+		beq	OK		; и ако е имало г░е╕ка ▒и о▓иваме
+		jmp	FatalIOerr	; за╣о▓о ▓ова ▒е е ▒л│╖ило п░и
+OK		rts			; search/link на ▒ама▓а п░ог░ама
+		endp;	CheckFatalIO
+
+; ------- Multiply by Paragraph Size (32) -------
+
+MulParaSz	proc
+		stx	LongWork+1	; понеже ни идва об░а▓но
+		clra
+		sta	LongWork
+		ldb	LongWork+1	; ▓ова е в▒║╣но▒▓ млад╕и┐ бай▓
+
+		ldx	#5		; ╣е │множаваме по 32
+loop		aslb
+		rol	LongWork+2
+		rola
+		dex
+		bne	loop
+
+		stb	LongWork+3
+		sta	LongWork+1	; в ▓ози момен▓ в LongWork е Fposition
+
+		rts
+		endp;	MulParaSz
+
+; ---------------------------- Put in SlotDict ----------------------------
+; Import: A - segment No
+;	  B - slot No
+
+PutInSlotDict	proc			; ▓░┐бва да поп║лним SlotDict
+		adda	__GlobSeg+1	; добав┐ме номе░а на ▒егмен▓а
+		sta	wrk1+1		; к║м │каза▓ел┐ за GlobSeg
+		lda	__GlobSeg	; и по▒ле ад░е▒и░аме
+		adca	#0		; ▒║▒ ▒▓а▓и╖но о▓ме▒▓ване SegSlotDict
+		sta	wrk1		; по X ка▓о пол│╖аваме
+		ldx	wrk1		; X, SegSlotDict + A
+		stb	x, SegSlotDict
+		rts
+		endp;	PutInSlotDict
+
+; ---------------------------- Create Segment ----------------------------
+; Import:	      X - па░аг░а┤ на SegDescriptor (Bsex-),
+;	  A + SegInfoSz - size of SegInfo (в▒║╣но▒▓ A = size of SegDictionary)
+;		      B - SegFlags
+;	      __Fhandle - File handle
+;
+; Export: X - па░аг░а┤а на ▒ледва╣и┐ ▒егмен▓
+;
+; Action: С║здава SegInfo за ▓оз ми ▓и ▒егмен▓
+
+CreateSeg	proc
+		phb			; preserve B
+		pha			; preserve A
+		bsr	ReadParagraph
+		pla			; restore A
+		clrb			; BA:= A /(16bit):= (8bit)/
+		adda	#SegInfoSz	; BA = SizeOf(SegInfo)
+		adcb	#0
+		jsr	GetStackErr
+
+		lda	SegQueue+1	; ▒лагаме ▓ози ми ▓и ▒егмен▓ в
+		ldb	SegQueue	; ▒пи▒║ка о▓ ▒егмен▓и
+		sta	x, SegNext+1	; new(SegInfo)^.next:= SegInfo;
+		stb	x, SegNext	; SegInfo:= new(SegInfo);
+		stx	SegQueue	; ама ▓ова NEW ░або▓и ▒ DataStack
+		stx	wrkF+2		; за да ▒ма го▓ови за MOVE
+
+		lda	__Fhandle
+		sta	x, SegFhandle	; set Filehandle
+
+		;clr	 x, SegNloads+1  ; not in memory (в▒║╣но▒▓ паме▓▓а
+		;clr	 x, SegNloads	 ; е н│ли░ана о▓ GetStack)
+
+		plb			; restore B
+                orb     __power_2       ; големина на блока в ▒▓епени на 2
+		stb	x, SegFlags
+                ;beq     NotMain        ; в ▒▓а░а▓а ве░▒и┐ ▒▓ава и ▓ака ама
+                bpl     NotMain         ; ве╖е не може ▓ака, но bpl в║░ви
+		stx	__GlobSeg	; м║ ▓│й е главен ▒егмен▓
+		ldx	__CurModInfo
+		lda	x, ModMainSlot
+		ldx	SegQueue
+		bra	Continue
+NotMain
+		lda	__GlobSeg+1
+		ldb	__GlobSeg
+		sta	x, SegGbl+1
+		stb	x, SegGbl
+		lda	SlotCnt
+		inc	SlotCnt
+		bne	Continue
+		jmp	Segs2many
+Continue
+		sta	x, SegSlotNo
+		pha			; preserve slot number
+
+		lda	#SD_SegSize	; п░еме▒▓ваме име▓о и
+		clrb			; на╖ални┐ блок (без SegSize)
+		ldx	#wrkF
+		int	_MoveMem
+
+		plb			; get slot number
+		lda	__Ph + SD_inNo	; internal number
+		bsr	PutInSlotDict
+
+		ldx	__Ph + SD_next	; ▒ледва╣и┐ ▒егмен▓
+		rts
+		endp;	CreateSeg
+
+; ---------------------------- Check CodeFile ----------------------------
+;   П░о╢ед│░а▓а п░ове░┐ва дали дадени┐ й ка▓о па░аме▓║░ ┤айл е CodeFile.
+; import: A - handle.
+; export: No Carry - OK.
+;	     X reg - Paragraph of first module descriptor. (Bsex-)
+;        __Fhandle - from Accomulator A
+; export v1.66+
+;            B reg - 0, 1, ..., 15 Block size (power of 2)
+;        __power_2 - same as B register.
+
+CheckCodeFile	proc
+		ldx	#0		; п░о╖и▓аме па░аг░а┤ #0
+                jsr     ReadParagraphA  ; ка▓о неб░ежно запи▒ваме __Fhandle
+
+		ldx	__Ph+CFH_code	; 1) ▓│ка ли е маги╖е▒ка▓а кон▒▓ан▓а?
+		cpx	#$c0de
+		bne	NotCodeFile	;    не, зна╖и не е code file
+
+		ldx	__Ph+CFH_Wsz	; 2) 16 би▓ов Bsex-?
+		cpx	#$1000
+		bne	NotCodeFile
+
+		ldb	__Ph+CFH_maj	; 3) Ве░▒и┐ 1.xx ?
+		decb
+		bne	NotCodeFile
+
+		ldx	__Ph+CFH_ParaSz ; 4) Paragraph size = 32?
+		cpx	#$2000		; negative byte sex
+		bne	NotCodeFile
+
+                ;--------------------------------------------------------------
+                ;ldx     __Ph+CFH_BlckSz ; 5) Block size = 512?
+                ;cpx     #$0002          ; negative byte sex
+                ;bne     NotCodeFile
+;--------------- version 1.66 block size can be a power of 2
+
+                lda     __Ph+CFH_BlckSz ; get block size (Bsex-)
+                ldb     __Ph+CFH_BlckSz+1
+                ldx     #$fff0          ; за да може да п░ев║░▓им ако > 2^16
+loop            lsrB
+                rorA                    ; div 2 and check carry
+                bcs     _1_found
+                inx
+                bne     loop            ; Block size is not a power of 2
+invalid_bsz     jmp     InvalidBlockSz  ; or is too large
+_1_found        aba
+                bne     invalid_bsz     ; block size is not a power of 2
+                bcs     invalid_bsz     ; block size is not a power of 2
+                stx     __Ph+CFH_BlckSz ; може и да го по▒капем
+                ldb     __Ph+CFH_BlckSz+1 ; get LSByte
+                andb    #%0000_1111
+                stb     __power_2
+                lda     __Fhandle
+;---------------
+		ldx	__Ph+CFH_FrstMod
+		clc
+                rts                     ; v1.65 п░ема╡на▓ ▓░ик (db _ldb_)
+NotCodeFile	sec
+		rts
+		endp;	CheckCodeFile
+
+;--------------------------- Check is module linked ---------------------------
+; Import: X - ptr to Module Info
+; Export: Carry is clear if module is linked.
+
+IsLinked	proc
+		lda	x, ModMainSlot	; get Main slot Number of a module
+		stx	wrk		; preserve X register
+		ldx	SegQueue	; а ▒ега да видим дали го има
+		beq	NotLinked
+loop		cmpa	x, SegSlotNo
+		beq	Linked
+		ldx	x, SegNext
+		bne	loop
+NotLinked	sec
+		db	_ldb_		; trick to jump over clc
+Linked		clc
+		ldx	wrk
+		rts
+		endp;	IsLinked
+
+;----------------------------- Open Library File ------------------------------
+; Import: A = 0 (в▒║╣но▒▓ н┐ма ╣о▓о никой не го б░║▒не)
+; Export: A = 0 if library not found, FileHandle if found
+
+OpenLibrary	proc
+                .ifdef  PControler
+                 clra   ; ма╕ина▓а ко┐▓о н┐ма да ▒е п░ави (и не ▒е п░ави)
+                 rts    ; изоб╣о н┐ма ┤айлове (да не гово░им за библио▓еки).
+                .else
+                 ldb     __NoLibFile     ; ако ▒ме п░авили и п░еди опи▓ за
+                 bne     NoLibrary       ; о▓ва░┐не кой▓о е бил не│▒пе╕ен
+
+                 ldx     OverlayBuffer   ; извадени ▓│к ╣о▓о да не ▒е пов▓а░┐▓
+                 stx     Dest            ; v1.66
+
+                 ldx     LibNamePtr      ; get address of library name
+                 bne     HasName
+                 lda     #DefaultNameSz
+                 clrb
+                 jsr     GetStackErr
+                 stx     Src
+                 ;ldx     OverlayBuffer  ;\ v1.66 извадени по-го░е
+                 ;stx     Dest           ;/
+                 ldx     #DefaultName
+                 stx     Src-2           ; wrk3
+                 ldx     #Src-2
+                 int     _MoveMem        ; Move library Name
+                 ldx     #Src
+                 lda     #1
+                 int     _Fopen
+                 ldx     Src             ; cut back memory allocated for name
+                 stx     LoMemPtr
+                 bra     quit
+HasName
+                ;ldx     #LibNamePtr    ; BUG о▓к░и▓ ▒лед ве░▒и┐ 1.50 ▓ози ░ед
+                                        ; ▓░┐бва да ▒е замени ▒ ╖е▓и░и▓е ░еда:
+                 stx     Src            ; ▓░┐бва да ▒е п░еме▒▓и ад░е▒а на име▓о
+                 ;ldx     OverlayBuffer ; за░ад б│┤е░а за ┤айл на UniDOS.
+                 ;stx     Dest          ; ▒лагаме к'во▓о ни ▓░┐бва в Src и Dest
+                 ldx     #Src           ; и дей▒▓ваме. ldx/stx ▒а извадени по-
+                                        ; го░е ╣о▓ инак ▒║ п│в▓а░┐▓ и лапа▓ ╢од
+
+                 lda     #1
+                 int     _Fopen
+quit             sta     __NoLibFile
+                 beq     CheckLibrary
+NoLibrary        clra
+OK               rts
+CheckLibrary     tba                     ; ▓░┐бва да п░ове░им валидно▒▓▓а
+                 jsr     CheckCodeFile
+                 ;lda     __Fhandle v1.66 изли╕но ╣о▓ CheckCodeFile не ▒капва A
+                 bcc     OK
+                 jmp     InvalidLibrary
+
+DefaultName      db      '\system.upl', 0
+DefaultNameSz    =       * - DefaultName
+                .endif
+		endp;	OpenLibrary
+
+;-------------------------------- Get BDY file --------------------------------
+; Export: Carry is clear if OK (file found and Module found too)
+
+GetBDY		proc
+		lda	#255		; get space for file name
+		clrb
+		jsr	GetStackErr
+		stx	Src
+		ldb	#'\'
+
+		sei			; п░иби░аме п║▓┐ (░азделени ▒ ;)
+		sts	tempS
+		lds	__BDYpath
+		beq	CurrPath	; ако е nil ▒е п░едполага
+		des			; ▓ек│╣а▓а dir
+PathLoop	pla			; ге▓ваме по░едни┐ бай▓ о▓ име▓о
+		cmpa	#';'
+		beq	SemiPath
+		sta	x, 0
+		beq	EndPath 	; ако п║▓┐ е ▒в║░╕ил ▓░┐бва да
+		inx			; ▒ложим NIL де▓о ▓░ебе
+		tab			; preserve last char (for later check)
+		bra	PathLoop
+EndPath 	lds	#-1
+SemiPath	ins
+		sts	__BDYpath
+CurrPath
+		cmpb	#':'            ; ако е бил :
+		beq	NoSlash
+		cmpb	#'\'            ; или е бил \
+		beq	NoSlash 	; не ▓░┐бва да добав┐ме \
+		lda	#'\'
+		sta	x, 0
+		inx
+NoSlash
+		lds	__CurModInfo	; address of name (name is the first)
+		des			; item in ModInfo record
+		ldb	#8		; get 8 chars
+NameLoop	pla
+		cmpa	#' '
+		beq	EndName
+		sta	x, 0
+		beq	EndName
+		inx
+		decb
+		bne	NameLoop
+EndName 	lds	#BDYextension-1
+		ldb	#4
+ExtLoop 	pla
+		sta	x, 0
+		inx
+		decb
+		bne	ExtLoop
+		stb	x, 0		; clear LastByte
+		lds	tempS
+		cli
+
+		ldx	OverlayBuffer	; prepare for OPEN file
+		stx	Dest
+		lda	#1		; read only file
+		ldx	#Src
+		int	_Fopen
+		ldx	Src		; release memory
+		stx	LoMemPtr
+		tsta
+		bne	NoBDY
+		tba			; file handle
+		jsr	CheckCodeFile
+		bcc	OK
+		jmp	InvalidBDY
+OK              ;lda     __Fhandle  v1.66 изли╕но (CheckCodeFile не го ▒капва)
+		jsr	SearchFile
+		bcc	rts
+		lda	__Fhandle	; ка▓о не ▒▓ава ▒и го за▓ва░┐ме
+		bsr	CalcHndlUsers	; ако не ▒е използ│ва
+		bne	NoBDY
+		int	_Fclose
+		lda	__ProgHandle	; ▒лагаме file handle за кой▓о
+                sta     __Fhandle       ; ▒ме ▒иг│▓░ни, ╖е не е за▓во░ен
+NoBDY		sec
+rts		rts
+
+BDYextension	db	'.BDY'
+		endp;	GetBDY
+
+; ------- Calc number of users of File Handle -------
+; import: A file handle
+; export: B колко мод│ла го използ│ва▓
+;	  по▒ледна▓а опе░а╢и┐ е TSTB
+
+CalcHndlUsers	proc
+		stx	tempX
+
+		ldx	SegQueue	; п░ове░┐ваме дали н┐кой използва ┤айла
+		clrb			; б░о┐╖ на използва╖и▓е
+loop		cmpa	x, SegFHandle
+		bne	NotUsed
+		incb
+NotUsed 	ldx	x, SegNext
+		bne	loop
+		ldx	tempX
+		tstb
+		rts
+		endp;	CalcHndlUsers
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,838 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Read from file standard procedures.    (c) 1989, 1990 YGP.
+
+;--------------------------- standard procedure GET ---------------------------
+; procedure Get(var F; var Buffer);	 { Компила▓о░а гене░и░а използ│ване▓о }
+;							   { п░и read(f, ...) }
+
+StdGet		proc
+		tsx
+		ldx	x, 0		; get Buffer address
+		stx	IObuff
+		tsx
+		ldx	x, 2		; get file address
+		ins			; pop addresses from stack
+		ins
+		ins
+		ins
+		stx	IOfile
+
+		lda	x, F_flags
+		bita	#%01000000
+		bne	OKreadable
+		lda	#_IO_NotReadable
+		jmp	SetIOresult
+OKreadable	lda	x, F_type
+		deca	;#NormalFile
+		beq	OKnormal
+		lda	#_IO_InvalidKind
+		jmp	SetIOresult
+
+OKnormal	lda	x, F_handle
+		ldx	x, F_rsize
+		stx	IOsize
+		ldx	#IObuff
+		int	_Fread
+		tsta
+		bne	endGET
+		cpx	IOsize		; at end of file ?
+		beq	endGET
+		ldx	IOfile
+		ldb	x, F_flags
+		orb	#%00100000
+		stb	x, F_flags
+		lda	#_IO_EOF
+set_io_near_                                  =*; за малко келепи░
+endGET		jmp	SetIOresult
+		endp;	StdGet
+
+;----------- Read Integer, Cardinal and LongInt standard procedures -----------
+
+; ------- Read Integer from file (standard procedure) -------
+; function fRdInt(var f: text);
+; Stack:   { f } -> { i }
+; Action:  Read integer value from file pointed at by <f>.
+
+fRdInt		jsr	TOSinFile
+		bra	RdInt_
+
+; ------- Read Integer from default input file -------
+; function RdInt: integer;
+; Stack:   {} -> { i }
+; Action:  Read integer value from default input file.
+
+RdInt		jsr	StdInFile
+
+RdInt_		proc
+		jsr	PrepReadText
+		bcs	PushLong_IO
+		jsr	ReadLint
+		bcs	PushLong_IO
+		clra
+		ldx	LongWork+0
+		beq	PushLong_IO
+		inx
+		beq	PushLong_IO
+HasError	lda	#_IO_BadFormat
+		bra	PushLong_IO
+		endp;	RdInt_
+
+; ------- Read Cardinal from file (standard procedure) -------
+; function fRdCard(var f: text);
+; Stack:   { f } -> { c }
+; Action:  Read cardinal value from file pointed at by <f>.
+
+fRdCard 	jsr	TOSinFile
+		bra	RdCard_
+
+; ------- Read Cardinal from default input file -------
+; function RdCard: cardinal
+; Stack:   {} -> { c }
+; Action:  Read Cardinal value from default input file.
+
+RdCard		jsr	StdInFile
+
+RdCard_ 	proc
+		jsr	PrepReadText
+		bcs	OK		; п░и г░е╕ка н┐ма кво да п░авим
+		jsr	ReadLint
+		bcs	PushLong_IO
+		clra
+		ldx	LongWork+0
+		beq	OK
+		lda	#_IO_BadFormat
+OK
+PushLong_IO	=	*
+		ldb	LongWork+2
+		phb
+		ldb	LongWork+3
+		phb
+TestA_IO	=	*
+		tsta
+
+                bne     set_io_near_    ; келепи░а ▒и е ╖и▒▓а аван▓а (3 бай▓а)
+                ;beq     ok_mloop       ; м║ кой ▓и ги дава. v 1.65
+                ;jmp     SetIOresult
+
+ok_mloop	jmp	MainLoop1
+		endp;	RdCard_
+
+; ------- Read Long Integer from file (standard procedure) -------
+; function fRdLong(var f: text): LongInt;
+; Stack:   { f } -> { li }
+; Action:  Read long integer value from file pointed at by <f>.
+
+fRdLong 	jsr	TosInFile
+		bra	RdLong_
+
+; ------- Read Long Integer from default input file -------
+; function RdLong: LongInt;
+; Stack:   {} -> { li }
+; Action:  Read Long integer value from default input file.
+
+RdLong		jsr	StdInFile
+
+RdLong_ 	proc
+		jsr	PrepReadText
+		bcc	OK
+		sta	IOresult+1
+		clr	IOresult
+		bra	PushLong
+OK		bsr	ReadLint
+                bcs     PushLong
+                clra
+PushLong	=	*
+		ldb	LongWork+0
+		phb
+		ldb	LongWork+1
+		phb
+		ldb	LongWork+2
+		phb
+		ldb	LongWork+3
+		phb
+		bra	TestA_IO
+		endp;	RdLong_
+
+; ------- Read Long Integer from file -------
+; Read Long Integer from file and place it in LongWork
+; import: IOfile - file address
+;   uses:   wrkF - minus
+;	  wrkF+1 - sign skipped
+;	  wrkF+2 - hex mode
+;	  wrkF+3 - по▒ледна▓а ╢и┤░а (в char вид)
+
+; не╣а▓а ка▓о ╢┐ло не ми ╡а░е▒ва▓, може би е по доб░е да ▒е нап░ави да
+; за╡апване дока▓о имаме ▒амо ╢и┤░и и по▒ле да п│▒каме val
+
+ReadLint	proc
+		lda	x, F_bios
+		beq	NotBIOS
+		jsr	BIOS_cr
+		clr	WorkBuff
+		int	_WhereXY
+		phb
+		pha
+AgainBIOS	pla
+		plb
+		phb
+		pha
+		int	_GotoXY
+		ldx	#WorkBuff
+		ldb	#30
+		lda	#$ff
+		int	_EditLine
+		cmpb	#$c0		; <cr> key
+		bne	AgainBIOS
+		ldb	#%01100000	; not hex, but ignore '_', allow sign
+		stx	IObuff
+		sta	IOsize+1
+		clr	IOsize
+		jsr	Str2Lint
+		bcs	AgainBIOS
+		pla
+		adda	IOsize+1
+		plb
+		jsr	CorrectXY
+		clc
+		rts
+
+NotBIOS
+		bsr	StartRead
+		bcs	IsBAD
+
+		cmpa	#'$'
+		bne	not_hex
+		inc	wrkF+2
+GetAgain	jsr	RdChText
+not_hex
+ReadLint1	=	*
+		cmpa	#'0'
+		bcs	BadChar
+		cmpa	#'9'
+		bls	IsDigit
+		cmpa	#'_'
+		beq	GetAgain
+		anda	#$df		; UpCase
+		cmpa	#'A'
+		bcs	BadChar
+		cmpa	#'F'
+		bhi	BadChar
+		suba	#'A' -('9' +1)
+		tst	wrkF+2
+		beq	BadChar
+IsDigit
+		sta	wrkF+3
+		lda	#10
+		ldb	wrkF+2
+		beq	decimal
+		lda	#16
+decimal
+		jsr	Mply_32x8
+		lda	wrkF+3
+		suba	#'0'
+		bsr	Add_32_8
+		bra	GetAgain
+BadChar
+		orb	#%00001000
+		stb	x, F_flags
+		sta	x, F_char
+		lda	wrkF		; negative?
+		beq	Positive
+		jsr	negLong
+Positive
+		lda	wrkF+3		; имаме ли поне една ╢и┤░а
+		beq	IsBad
+		clc
+		rts
+
+IsBad
+		lda	#_IO_BadFormat
+		sec
+		rts
+		endp;	ReadLint
+
+; -----------------------------------
+Add_32_8	proc
+
+		clrb
+		adda	LongWork+3
+		sta	LongWork+3
+		tba			; A:= 0
+		adca	LongWork+2
+		sta	LongWork+2
+		tba			; A:= 0
+		adca	LongWork+1
+		sta	LongWork+1
+		adcb	LongWork+0
+		stb	LongWork+0
+		rts
+
+		endp;	Add_32_8
+
+;---------------------------------------------
+; Import: IOfile - file address подго▓вен за ╖е▓ене о▓ ▓ек▒▓ов ┤айл
+; Export: A = first meaningful char.
+
+StartRead	proc
+		ldx	#0
+		stx	LongWork+0
+		stx	LongWork+2
+		stx	wrkF+0
+		stx	wrkF+2
+		stx	IOresult
+
+SkipLoop				; Skip leading space, tabs and eolns
+		jsr	RdChText
+		bcs	eofERR
+		bitb	#%00100000	; eof encountered?
+		bne	eofERR		; yes, error in integer/real format
+		cmpa	#' '            ; is it space?
+		beq	SkipLoop	; yes, skip it
+		cmpa	#9		; is it <tab>
+		beq	SkipLoop	; yes, skip it
+		cmpa	#13		; is it <cr>
+		beq	SkipLoop	; yes, skip it
+
+;StartRead1	 =	 *		 ; None of the Above (integer began)
+		cmpa	#'+'
+		beq	SkipSign
+		cmpa	#'-'
+		bne	NoSign
+		inc	wrkF		; negative
+SkipSign	tst	wrkF+1
+		bne	BadChar 	; ве╖е ▒ме наба░али един знак
+		inc	wrkF+1
+		bra	SkipLoop
+NoSign		clc
+		rts
+
+BadChar 	orb	#%00001000
+		stb	x, F_flags
+		sta	x, F_char
+eofERR		sec
+		rts
+		endp;	StartRead
+
+;-------- ReadReal standard procedures. (from default and given file) ---------
+
+; ------- Read Real from file (standard procedure) -------
+; function fRdReal(var f: text): real;
+; Stack:   { f } -> { r }
+; Action:  Read real value from file pointed at by <f>.
+
+fRdReal 	jsr	TOSinFile
+		bra	RdReal_
+
+; ------- Read Real from default input file -------
+; function RdReal: real;
+; Stack:   {} -> { r }
+; Action:  Read real value from default input file.
+
+RdReal		jsr	StdInFile
+
+RdReal_ 	proc
+		lda	x, F_bios
+		beq	NotBIOS
+		jsr	BIOS_cr
+		clr	WorkBuff
+		int	_WhereXY
+		phb
+		pha
+AgainBIOS	pla
+		plb
+		phb
+		pha
+		int	_GotoXY
+		ldx	#WorkBuff
+		ldb	#30
+		lda	#$ff
+		int	_EditLine
+		cmpb	#$c0		; <cr> key
+		bne	AgainBIOS
+		ldb	#%01100000	; not hex, but ignore '_', allow sign
+		stx	IObuff
+		sta	IOsize+1
+		clr	IOsize
+		jsr	Str2Real
+		bcs	AgainBIOS
+		pla
+		adda	IOsize+1
+		plb
+		jsr	CorrectXY
+		jmp	EndRdReal
+
+NotBIOS
+		jsr	PrepReadText
+		bcc	OKtext
+		clrb
+		phb
+		phb
+		phb
+		phb
+		jmp	SetIOresult
+OKtext
+		clr	fp_e1		; clear fp accomulator
+		jsr	StartRead
+		bcc	StartOK
+		jmp	EndRdReal
+StartOK
+		clrb
+		stb	wrk1		; exp
+		phb			; number of digits in stack
+
+		ldb	wrkF		; wrkF 0/1 - plus/minus
+nosign		stb	wrk1+1
+		bra	CheckChar
+
+loop		plb
+		incb			; increment number of digits
+		phb
+		tst	wrk1+1
+		bpl	HasntPoint
+		dec	wrk1
+HasntPoint	cmpb	#37
+		bcc	TooManyDigits
+		suba	#'0'
+		int	_mply10addA
+		bra	NextChar
+TooManyDigits	ldb	wrk1+1
+		bmi	HasPoint
+		inc	wrk1
+HasPoint
+NextChar	jsr	RdChText	; get next char from file
+		bcc	CheckChar
+		jmp	IOerror
+
+CheckChar	cmpa	#'.'
+		bne	notPoint
+		ldb	wrk1+1
+		bmi	EndOfNumber
+		orb	#$80
+		stb	wrk1+1
+		bra	NextChar
+
+notPoint	cmpa	#'0'
+		bcs	EndOfNumber
+		cmpa	#'9'
+		bls	loop
+		cmpa	#'_'
+		beq	NextChar
+		pha
+		anda	#$df		; UpCase
+		cmpa	#'E'
+		pla
+		bne	EndOfNumber
+skip_
+		pla
+		pha
+		tsta
+		beq	Error
+		jsr	RdChText
+		bcs	IOerror
+		cmpa	#'_'
+		beq	skip_
+		sta	x, F_char	; char avail
+		orb	#%00001000
+		stb	x, F_flags
+		jsr	StartRead
+		bcs	IOerror
+		jsr	ReadLint1
+		bcs	IOerror
+		bra	Continue
+
+EndOfNumber	ldb	x, F_flags
+		orb	#%00001000
+		stb	x, F_flags
+		sta	x, F_char
+		clr	LongWork+3
+		clr	LongWork+2
+continue
+		pla			; number of digits
+		pha
+		sta	wrk2
+		clrb
+		lda	wrk1
+		bpl	wrk1Pos
+		decb
+wrk1Pos
+		adda	LongWork+3
+		adcb	LongWork+2
+		adda	wrk2		; add number of digits
+		adcb	#0
+ ; кой знае за╣о не╣а▓а не в║░в┐▓ п░и 0.00000000000000000000е40
+ ; оказва ▒е ╖е в ▓ози момен▓ в A има 40
+		bmi	OK		; B < 0 зна╖и BA <= 37
+		beq	Test37
+		bra	Error
+Test37		cmpa	#37
+		bhi	Error
+OK
+		suba	wrk2		; о▓ново изваждаме Ndigits
+		sbcb	#0
+		int	_fp_10_pwr
+		ldb	wrk1+1
+		andb	#1		; negative?
+		beq	NotNeg
+		lda	LongWork
+		ldb	LongWork+1
+		bmi	MustNeg 	; поне един би▓ о▓ ек▒понен▓а▓а е <> 0
+		tsta			; знака ▒║▒ ▒иг│░но▒▓ е положи▓елен
+		beq	NotNeg		; имаме 0 ▓ака ╖е н┐ма кво да п░авим
+MustNeg 	ora	#$80
+		sta	LongWork
+NotNeg		bra	Quit
+
+Error		pla
+Error1		clra
+		pha
+
+Quit		pla
+		tsta
+		bne	EndRdReal	; има ╢и┤░и зна╖и OK
+		lda	#_IO_BadFormat
+		db	_cmpa_
+IOerror 	ins
+		sta	IOresult+1
+EndRdReal	clra
+		jmp	PushLong
+		endp;	RdReal_
+
+;----------------------- Read Char standard procedures ------------------------
+
+; ------- Read Char standard procedure -------
+; function RdChar: char;
+; Stack:    { } -> { ch }
+; Action:   Read char from Default Input file.
+
+RdChr		jsr	StdInFile
+		bra	ReadChar
+
+; ------- Read Char from file (standard procedure) -------
+; function fRdChar(var f: text);
+; Stack:    { f } -> { ch }
+; Action:   Read char from file pointed at by <f>.
+
+fRdChr		jsr	TOSinFile
+
+ReadChar	proc
+
+		jsr	PrepReadText
+		bcc	OK
+IOerror 	clrb
+		phb			; push char #0
+		phb
+		jmp	SetIOresult
+OK
+		lda	x, F_BIOS
+		beq	notBIOS
+
+BIOSread
+		int	_GetChar	; get char from BIOS
+		ldx	#StartCTbl
+ConvLoop	cmpa	x, 0
+		beq	Found
+		inx
+		inx
+		cpx	#EndCTbl
+		bne	ConvLoop
+		db	_cpx_
+Found		lda	x, 1
+		ldx	IObuff
+		ldb	x, F_flags
+		andb	#%11100011
+		cmpa	#13		; <cr>
+		bne	notCR
+		lda	#10
+		int	_Wchar
+		lda	#13
+		orb	#%00010000
+notCR		stb	x, F_flags
+		cmpa	#' '
+		bcs	PushChar
+		cmpa	#'┐'
+		bhi	PushChar
+		int	_Wchar
+
+		jsr	BIOS_cr
+
+		bra	PushChar
+notBIOS
+		jsr	RdChText
+		bcs	IOerror
+PushChar	clrb
+		phb
+		pha
+		jmp	OK_IOresult
+		endp;	ReadChar
+
+;------------------------- ReadLn standard procedures -------------------------
+
+; ------- Read Line from standard file -------
+; procedure ReadLn;
+; Stack:    no change
+; Action:   Skip to end of line Default Input file
+
+RdLn		jsr	StdInFile
+		bra	ReadLine
+
+; ------- Read Line from File (standard procedure) -------
+; procedure fReadLn(var f: text);
+; Stack:    { f } -> { }
+; Action:   Skip to end of line input file pointed at by TOS
+
+fRdLn		jsr	TOSinFile
+
+ReadLine	proc
+		bsr	PrepReadText
+		bcs	IOerr
+		;ldb	 x, F_flags	; за░едено о▓ PrepReadText
+		lda	x, F_BIOS
+		beq	TestEOLN	; не е п░ез BIOS-а, ▓огава давай!
+		bitb	#%00010000
+		bne	OK
+waitCR		int	_GetChar
+		cmpa	#$c0
+		bne	waitCR
+OK		lda	#10
+		int	_Wchar
+		bra	continue
+
+RdLoop		jsr	RdChText_
+		bcs	IOerr
+TestEOLN	bitb	#%00010000	; Eoln ?
+		beq	RdLoop		; no not Eoln, so read again
+continue	andb	#%11100111	; н┐ма б│ква н┐ма EOLN (ве╖е е нов ░ед)
+		stb	x, F_flags
+		clra
+IOerr		jmp	SetIOresult
+		endp;	ReadLine
+
+;---------------------------------------
+; Prepare text File for read
+; Import: X:	 File variable pointer
+; Export: IOfile: file pointer (X)
+;	  IObuff: addr(WorkBuffer)
+;	  IOsize: 1
+;	  carry is set if error and A = error No
+
+PrepReadText	proc
+		lda	x, F_type
+		cmpa	#TextFile
+		bne	NotText
+PrepRead1	=	*
+		stx	IOfile
+		ldx	#WorkBuff
+		stx	IObuff
+		ldx	#1
+		stx	IOsize
+
+		ldx	IOfile
+		ldb	x, F_flags
+		bitb	#%01000000	; Read enable
+		bne	Readable	; Yes, file is readable
+		lda	#_IO_notreadable
+		db	_cpx_
+NotText 	lda	#_IO_NotText
+		sec
+		rts
+Readable
+		clc
+		rts
+		endp;	PrepReadText
+
+;---------------------------------------
+; Read a char from a Text File
+; Import: IOfile: File variable pointer
+;	  IObuff: buffer address
+;	  IOsize: 1 (char by char read)
+; Export: C: carry is set if error occured
+;	  A: Readed Char  (if no carry)
+;	  B: F_flags	  (if no carry)
+;	  X: ptr to file  (if no carry)
+; Warning: do not use for BIOS or User defined files.
+
+RdChText	proc
+		ldx	IOfile		; get file ptr
+		ldb	x, F_flags	; char avail?
+		bitb	#%00001000
+		beq	MustRead	; No, read from file
+		lda	x, F_char	; Yes, get it
+		ldx	IObuff
+		sta	x		; Store in buffer (in case of read str)
+		ldx	IOfile		; restore X register
+		bra	SetNoChar
+RdChText_	=	*		; force reading
+MustRead
+		lda	x, F_handle
+		ldx	#IObuff
+		int	_FRead
+		tsta
+		bne	Error
+                ;cpx     #0             ; по-б║░зо, ама по-д║лго, п║к ние не
+                stx     tempS           ; не ▒ме ▒е за▓и╖али за ник║де (v1.66)
+		bne	NotEndFile
+		lda	#26		; emulate EOF char
+		bra	CharReaded
+NotEndFile
+		ldx	IObuff
+		lda	x, 0		; get readed char
+CharReaded
+		ldx	IOfile
+		sta	x, F_char
+		;ldb	 x, F_flags
+CheckChar	cmpa	#13		; <cr> ?
+		bne	NotCR
+		orb	#%00000100	; <cr> accepted
+IsEoln		orb	#%00010000
+		bra	SetNoChar
+
+NotCR		cmpa	#10		; <lf> ?
+		bne	NotLF
+		bitb	#%00000100	; is <cr> flag set
+		beq	Cont		; no, dont skip lf
+		andb	#%11111011
+		bra	MustRead	; skip <lf>
+Cont
+NotLF		cmpa	#26
+		bne	NotEOF
+		orb	#%00110000
+		lda	#13		; emulate eoln and set eof
+		bra	SetNoChar
+NotEOF		andb	#%11000011	; clear eof and eoln char
+SetNoChar	andb	#%11110111
+		stb	x, F_flags
+		clc
+                rts                     ; v1.65 бозав ▓░ик (db _bita_)
+Error		sec
+		rts
+		endp;	RdChText
+
+;---------------------- Read String standard procedures -----------------------
+
+; ------- Read String standard procedure -------
+; procedure RdStr(var s: string; max: integer);
+; Stack:    { w, addr } -> { }
+; Action:   Read string pointed at by <addr>,
+;	    with maximum length <w> from Default Input file.
+
+RdStr		jsr	StdInFile
+		bra	ReadString
+
+; ------- Read String from file (standard procedure) -------
+; procedure FRdStr(var s: string; size: integer; var f: text);
+; Stack:    { f, sz, addr } -> { }
+; Action:   Read string pointed at by <addr>,
+;	    with maximum length <sz> from file pointed at by <f>.
+
+fRdStr		jsr	TOSinFile
+
+ReadString	proc
+
+		jsr	PrepReadText
+		bcc	OK
+		ins			; pop two params
+		ins
+		ins
+		ins
+IOerror 	jmp	SetIOresult
+OK
+		pla			; get MaxSize
+		sta	IOsize+1	; Max Size is <= 255 =>
+		pla			; ==> IOsize = 0, IOsize+1 = size
+		sta	IOsize
+
+		tsx
+		ldx	x		; Get Buffer Address
+		stx	IObuff
+		stx	wrkF
+		ins			; pop buffer address
+		ins
+
+		lda	IOsize+1	; max length = 0?
+		beq	EndRead 	; ▓ова едва ли ╣е ▒е ▒л│╖и
+		ldx	IOfile
+		lda	x, F_BIOS	; via BIOS ?
+		bne	viaBIOS
+		ldx	IOsize		; IOsize ▒е използ│ва о▓ д░│га░┐
+		stx	wrkF+2		; RdChText, как▓о и IObuff
+		ldx	IObuff
+		inx
+		stx	IObuff
+		ldx	#1
+		stx	IOsize
+
+ReadLoop	jsr	RdChText
+		bcs	IOerror
+		bitb	#%00010000	; eoln ?
+		beq	NotEoln
+		orb	#%00001100
+		stb	x, F_flags
+		sta	x, F_char
+		bra	EndRead
+NotEoln
+		inc	wrkF+2		; bump number of readed chars
+		ldx	IObuff
+		inx
+		stx	IObuff
+		dec	wrkF+3		; decrement remaining to read
+		bne	ReadLoop
+
+EndRead 	ldx	wrkF
+		lda	wrkF+2
+		sta	x, 0		; set size of readed string
+OKreaded	jmp	OK_IOresult
+
+viaBIOS 	int	_WhereXY	; preserve X, Y position
+		phb			; ▓ова ▒е п░ави ╣о▓о get line ▒и
+		pha			; за░┐зва к│░▒о░а де▓о не ▓░┐бва
+		ldx	IObuff
+		ldb	IOsize+1
+		clr	x, 0		; put 0 to clear buffer before read
+		int	_GetLine
+		plb			; ▒м┐▓аме к║де ▓░┐бва да е к│░▒о░а
+		aba			; в A имаме ░еална▓а д║лжина на низа
+		bcc	NotFar
+		lda	#80
+NotFar		plb
+		bsr	CorrectXY
+		bsr	BIOS_cr
+		jsr	ToString_
+		jmp	OK_IOresult
+		endp;	ReadString
+
+BIOS_cr 	proc			; казваме ╖е ▒ме за╡апали CR
+		ldx	IOfile
+		ldb	x, F_flags
+		orb	#%00010000	; EOLN = true
+		andb	#%11110011	; ChAvail, CR readed = false
+		stb	x, F_flags
+		rts
+		endp;	BIOS_cr
+
+CorrectXY	proc
+		phb
+		pha			; к│░▒о░а ▓░┐бва да е ▓е ▓│ка X pos
+		int	_GetScrSize	; а колко е гол┐м ек░ана
+		plb
+		cba			; да не би да ▒ме изв║н него
+		bls	TooFar		; ако да о▓иваме нак░а┐
+		tba
+		db	_cmpa_
+TooFar		deca
+		plb
+		int	_GotoXY
+		rts
+		endp;	CorrectXY
+
+;------------------------------------------------------------------------------
+; иде┐▓а е да ▒е п░екоди░а▓ в▒и╖ки клави╕и ама за ▒ега и ▓ова ▒▓ига
+
+StartCTbl	db	$c2, 07 	; right arrow as	<bel>
+		db	$c1, 08 	; left	arrow as	<bs>
+		db	$ed, 09 	; tab	      as	<tab>
+		db	$c3, 10 	; down	arrow as	<lf>
+		db	$c4, 11 	; up	arrow as	<vt>
+		db	$c0, 13 	; enter       as	<cr>
+EndCTbl
+
+;------------------------------------------------------------------------------

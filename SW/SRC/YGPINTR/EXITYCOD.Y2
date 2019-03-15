@@ -1,0 +1,136 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Exit Y code interpreter.		    (c) 1989, 1990 YGP.
+
+NewTerminate	proc
+		clr	SegLoadFlag
+		lda	IsRunning	; ако п░авим LINK ?
+		beq	NoProgram
+		lda	OSactive	; или п║к е ак▓ивен OS shell (execute)
+		bmi	NoProgram	; п│▒каме TERMINATE к░ай │╕и▓е ▒и.
+		lda	#_haltpgm
+		int	_GetIntVec
+		int	_ChainIntrpt	; Halt program execution
+NoProgram	ldb	OldTerminate
+		ldx	OldTerminate+1
+		int	_ChainIntrpt	; п░ог░ама▓а не в║░ви
+		endp; NewTerminate
+
+ExitYcode	proc
+		sei			; в момен▓а ▒║м зае▓ и не ╣а никой
+		lda	HiMemPtr+1	; да ме безпокои
+		ldb	HiMemPtr
+		suba	StackDepth+1
+		sbcb	StackDepth
+		sta	wrk+1
+		stb	wrk
+		lds	wrk		; restore stack position before
+
+		lda	SaveSWI_AreaP
+		sta	swi_P
+		ldx	SaveSWI_AreaB	; B&A registers
+		stx	swi_B
+		ldx	SaveSWI_AreaX
+		stx	swi_X
+		clr	IsRunning
+		cli
+		lda	#_Terminate
+		ldb	OldTerminate
+		ldx	OldTerminate+1
+		tst	SaveAreaPtr	; ако е 0 зна╖и ╣е в║з▒▓ановим (ина╖е
+		bne	NotFirstTime	; ▒ме в OS shell викнал PASCAL)
+
+		int	_SetIntVec
+
+;		lda	#_Execute
+;		ldb	OldExecute
+;		ldx	OldExecute+1
+;		int	_SetIntVec
+;
+;		lda	#_UniDOSshell
+;		ldb	OldOSshell
+;		ldx	OldOSshell+1
+;		int	_SetIntVec
+;
+;		lda	#_Terminate
+;		int	_GetIntVec
+;NotFirstTime	int	_ChainIntrpt	!!! БОЗА С КОСМИ
+
+NotFirstTime	rts			; _Terminate
+		endp;	ExitYcode
+
+;NewOSshell	 ldx	 #OldOSshell
+;		 bra	 ExecuteShell
+;NewExecute	 ldx	 #OldExecute
+;
+;ExecuteShell	 proc
+;		 lda	 OSshellFLAG	 ; или п║к е ак▓ивен OS shell (execute)
+;		 bne	 CallOldIntrpt	 ; п│▒каме нови┐ ▓ак║в к░ай │╕и▓е ▒и.
+;		 inc	 OSshellFLAG
+;		 stx	 LongWork	 ; ▒па▒┐ваме X ░еги▒▓║░а
+;					 ; и ▒║▒▓о┐ние▓о на ин▓е░п░е▓а▓о░а
+;
+;		 ldx	 HiMemPtr	 ; за да можем по▒ле да ┐ о▒вободим
+;		 stx	 ReleaseMem
+;
+;		 ldx	 #YregistersSz + SaveAreaSize
+;		 clrb			 ; вземаме ▓олкова паме▓ колко▓о ни
+;		 int	 _GetMem	 ; ▓░┐бва за ▒па▒┐ване▓о
+;		 stx	 wrkF+2
+;		 bne	 OK
+;NoMemory	 lda	 #66		 ; insuficient memory (UniDOS's error)
+;		 sta	 SWI_A
+;		 rts
+;
+;CallOldIntrpt	 ldb	 x, 0		 ; в X имаме ад░е▒а на ▒▓а░и┐ interrupt
+;		 ldx	 x, 1		 ; OSshell или Execute
+;		 int	 _ChainIntrpt
+;OK
+;		 ldx	 #Yregisters
+;		 stx	 wrkF
+;		 lda	 #YregistersSz
+;		 clrb	 ;#/YregistersSz
+;		 ldx	 #wrkF
+;		 int	 _MoveMem
+;		 adda	 wrkF+2+1
+;		 adcb	 wrkF+2
+;		 sta	 IOfile+1
+;		 stb	 IOfile
+;		 ldx	 #SaveArea
+;		 stx	 IOsize
+;		 ldx	 #IOsize
+;		 lda	 #SaveAreaSize
+;		 clrb	 ;#/SaveAreaSize
+;		 int	 _MoveMem
+;
+;		 ldx	 wrkF+2
+;		 stx	 SaveAreaPtr
+;		 ldx	 LongWork	 ; извикваме ▒▓а░и┐ interrupt
+;		 bsr	 CallOldIntrpt	 ; и ▒лед в░║╣ане▓о м│ в║з▒▓анов┐ваме
+;					 ; ▒║▒▓о┐ние▓о на ин▓е░п░е▓а▓о░а
+;		 ldx	 SaveAreaPtr
+;		 stx	 wrkF
+;		 ldx	 #Yregisters
+;		 stx	 wrkF+2
+;		 lda	 #YregistersSz
+;		 clrb	 ;#/YregistersSz
+;		 ldx	 #wrkF
+;		 int	 _MoveMem
+;		 adda	 wrkF+1
+;		 adcb	 wrkF
+;		 sta	 LongWork+1
+;		 stb	 LongWork
+;		 ldx	 #SaveArea
+;		 stx	 LongWork+2
+;		 ldx	 #LongWork
+;		 lda	 #SaveAreaSize
+;		 clrb	 ;#/SaveAreaSize
+;		 int	 _MoveMem
+;
+;		 ldx	 ReleaseMem	 ; release memory
+;		 int	 _Release
+;		 clr	 OSshellFLAG
+;		 rts
+;		 endp;	 ExecuteShell
+
+;------------------------------------------------------------------------------
+

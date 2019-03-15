@@ -1,0 +1,887 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. String <--> Number convertions.	    (c) 1989, 1990 YGP.
+
+; ------- negate LongWork -------
+; uses: A, B accomulators
+
+negLong 	proc
+		clra
+		neg	LongWork+3
+		tab
+		sbcb	LongWork+2
+		stb	LongWork+2
+		tab
+		sbcb	LongWork+1
+		stb	LongWork+1
+		tab
+		sbcb	LongWork+0
+		stb	LongWork+0
+		rts
+		endp;	negLong
+
+; ------- Convert LongInt to String -------
+; Import: LongWork - long integer number (BSex+)
+; Export: X reg - ptr to string representation of LongInt
+;   uses: wrk, wrk1, WorkBuff
+;	  (в║зможно е да ▒е полз│ва wrkF вме▒▓о wrk, wrk1)
+
+Long2Str
+		lda	#10		; radix - dec
+		ldb	LongWork
+		bra	LongWI2str
+
+; ------- Convert LongWord to String -------
+; Import: LongWork - long integer number (BSex+)
+; Export: X reg - ptr to string representation of LongWord (string[9])
+;   uses: wrk, wrk1, WorkBuff
+
+LongWord2Str	clrb
+		lda	#16		; radix - hex
+
+LongWI2Str      proc                    ;--------------- v1.66 modifications
+                .ifdef  use_32x16
+                 sta     wrk+1          ; radix dec/hex (16 bit Bsex+)
+                 clr     wrk            ; (will use subroutine div_LWxWRK)
+                 phb                    ; preserve first byte of LongInt
+                 tstb                   ; п░ове░┐ваме кво е ╖и▒ло▓о
+                 bpl     OKpositive     ; ако е о▓░и╢а▓елно ▒е п░ави
+                 bsr     negLong        ; положи▓елно, ка▓о в ▒▓ека в▒е
+                                        ; о╣е ▒▓ой о░игинални┐ п║░ви бай▓
+                                        ; ▓.е. по▒ле ле▒но можем да видим дали
+                                        ; ╖и▒ло▓о е било < 0
+OKpositive
+                 ldx     #WorkBuff + WBsize -1
+loop             stx     wrk1
+                 jsr     div_LWxWRK
+
+                 adda    #'0'
+                 cmpa    #'9'           ; п░ове░ка за hex digit
+                 bls     OKdecimal
+                 adda    #'a'-'9'-1
+OKdecimal        ldx     wrk1
+                 sta     x, 0           ; ▒лагаме по▒ледна▓а ╢и┤░а на м┐▒▓о▓о й
+                 dex
+                 ldb     wrk+1          ; │▒ловие▓о за к░ай на ╢ик║ла
+                 cmpb    #16            ; е ░азли╖но за dec/hex п░еоб░аз│ване▓о
+                 bne     DecimalEnd
+                 cpx     #WorkBuff+WBsize-1 - 8
+                 bne     loop           ; п░и hex ▒е и▒ка▓ 8 ╢и┤░и
+                 ins                    ; pop first byte (де▓о ▒и го пазе╡ме)
+                 bra     DecHexEnd      ; ama ▓ой не ни ▓░┐бва п░и HEX
+DecimalEnd
+                 ldb     LongWork+3     ; дока▓о п░и dec ▒е и▒ка дока▓о
+                 orb     LongWork+2     ; ╖и▒ло▓о ▒▓ане 0
+                 orb     LongWork+1
+                 orb     LongWork+0
+                 bne     loop
+
+                 plb                    ; а какво бе╕е ╖и▒ло▓о ( < 0, >= 0? )
+                 tstb
+                .else
+                 sta     wrk            ; radix dec/hex
+                 stb     wrk+1          ; first byte of LongInt
+                 bpl     OKpositive     ; ако е о▓░и╢а▓елно ▒е п░ави
+                 bsr     negLong        ; положи▓елно, ка▓о в wrk+1 в▒е
+                                        ; о╣е ▒▓ой о░игинални┐ п║░ви бай▓
+                                        ; ▓.е. по▒ле ле▒но можем да видим дали
+                                        ; ╖и▒ло▓о е било < 0
+OKpositive
+                 ldx     #WorkBuff + WBsize -1
+loop_0           ldb     wrk
+loop             stx     wrk1
+
+div32x8          proc                   ; п░о╢ед│░а▓а е напи▒ана inline
+                 ldx     #33            ; LongWork:= LongWork div wrk;
+                 clra ; clc             ;        A:= LongWork mod wrk;
+loop             rola
+                 cba
+                 clc
+                 blt     Label          ; blt не полз│ва Carry
+                 sba
+                 sec
+Label            rol     LongWork+3
+                 rol     LongWork+2
+                 rol     LongWork+1
+                 rol     LongWork+0
+                 dex
+                 bne     loop
+                 endp;   div32x8        ; и ▓ака в A имаме по▒ледна▓а ╢и┤░а
+
+                 adda    #'0'
+                 cmpa    #'9'           ; п░ове░ка за hex digit
+                 bls     OKdecimal
+                 adda    #'a'-'9'-1
+OKdecimal        ldx     wrk1
+                 sta     x, 0           ; ▒лагаме по▒ледна▓а ╢и┤░а на м┐▒▓о▓о й
+                 dex
+                 ;ldb     wrk           ; │▒ловие▓о за к░ай на ╢ик║ла
+                 cmpb    #16            ; е ░азли╖но за dec/hex п░еоб░аз│ване▓о
+                 bne     DecimalEnd
+                 cpx     #WorkBuff+WBsize-1 - 8
+                 bne     loop           ; п░и hex ▒е и▒ка▓ 8 ╢и┤░и
+                 bra     DecHexEnd
+DecimalEnd
+                 ldb     LongWork+3     ; дока▓о п░и dec ▒е и▒ка дока▓о
+                 orb     LongWork+2     ; ╖и▒ло▓о ▒▓ане 0
+                 orb     LongWork+1
+                 orb     LongWork+0
+                 bne     loop_0
+
+                 ldb     wrk+1          ; а какво бе╕е ╖и▒ло▓о ( < 0, >= 0? )
+                .endif
+
+                bpl     WasPositive
+                lda     #'-'
+                sta     x, 0
+                dex
+WasPositive
+DecHexEnd
+                stx     wrk1           ; понеже п░едва░и▓елно знам, ╖е не
+                lda     #WorkBuff+WBsize-1 ; ▒е п░е▒ка╖а page boundary
+                suba    wrk1+1         ; може да ▒е вад┐▓ ▒амо млад╕и▓е
+                sta     x, 0           ; length of string
+                rts
+		endp;	LongWI2Str
+
+; ------- Real -> String -------
+; Import: fp_1 - real number to convert
+;	     B - 0/$ff Fraction/Exponential format
+;	     A - character size (of fraction/exponential form)
+;	     X - ptr to string[15/80](1[-] + 38[intpart] + 1[.] + 38[fracpart])
+; Export:    X - unchanged & IObuff = Xreg
+;
+; uses:      wrk3   - д║лжина на низа ▒║▒ зна╖е╣и▓е ╢и┤░и
+;	     wrk3+1 - ко░ек╢и┐ на по░┐д║ка (по 0 на ▒▓епен ко┐)
+;	     ...    - и д░│ги ка▓о Src, Dest, ...
+
+Real2Str	proc
+		stx	IObuff		; preserve X register
+		pha
+		phb
+		ldb	fp_e1		; дали е 0.0
+		bne	not_0
+
+		stb	wrk3+1		; по░┐д║ка
+		lda	#10		; ако имаме 0.0 п░авим н│лев string
+		ldx	#WorkBuff	; WorkBuff:= '0000000000';
+		sta	wrk3
+		stx	Src
+		bsr	Fill_0
+		clra
+		bra	OKdigits
+not_0
+		lda	fp_s1		; вземаме ▒и знака
+		pha			; preserve sign
+		int	_prepareFP
+		jsr	Long2str	; пол│╖аваме 9-10 зна╖е╣и ╢и┤░и
+		lda	x, 0		; inc(exp, length(WrkStr)-1));
+		sta	wrk3
+		deca
+		adda	wrk3+1
+		sta	wrk3+1
+		stx	Src
+		pla			; restore sign
+OKdigits
+		ldx	IObuff
+		tsta
+		bpl	Positive
+		inx
+		ldb	#'-'
+		stb	x, 0		; знака на ╖и▒ло▓о
+
+Positive	stx	Dest		; X ▒о╖и по▒ледна▓а б│ква
+		plb
+		tstb
+		bpl	FractionForm
+		jmp	Exponential	; в ек▒понен╢иален вид
+
+; ------- Fill with zeros/spaces -------
+
+Fill_sp 	ldb	#' '
+		db	_cpx_
+Fill_0		ldb	#'0'
+
+Fill_		proc
+		bra	test
+loop		inx
+		stb	x, 0
+test		deca
+		bpl	loop
+		rts
+		endp;	Fill_
+
+FractionForm
+		pla
+		cmpa	#40		; мак▒им│м 40 ╢и┤░и ▒лед ▓о╖ка▓а
+		bls	Less40
+		lda	#40
+Less40		sta	IOsize
+		ldb	wrk3+1
+		incb			; ▒ега wrk3 показва колко ╢и┤░и има
+		stb	wrk3+1		; п░ед де▒е▓и╖на▓а ▓о╖ка
+		addb	IOsize
+		jsr	RoundString	; зак░║гл┐ваме ░або▓ни┐ низ
+		ldx	Dest
+		lda	wrk3+1		; ако имаме + exp зна╖и има ╢┐ла ╖а▒▓
+		ble	NoIntPart
+		bsr	MoveCharsX	; п░еме▒▓ваме колко▓о ▓░┐бва ╢и┤░и
+		clr	wrk3+1		; заб║░▒ваме exp (0 ╢и┤░и ▒лед ▓о╖ка▓а)
+		db	_cpx_		; ▓░ик за п░е▒ка╖ане на lda #1
+NoIntPart	lda	#1
+		bsr	Fill_0
+		lda	IOsize
+		beq	endR2S
+		lda	#'.'
+		inx
+		sta	x, 0		; по▒▓ав┐ме ▒и ▓о╖ка▓а
+		neg	wrk3+1		; wrk3+1 <= 0, so make it positive
+		ldb	wrk3		; о▒▓ава ли не╣о о▓ ╢и┤░и▓е
+		beq	EmptyWork
+		stx	Dest		; да! Ма╡аме воде╣и▓е н│ли │вели╖авайки
+		ldx	Src		; wrk3+1 кой▓о показва колко н│ли вод┐▓
+loop		lda	x, 1
+		cmpa	#'0'
+		bne	endloop
+		inx
+		inc	wrk3+1
+		decb
+		bne	loop
+endloop 	stx	Src
+		ldx	Dest
+		stb	wrk3
+		beq	EmptyWork
+		lda	IOsize
+		suba	wrk3+1
+		bls	EmptyWork
+		sta	IOsize
+		lda	wrk3+1
+		bsr	Fill_0
+		lda	IOsize
+		bsr	MoveCharsX
+trunc_0 	ldb	x, 0
+		cmpb	#'0'
+		bne	OK_not_0
+		inca
+		dex
+		bra	trunc_0
+EmptyWork	lda	#'0'
+		inx
+		sta	x, 0
+		lda	IOsize
+		deca
+OK_not_0	bsr	Fill_sp
+endR2S		stx	Dest
+		lda	Dest+1		; в▒║╣но▒▓ ни ин▓е░е▒│ва ▒амо млад╕и┐
+		;ldb	Dest		; бай▓ и не е н│жно да ▒м┐▓аме ▒▓а░╕и┐
+		suba	IObuff+1
+		;sbcb	IObuff
+		ldx	IObuff
+		sta	x, 0		; set string size
+		rts
+
+MoveCharsX	proc			; import: wrk3 - number of source chars
+		sei			;	   Src - source address - 1
+		sts	tempS		;	     A - max chars to move
+		lds	Src		; export: wrk3, A decremented
+		bra	test		;	  Src, X reg incremented
+_loop           plb
+		inx
+		stb	x, 0
+test		dec	wrk3
+		bmi	noMore
+		deca
+                bpl     _loop
+		inca
+noMore		inc	wrk3
+		sts	Src
+		lds	tempS
+		cli
+		rts
+		endp;	MoveCharsX
+
+Exponential				; ╕║ пи╖а▓║ми в ек▒понен╢иален вид
+		tsta			; check sign (again)
+		bmi	Negative	; ако е положи▓елно ▓░┐бва да ▒ложим sp
+		lda	#' '            ; ек▒понен╢иални┐ вид е: sD.DDDDDDDEsdd
+		inx			; к║де▓о п║░во▓о s = ' ' | '-'
+		sta	x, 0
+Negative	plb			; големина на поле▓о
+		cmpb	#8		; ▓┐ ▓░┐бва да е в ин▓е░вала [8..15]
+		bcc	Large8
+		ldb	#8
+Large8		cmpb	#15
+		bls	Less15
+		ldb	#15
+Less15
+		subb	#6		; б░ой ╢и┤░и в ек▒понен╢иални┐ вид
+		stb	IOsize		; preserve number of digits
+		stx	Dest
+		bsr	RoundString
+		ldx	Dest
+		lda	#1
+		bsr	MoveCharsX
+		lda	#'.'
+		inx
+		sta	x, 0
+		lda	IOsize		; една ╢и┤░а е ве╖е за▒м│кана (п║░ва▓а)
+		deca			; за ▓│й е ▓│й ми ▓и dec-ване
+		bsr	MoveCharsX
+		lda	#'E'
+		inx
+		sta	x, 0
+		ldb	#'+'            ; знака на по░┐д║ка е '+' | '-'
+		lda	wrk3+1
+		bpl	PosExp
+		ldb	#'-'
+		nega
+PosExp		inx
+		stb	x, 0
+		clrb			; ▓░┐бва да пол│╖им две▓е ╢и┤░и
+TenLoop 	suba	#10
+		bmi	Less10
+		incb
+		bra	TenLoop
+Less10		adda	#10 + '0'
+		addb	#'0'
+		inx
+		stb	x, 0		; п║░ва▓а ╢и┤░а на ек▒понен▓а▓а
+		sta	x, 1		; в▓о░а▓а ╢и┤░а на ек▒понен▓а▓а
+		inx
+		bra	endR2S
+
+RoundString	proc			; import B о▓ ко┐ пози╢и┐ п░авим round
+		tba			; if (B = 0) or
+		beq	rts
+		ldx	Src
+		cmpb	x, 0		;    (B >= length(WrkStr))
+		bcc	rts		;   then exit
+		clrb
+		adda	Src+1
+		adcb	Src
+		sta	wrk+1
+		stb	wrk
+		ldx	wrk
+
+		ldb	x, 1		; if ('5' <= wrk[B+1])
+		cmpb	#'5'
+		bcs	rts
+RoundLoop	inc	x, 0		; запо╖ваме да │вели╖аваме
+		lda	x, 0
+		cmpa	#'9'            ; дали ▒ме п░ев║░▓ели ▒▓ойно▒▓и▓е?
+		bls	rts
+		lda	#'0'
+		sta	x, 0
+		dex
+		cpx	Src
+		bne	RoundLoop
+		inc	x, 1		; нап░авили ▒ме ░о│нд на в▒и╖ко▓о и ▒ме
+		inc	wrk3+1		; имали нап░име░ 999995
+rts		rts			; пол│╖аваме	 10000 и inc(exp)
+		endp;	RoundString
+
+		endp;	Real2Str
+
+; ------- Multiply Subroutine (32bit X 16bit) -------
+; Import:   LongWork(32) - op1, BA(16) - op2 (both in Bsex+)
+; Export:   LongWork(32):= op1 * op2 (in Bsex+)
+; Warning:  B, A, tempX, tempS destroyed, X reg = 0
+
+mply_32x8	clrb
+mply_32x16	proc
+		ldx	LongWork	; п░еме▒▓ваме опе░анда
+		stx	tempX
+		ldx	LongWork+2
+		stx	tempS
+		ldx	#0		; н│ли░аме ░ез│л▓а▓а
+		stx	LongWork+0
+		stx	LongWork+2
+                .ifdef  old_mpl
+                 ldx     #16             ; cnt:= 16;
+                .endif
+loop					; repeat
+		lsrB			;   Shr(op2);
+		rorA
+		bcc	DontAdd 	;   if HasCarry
+		pha			;     then Inc(result, op1);
+		lda	tempS+1
+		adda	LongWork+3
+		sta	LongWork+3
+		lda	tempS+0
+		adca	LongWork+2
+		sta	LongWork+2
+		lda	tempX+1
+		adca	LongWork+1
+		sta	LongWork+1
+		lda	tempX+0
+		adca	LongWork+0
+		sta	LongWork+0
+		pla
+DontAdd
+		asl	tempS+1 	 ;   Asl(op1);
+		rol	tempS
+		rol	tempX+1
+		rol	tempX
+                .ifdef  old_mpl
+                 dex                     ;   Dec(cnt);
+                .else
+                 ;pha   ▒▓░а╕на гл│по▒▓
+                 ;aba   ко┐▓о е оп░авена  ; a or b = 0?
+                 ;pla   в║в version 1.65
+
+                 tsta                   ; tests that A
+                 bne    loop            ; or B
+                 tstb                   ; <> 0
+                .endif
+		bne	loop		; until cnt = 0;
+		rts
+		endp;	mply_32x16
+
+; ------- Packed chars -> Integer -------
+; Convert packed array of char to Long Integer
+; Import: IObuff - start address,
+;	  IOsize - size
+;	  B - options (HUS00000 - H hex, U allow Underscores, S allow sign)
+; Export: LongWork = calculated value,
+;	  X - док║де ▒ме ▒▓игнали
+;	  Carry is set if error occured
+; Usage:  Dest	 - end of buffer
+;	  wrkF	 - work
+;	  wrkF+2 - options
+;	  wrkF+3 - last character
+
+Str2Lint	proc
+		jsr	StartConv	; common start (real/integer convert)
+		bcs	rts
+		cmpa	#'$'            ; hex?
+		bne	NoHexSign
+		lda	wrkF+2		; set in hex mode
+		ora	#$80
+		sta	wrkF+2
+		inx
+Str2Lint_	=	*
+NoHexSign
+		bra	TakeChar
+
+loop		sta	wrkF+3
+		lda	#10
+		ldb	wrkF+2
+		bpl	decimal
+		lda	#16
+decimal 	stx	wrkF
+		bsr	mply_32x8
+		ldx	wrkF
+
+		lda	wrkF+3
+		suba	#'0'            ; в A имаме 0..9 (0..15 if hex mode)
+		jsr	Add_32_8
+
+next		inx
+
+TakeChar
+		cpx	Dest		; get next character
+		beq	EndOfNumber	; but first check index in src buffer
+		lda	x, 0
+		cmpa	#'0'
+		bcs	EndOfNumber	; не е ╢и┤░а
+		cmpa	#'9'
+		bhi	NotDigit	; ▓ова е ╢и┤░а о▓ '0'..'9'
+		jmp	loop
+NotDigit	ldb	wrkF+2		; options
+		cmpa	#'_'            ; Skip underscroes?
+		bne	NotUndr
+		bitb	#%01000000
+		beq	EndOfNumber	; не, не е казано да ▒е ░або▓┐▓ '_'-▓е
+		bra	next
+NotUndr 	tstb			; а да не би да ▒ме в hex mode
+		bpl	EndOfNumber	; не не ▒ме в ▓ак║в mode
+		anda	#$df		; UpCase
+		cmpa	#'A'
+		bcs	EndOfNumber
+		cmpa	#'F'
+		bhi	EndOfNumber
+		suba	#'A'-'9'-1
+		jmp	loop
+EndOfNumber
+		ldb	wrkF+2
+		andb	#1
+		beq	DontNeg
+		jsr	negLong 	; имали ▒ме '-' п░еди ╖и▒ло▓о
+
+DontNeg
+		lda	wrkF+3		; в A има по▒ледна▓а ╢и┤░а ако в▒и╖ко
+		clc			; е на░ед
+		tsta
+		bne	rts
+		sec
+rts		rts
+		endp;	Str2Lint
+
+; -------------------------------
+; Import: IObuff - start address
+;	  IOsize - size
+; Export:      X - к║де ▒ме ▒п░ели
+;	    Dest - IObuff + IOsize
+;	   Carry - set if only sp, tab, cr, lf in buffer
+
+sp_tab_cr_lf	proc
+
+		lda	IOsize+1	; calc ending address
+		ldb	IOsize
+		adda	IObuff+1
+		adcb	IObuff
+		sta	Dest+1		; Dest = Ending address
+		stb	Dest
+
+; Сега в IObuff има на╖ални┐ ад░е▒, а в Dest к░айни┐.
+; Т░┐бва да ╡│кнем и да п░е▒ко╖им в▒и╖ки <sp>, <tab>, <cr>, <cr><lf>.
+; За╣о▓о ▓ова ▒а ▒пе╢иални ▒имволи кои▓о не ни б║░ка▓.
+
+		ldx	IObuff		; ▓░║гваме о▓ на╖ални┐ ад░е▒
+		bra	TestX
+SkipLoop	lda	x, 0
+		cmpa	#$09		; <tab>
+		beq	Skip
+		cmpa	#' '
+		beq	Skip
+		cmpa	#$0a		; <lf> ?
+		beq	Skip
+		cmpa	#$0d		; <cr> ?
+		bne	StopSkipping
+Skip		inx
+sp_tab_cr_lf_	=	*
+TestX		cpx	Dest
+		bne	SkipLoop
+
+EndBuffer	; Б│┤е░а ▒в║░╕и а в него има╕е ▒амо ░азни▓е м│ ▓ам <sp>
+		sec			; За▓ова казваме ╖е има г░е╕ка
+                rts                     ; v1.65 ▓░ика е ма╡на▓ (db _bita_)
+StopSkipping    clc
+		rts
+
+		endp;	sp_tab_cr_lf
+
+; ------- Common Var Start -------
+
+StartConv	proc
+		andb	#%11100000
+		stb	wrkF+2
+
+		ldx	#0
+		stx	LongWork+0
+		stx	LongWork+2
+		clr	wrkF+3
+		bsr	sp_tab_cr_lf
+		bcs	rts
+
+CVS1		=	*
+		lda	x, 0
+StopSkipping	cmpa	#'-'            ; test for sign
+		bne	NotMinus
+		lda	wrkF+2		; say has sign -
+		ora	#1
+		sta	wrkF+2
+		bra	CheckSgn
+NotMinus	cmpa	#'+'
+		bne	NoSign
+CheckSgn	lda	wrkF+2
+		bita	#%00100000	; ░аз░е╕ен ли е знака
+		beq	err
+NextChar	inx
+		bra	sp_tab_cr_lf_
+
+NoSign		clc
+                rts                     ; v1.65 ▓░ика е ма╡на▓ (db _bita_)
+err		sec
+rts		rts
+		endp;	StartConv
+
+; ------- String -> Real -------
+; Convert packed array of char to Real
+; Import: IObuff - start address,
+;	  IOsize - size
+;	       B - options xUxxxxxx - U allow underscores
+; Export: LongWork = calculated real value (in IEEE format),
+;	  X - док║де ▒ме ▒▓игнали
+;	  Carry is set if error occured
+; Usage:    Dest - end of buffer
+;	    wrk1 - options
+;	    wrkF - used by str2lint
+
+Str2Real	proc
+		clr	fp_e1		; zero FP_1 accomulatr
+		andb	#%01100000
+		bsr	StartConv
+		bcc	OKcvs
+		jmp	Error1
+OKcvs
+		ldb	wrkF+2
+		stb	wrk1+1
+		andb	#%11100000
+		orb	#%00100000
+		stb	wrkF+2
+		clra
+		sta	wrk1		; wrk1 = exp
+		pha			; Number of digits (in stack)
+		bra	TakeChar
+
+loop		plb
+		incb			; increment Ndigits
+		phb
+		tst	wrk1+1
+		bpl	HasntPoint
+		dec	wrk1
+HasntPoint	cmpb	#37
+		bcc	TooManyDigits
+		suba	#'0'
+		int	_mply10addA
+		bra	NextChar
+TooManyDigits	ldb	wrk1+1
+		bmi	HasPoint
+		inc	wrk1
+HasPoint
+NextChar	inx
+TakeChar	cpx	Dest
+		beq	EndOfNumber1
+		lda	x, 0		; get next char of a number
+		cmpa	#'.'
+		bne	notPoint
+		lda	wrk1+1
+		bmi	EndOfNumber2
+		ora	#$80
+		sta	wrk1+1
+		bra	NextChar
+notPoint	cmpa	#'0'
+		bcs	EndOfNumber
+		cmpa	#'9'
+		bls	loop
+		ldb	wrk1+1
+		cmpa	#'_'
+		bne	NotUnder
+		bitb	#%01000000
+EndOfNumber1	beq	EndOfNumber
+		bra	NextChar
+NotUnder
+		anda	#$df		; upcase
+		cmpa	#'E'
+EndOfNumber2	bne	EndOfNumber
+		pla
+		pha
+		tsta
+		beq	Error		; н┐ма ╢и┤░и п║к е до╕ло 'E'
+
+skip_		inx			; или п║к до╕ло е 'E' а п║к по▒ле
+		cpx	Dest		; н┐ма ╢и┤░и
+		beq	Error
+		lda	x, 0		; skip '_'
+		cmpa	#'_'
+		beq	skip_
+
+		jsr	CVS1
+		bcs	Error
+		jsr	Str2Lint_
+		bcs	Error
+		bra	continue
+
+EndOfNumber	clr	LongWork+3
+		clr	LongWork+2
+continue
+		pla			; number of digits
+		pha
+		sta	wrk2
+		clrb
+		lda	wrk1
+		bpl	wrk1Pos
+		decb
+wrk1Pos
+		adda	LongWork+3
+		adcb	LongWork+2
+		adda	wrk2		; add number of digits
+		adcb	#0
+		bmi	OK		; B < 0 зна╖и BA <= 37
+		beq	Test37
+		bra	Error
+Test37		cmpa	#37
+		bhi	Error
+OK
+		suba	wrk2		; о▓ново изваждаме Ndigits
+		sbcb	#0
+		int	_fp_10_pwr
+		ldb	wrk1+1
+		andb	#1		; negative?
+		beq	NotNeg
+		lda	LongWork
+		ldb	LongWork+1
+		bmi	MustNeg 	; поне един би▓ о▓ ек▒понен▓а▓а е <> 0
+		tsta			; знака ▒║▒ ▒иг│░но▒▓ е положи▓елен
+		beq	NotNeg		; имаме 0 ▓ака ╖е н┐ма кво да п░авим
+MustNeg 	ora	#$80
+		sta	LongWork
+NotNeg		bra	Quit
+
+Error		pla
+Error1		clra
+		pha
+
+Quit
+		pla			; вадим A в него има <> 0 ако в▒и╖ко
+		clc			; е на░ед
+		tsta
+		bne	OKokOK
+		sec
+OKokOK		rts
+		endp;	Str2Real
+
+; ------- Convert packed array of byte to Numeric Value -------
+; function Str2Val(const Buff; Ndx, limit: cardinal;
+;		     var Nchars: Cardinal): (LongInt/Real);
+; instruction parameter is byte: IHUSxxxxx
+;				 ^^^^________ allow sign
+;				 |||_________ allow underscores
+;				 ||__________ get hex number (if integer)
+;				 |___________ integer/real convert (0/1)
+
+Str2Val 	proc
+		plb			; address of Nchars
+		pla
+		sta	IOfile+1	; ▒║▒ ▒иг│░но▒▓ е ▒вободно
+		stb	IOfile		; ▓.е. не ▒е пипа
+
+		pla			; limit
+		plb
+		sta	IOsize+1
+		stb	IOsize
+
+                .ifdef addr_offs
+                 jsr     get_addr_offset
+                .else
+                 pla                     ; offset
+                 plb
+                 tsx
+                 adda    x, 1            ; add base address
+                 adcb    x, 0
+                 ins                     ; pop base address
+                 ins
+                .endif
+                sta     IObuff+1        ; start address
+                stb     IObuff
+
+		ldx	ipc
+		ldb	x, 0		; get instruction parameter
+		inx
+		stx	ipc
+		aslb
+		bcc	Integer
+		jsr	Str2Real
+		bra	continue
+Integer
+		jsr	Str2Lint
+
+continue	lda	#_IO_BadFormat	; prepare for error
+		bcs	HasError
+		clra
+HasError	sta	IOresult+1
+		clr	IOresult
+
+		stx	wrk		; calc Nchars
+		lda	wrk+1
+		ldb	wrk
+		suba	IObuff+1
+		sbcb	IObuff
+		ldx	IOfile		; address of Nchars
+		sta	x, 0		; set Number of chars processed
+		stb	x, 1		; in negative byte sex
+
+		clra			; push LongWork (and jump to MainLoop)
+		jmp	PushLong	; ама PushLong п░ове░┐ва A за IOresult
+		endp;	Value
+
+; ------- Convert value to string -------
+; procedure Int2Str (Value: (LongWord/LongInt); var s: string);
+; procedure Real2Str(Value: real; w: natural; var s: string);
+; instruction parameter is byte: negative/positive - real/longint
+;				 0 - integer, 1 - LongWord, 2 - Word, 3 - Byte
+;			       $80 - exponential form, $81 - fraction form
+;
+; незад║лжи▓елни┐ па░аме▓║░ w ▒е дава ▒амо ако е н│жно да ▒е п░ев░║╣а о▓ real
+
+Val2str 	proc
+		pla			; get string size
+		sta	IOwidth
+		ins			; pop MSByte
+		tsx
+		ldx	x, 0		; get string address
+		stx	IOfile		; ▓ова знаем, ╖е не ▒е полз│ва
+		ins
+		ins
+
+		ldx	ipc		; п░ове░┐ваме как║в ▓о╖но convert
+		lda	x, 0		; get instruction's paramater
+		bmi	ConvertReal	; real -> string или integer -> string
+		jsr	PopLongInt	; вадим ▒и ╖и▒ло▓о
+		tsta
+		beq	IntegerConv
+		pha
+		jsr	LongWord2str
+		pla
+		deca
+		beq	Continue	; long word (OK)
+		ldb	#4
+		deca
+		beq	Cont		; word
+		ldb	#2
+Cont		lda	#8
+		sba
+		stx	wrk		; ▒м┐▓аме ад░е▒а
+		adda	wrk+1
+		sta	wrk+1
+		bcc	NoCarry
+		inc	wrk
+NoCarry 	ldx	wrk
+		stb	x, 0		; д║лжина▓а на string-а
+		bra	Continue
+
+IntegerConv	jsr	Long2Str
+		bra	Continue
+
+ConvertReal	anda	#$7f		; Mask off MSBit
+		sta	IOwidth+1
+		pla			; preserve width
+		plb
+		tstb
+		beq	OK_msb
+		lda	IOwidth 	; string size
+OK_msb		sta	wrk
+
+		jsr	PopReal
+
+		lda	#90		; до▒▓а▓║╖но гол┐м string
+		clrb
+		jsr	GetStackErr
+
+		lda	wrk		; restore size
+		ldb	IOwidth+1	; restore type (exponent/frac 0/1)
+		decb			; п░авим го какво▓о го и▒ка Real2str
+		jsr	Real2Str
+		sei			; ╡а ▒ега внимаваи какво п░ави╕
+		stx	LoMemPtr	; release memory
+Continue
+		lda	x, 0		; get string size
+		cmpa	IOwidth 	; как е в ▒░авнение ▒ дадени┐ string
+		bls	enough
+		lda	IOwidth 	; о▓░┐зваме ако е по-мал║к
+enough		sts	tempS
+		sta	x, 0		; put string size (евен▓│ално cut)
+		sei			; ако ▒ме до╕ли о▓ по-го░е н┐ма sei
+		txs
+		ldx	IOfile		; address of string
+loop		plb
+PutSize 	stb	x, 0
+		inx
+		deca
+		bpl	loop		; string-а има най много 127 б│кви
+		lds	tempS
+		cli
+		jmp	BumpIPC
+		endp;	Val2str
+
+;------------------------------------------------------------------------------

@@ -1,0 +1,60 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Miscellaneous instructions.	    (c) 1989, 1990 YGP.
+
+; ------- Increment/Decrement Double word -------
+; mnemonic: IncDecD byte
+; Stack:    if (<byte> = 0) or (<byte> = $80)
+;	      then { dw, addr } -> { }
+;	      else { addr } -> { }
+; Action:   inc/dec-rement double word pointed at by <addr> by <byte> or by <dw>
+;    ˆ±²®°¨¿²  ¥ ±«¥¤­ ² :  ª® <byte> ¥ ° §«¨·­® ®² 0 ¨ ®² $80 ²®:
+; ¡ ©²  ±¥ ¢º§¯°¨¥¬  ª ²® signed byte ¨ ±¥ ° §¸¨°¿¢  ¤® ¤º«£  ¤³¬ , ª ²® ±² °¸¨¿
+; ¡ ©² ¨ ±² °¸ ²  ¤³¬  ­  ² §¨ ¤º«£  ¤³¬  ±¥ § ¯º«¢  ±º± ±² °¸¨¿ ¡¨² ­  ¡ ©² 
+; ($00/$ff) ±«¥¤ ª®¥²® ² ª  ¯®«³·¥­ ²  ¤¢®©­  ¤³¬  ±¥ ¤®¡ ¢¿ ªº¬ ¤¢®©­ ²  ¤³¬ ² 
+; ·¨©²®  ¤°¥± ¥ ­  TOS.
+;   €ª® ®¡ ·¥ <byte> = 0 ²® ¢ ±²¥ª  ¨¬  ¤¢®©­  ¤³¬  ª®¿²® ²°¿¡¢  ¤  ±¥ ¤®¡ ¢¨
+; ªº¬ ¤³¬ ²  ·¨©²®  ¤°¥± ¥ ¯®¤ ­¥¿ ¢ ±²¥ª ,    ª® <byte> = $80 ²® ²°¿¡¢  ¤³¬ ² 
+; ®² ¢º°µ  ­  ±²¥ª  ¤  ±¥ ¨§¢ ¤¨   ­¥ ¤  ±¥ ¯°¨¡ ¢¨.
+
+IncDecD 	proc
+		ldx	ipc
+		lda	x		; get parameter of instruction
+		bita	#%01111111	; constant parameter?
+		beq	incd0		; ­¥, ­¥ ¥ ¶®­±² ­²¥­.
+		clrb
+		tsta			; ª®­±² ­²   ¬  ª ª¢  (+/-) ?
+		bpl	incd		; ¯®«®¦¨²¥«­  (B=0 already)
+		decb			; B:= $FF
+incd		phb
+		phb
+		bra	incd1
+
+incd0		asla			; Set carry according to
+                ;pla    v1.65            ; operation (Inc or Dec)
+                ;plb
+                bcc     incd1_          ; ¨¬ ¬¥ increment
+                ;phb    v1.65            ; ¨¬ ¬¥¬ decrement
+                ;pha                     ; § ²®¢  ¢§¥¬ ¬¥ ®²°¨¶ ²¥«­®²®
+		jsr	NegLongTOS	; ¨ ¯®±«¥ £® ¤®¡ ¢¿¬¥
+incd1_                                  ; added in v 1.65
+		pla			; get LoWord again
+		plb
+incd1
+		tsx			; ¢ ±²¥ª  ¥ ± ¬® ±² °¸ ²  ¤³¬ 
+		ldx	x, 2		; get address of word
+		adda	x, 0		; add with LoWord
+		adcb	x, 1
+		sta	x, 0		; patch LoWord
+		stb	x, 1
+		pla
+		plb
+		ins			; pop address
+		ins
+		adca	x, 2		; add HiWord
+		adcb	x, 3
+		sta	x, 2		; patch HiWord
+		stb	x, 3
+		jmp	BumpIPC
+		endp;	IncDecD
+
+;------------------------------------------------------------------------------

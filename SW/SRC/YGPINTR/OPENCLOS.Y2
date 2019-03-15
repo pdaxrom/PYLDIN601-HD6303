@@ -1,0 +1,293 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Open, close, initialize file variables.(c) 1989, 1990 YGP.
+
+; ------- File initialize -------
+; procedure Finit(var f: file;
+;		      RecSize: Cardinal;
+;		      Kind: (Normal, Packed, text, file));
+; Stack:    { Kind, RecSize, File } -> { }
+; Action:   initialize file pointed at by <file>
+;	    with record size <RecSize> and
+;	    <Kind> = 0 - normal, 1 - packed, 2 - text, 3 - file
+
+Finit		proc
+		tsx
+		ldx	x, 4		; get address of file variable
+		lda	#2*8		; clear file variable
+loop		clr	x, 0
+		inx
+		deca
+		bne	loop
+
+		tsx
+		ldx	x, 4		; get address of file variable (again)
+		pla
+		ins			; pop MSByte (¬³±² ¡¥ 0)
+
+		plb			; get Record size in words
+		stb	x, F_rsize+1	; or in bytes (²®¢  § ¢¨±¨ ®² F_type)
+		plb
+		stb	x, F_rsize
+
+NotPack 	cmpa	#2		; ±² ° ²  ¢¥°±¨¿ ¤ ¢ ¸¥ ¤°³£¨ ­®¬¥° 
+		beq	OKkind
+		suba	#3		; ®² 3 ²°¿¡¢  ¤  ¯®«³·¨¬ 0
+		beq	OKkind
+		cmpa	#1-3		; ¤ «¨ ¥ packed (­¥ ²°¿¡¢  ¤  *2)
+		beq	dont_x_2
+		asl	x, F_rsize+1	; * 2 §  ¤  £® ¨¬ ¬¥ ¢ ¡ ©²®¢¥
+		rol	x, F_rsize	; ®· ª¢ ¬¥ ± ¬® Normal ´ ©«®¢¥
+dont_x_2
+		lda	#NormalFile
+OKkind
+		ins			; pop address (currently in X register)
+		ins
+
+		sta	x, F_type
+		jmp	MainLoop1
+		endp;	Finit
+
+; ------- Open File -------
+; procedure: Fopen(var f: file;
+;		   const Name: string;
+;		   mode: word);
+; Stack:    { mode, ^name, ^f } -> { }
+; Action:   if ^name = nil §­ ·¨ ¨¬ ¬¥ reset(f) ¨«¨ ¯®¤®¡­¨²¥ ¬³ ² ¬
+;	    Open file with required mode = Hi(mode) send to UniDOS as Bregister
+;	    Lo(mode): ABCDEFGH
+;			 |||\|__ Write/Read mode
+;			 |||____ append ( ª® ¥ 1 ²® Write = 1 ±º¹®)
+;			 ||_____ temporary
+;			 |______ create new file only
+
+Fopen		proc
+		pla			; get parameters
+		plb
+		sta	IOsize+1
+		stb	IOsize
+		plb
+		stb	IObuff
+		plb
+		stb	IObuff+1
+		tsx
+		ldx	x, 0
+		ins
+		ins
+		stx	IOfile
+
+InternalOpen	ldx	IOsize		; ¯°¥µ¢º°«¿¬¥ size ¢º¢ width ¹®²®
+		stx	IOwidth 	; size ­¨ ²°¿¡¢  ¤  ¥ 0
+		ldx	#0
+		stx	IOsize
+		stx	LongWork	; prepare for seek (LongZero ­¥ ¬®¦¥
+		stx	LongWork+2	; ¤  ±¥ ¯®«§¢ , ¸¨ ªº±º¬ ³¸¨²¨ ­  ˆ‚Ž
+; §  ²º§¨ ° ¡®²º ®²­¥ ¬¨ 3-4 · ±º ¡®© ­  ¡³¡³«¥·ª¨ ¤®ª ² ° §¡¨°º ·¨ ¯°¨ ±¨¨ª ±º
+; ­ ¬ §¢  ²³© ¤¥²® ±¨ ¤ «, º¬º ª®© ¤º £³ ³¯¨¸¨ ³ ¤³ª³¬¨­² ¶¨º²º º?)
+; ¢ ¨¤­º²º ¤ºªº¬¨­²º¶¨º (­  ¡º«£º°±ª¨) ¯¨¸¨ ¨¤­® ¯ºª ³ ¤°³£º²º (° ¸º­±ª ² )
+; ±¨°±¥¬ ¤°³£³. ¬º ²® ¡¨¢  ¡¨¢  º¬º · ª ¯ºª ²®«ª®§ ¡¨¢  «¨ º?
+		anda	#%11		; ®±² ¢ ² ± ¬® ¯®±«¥¤­¨²¥ ¤¢  ¡¨² 
+		ldx	IObuff
+		bne	OpenFile
+					; IObuff = nil §­ ·¨ ¨¬ ¬¥ reopen
+		ldx	IOfile		; ².¥. reset(f), rewrite(f)...
+		anda	x, F_flags	;  ª® ¨¬ ¬¥ ¯®¢²®°­® ®²¢ °¿­¥ ²®
+		bne	CanReopen	; ²°¿¡¢  ¤  ¨¬  ­³¦­¨¿ R/W mode
+		lda	#_IO_CantReopen ; ¯°¨ ¯º°¢®²® ±¨ ®²¢ °¿­¥
+		db	_cpx_		;   ¹®¬ £® ­¿¬ ¬¥ ¥ £°¥¸ª 
+NotClosed	lda	#_IO_NotClosed
+exitIO		jmp	SetIOresult
+
+CanReopen	lsra
+		rora
+		rora
+		sta	IOwidth 	; ¨ ¡¥§ ²®¢  ±² °¸ ²  · ±² ­¥ ²°¿¡¢ 
+		lda	x, F_BIOS	; ²®¢  ¥ ¬¿±²®²® ªº¤¥²® ¥ ±º¹¥±²¢¥­®
+		bne	viaBIOS 	; ·¥ x, F_BIOS = 24
+		lda	x, F_handle	; ¸º ¯° ¨¬ ±¥¥ª
+		ldx	#LongWork	; ‚¨¦ ª®¬¥­² °¨¿ §  ³¸¨²¨ ­  ˆ‚Ž
+		ldb	IOwidth+1
+		andb	#%100
+		lsrb			; 0/2
+		int	_Fseek		; ¤ «¨ ­¥ ²°¿¡¢  ¤  ±¥ ª ¦¥ truncate
+viaBIOS 	tsta			;  ª® ¨¬ ¬¥ write only file
+		bne	exitIO		; ².¥.  ª® ¨¬ ¬¥ rewrite(f)
+
+		ldx	IOfile
+		ldb	x, F_flags
+		orb	IOwidth
+		andb	#%11000011
+		lda	IOwidth+1
+		anda	#%100
+		beq	NotAppend
+		orb	#%00110000
+NotAppend	stb	x, F_flags
+		jmp	OK_IOresult
+
+OpenFile	ldx	IOfile
+		ldb	x, F_flags
+		bne	NotClosed
+		sta	wrkF
+		lsra
+		rora
+		rora
+		ora	wrkF
+		sta	wrkF
+		jsr	ToASCIIZ_
+		lda	IOwidth+1
+		ldb	IOwidth
+		ldx	#IObuff
+		bita	#%00010000
+		beq	NotNewFile
+		lda	IOwidth
+		int	_Fcreatenew
+		bra	continue
+NotNewFile	bita	#%00001000
+		beq	NotTemp
+		lda	IOwidth
+		int	_Fcreatetemp
+continue	tsta
+		bne	HasError
+		lda	IOwidth+1
+		anda	#1		; ¯°®¢¥°¿¢ ¬¥ ¤ «¨ ±¬¥ ¨¬ «¨
+		beq	OKcontinue	; Read/Write file
+		tba			; ¨  ª® ¥ ² ª  § ²¢ °¿¬¥ ´ ©« 
+		int	_Fclose 	; ¨ ¯®±«¥ £® ®²¢ °¿¬¥ ¯ ª
+		tsta
+		bne	HasError
+		lda	IOwidth+1
+NotTemp 	anda	#%111		; append/write/read
+		cmpa	#2		; write only mode?
+		beq	CreateIt
+		anda	#%11
+		int	_Fopen		; ¢ ²®§¨ ¬®¬¥­² Breg ­¥ ­¨ ²°¿¡¢ 
+		cmpa	#11		; ­¿¬  ² ªº¢ ´ ©« ?
+		bne	NotError11
+		ldb	IOwidth+1	;    ª® ¥ ´ ©«  £® ¥ ­¿¬ «®
+		andb	#%111		; ¨ ±¬¥ £® ¨±ª «¨ ± ¬® §  ·¥²¥­¥
+		decb			; ²® §­ ·¨ ¥ ¢º§­¨ª­ «  ²®·­® ² §¨
+		beq	HasError	; £°¥¸ª  (file not found)
+CreateIt	lda	IOwidth
+		int	_Fcreate
+		bra	continue
+HasError	pha
+		bsr	ToString_
+		pla
+		jmp	SetIOresult
+DoSeek		phb			; preserve handle
+		tba			; prepare for seek to end of file
+		ldb	#2
+		stb	IOwidth+1	; ±ª ¯¢ ¬¥ IOwidth+1 § ° ¤¨ § ¢º°² ­¥²®
+		ldx	#LongWork	; ¯°¥§ NotError11 (¯ ª ¢¨¦ ª®¬¥­² °¨¿
+		int	_Fseek		; §  ³¸¨²¨ ­  ˆ‚Ž)
+		plb
+NotError11	tsta
+		bne	HasError
+		lda	IOwidth+1
+		bita	#%100		; append?
+		bne	DoSeek
+OKcontinue
+		ldx	IOfile
+		stb	x, F_handle
+		lda	wrkF
+		sta	x, F_flags
+		bsr	ToString_
+		jmp	OK_IOresult
+		endp;	Fopen
+
+ToASCIIZ_
+		ldx	IObuff
+
+ToASCIIZ	proc
+		ldb	x, 0
+		beq	OK
+loop		lda	x, 1
+		sta	x, 0
+		inx
+		decb
+		bne	loop
+		stb	x, 0
+OK		rts
+		endp;	ToASCIIZ
+
+
+ToString_
+		ldx	IObuff
+
+ToString	proc
+		sei
+		sts	tempS
+		txs
+		plb
+		clr	x, 0
+		bra	test
+loop		plb
+		pha
+		ins
+test		tba
+		beq	end_loop
+		inc	x, 0
+		bne	loop
+end_loop	lds	tempS
+		cli
+		rts
+		endp;	ToString
+
+
+; ------- Close File -------
+; procedure: Fclose(var f: file;
+;		    mode: (FromCompiler, FromClose, TruncateClose, TruncOnly));
+; Stack:    { mode, ^f } -> { }
+; Action:   Close file with required mode.
+
+Fclose		proc
+		tsx
+		ldx	x, 2		; get file address
+		;stx	 IOfile
+		pla
+		plb
+		ins			; pop file address
+		ins
+		stb	IOsize
+		sta	IOsize+1
+;     ‘¥£  ¥¤­® ¬ «ª® ¢±²º¯¨²¥«­® ±«®¢®. ’°¿¡¢  ¤  ±¥ ­ ¯° ¢¨ ±° ¢­¨²¥«­® ¤®¡° 
+; ¯°®¢¥°ª   ¯°¨ § ²¢ °¿­¥²® ­  ´ ©«,  § ¹®²® ª®¬¯¨« ²®°   £¥­¥°¨°  close ¢¨­ £¨
+; ¢ exit code ­  ¯°®¶¥¤³°   ±º¤º°¦ ¹  ´ ©«®¢¥ ¨  ª®  ±¥ ±ª ¯¥ ­¥¹® ¨ ±¥ § ¯®·­¥
+; exit, ¯°¥¤¨ ¤  ±¥ ¥ ¨­¨¶¨ «¨§¨° « ´©«  ¸º ±² ­¨ «®¸®. Ž±¢¥­ ²³© ª®¯¨« ²®°±ª¨¿
+; close ±¥ ° §¯®§­¢  «¥±­® (²®© ¥ ± mode = 0) ¨ ±«¥¤ ­¥£® ­¥ ±¥ · ª  IOerror.
+		bne	continue
+		lda	x, F_type
+		cmpa	#3		; 0, 1, 2 ±º¹¥±²¢³¢ ²   ¤°³£¨²¥ ¢¨¤®¢¥
+		bcc	okDontClose	; ´ ©«®¢¥ § ±¥£  ­¿¬ 
+continue
+		;ldx	 IOfile
+		lda	x, F_BIOS
+		bne	OKdontclose
+		lda	x, F_handle
+		cmpa	#5		; ­¿ª®© ®² ±² ­¤ °²­¨²¥ ´ ©«®¢¥?
+		bcs	okDontClose
+		ldb	x, F_flags
+		beq	okDontClose     ; ´¨«¥²® ¨§®¡¹® ­¥ ¥ ®²¢ °¿­®
+
+                ;bmi     NoTruncate     ; BUG corrected in v1.67
+
+                bpl     NoTruncate      ; ´¨«¥²® ­¥ ¥ ¢ °¥¦¨¬ §  ¯¨± ­¥
+		ldb	IOsize+1        ; get proc parmaeter
+		andb	#$fe		; 2, 3 = truncate
+		cmpb	#2
+		bne	NoTruncate
+		int	_Ftruncate	; ¨¬ /­¿¬  £°¥¸ª  ¯°¨ truncate
+NoTruncate				; ¯°®¤º«¦ ¢ ¬¥ ¡¥§ ¤  ±¥ ¨­²¥°¥±³¢ ¬¥
+		ldb	IOsize+1
+		cmpb	#3		; truncate only
+		beq	DontClose
+		lda	x, F_handle	; ¯°®¤º«¦ ¢ ¬¥ ¡¥§ ¤  ±¥ ¨­²¥°¥±³¢ ¬¥
+		int	_Fclose
+                ;tsta                   ; file always is closed never the less
+                ;bne     DontClose      ; that IO error occured.
+                clr     x, F_flags
+		db	_cmpa_		; trick to jump over next instruction
+OKdontclose	clra
+DontClose	jmp	SetIOresult
+		endp;	CloseF
+
+;------------------------------------------------------------------------------

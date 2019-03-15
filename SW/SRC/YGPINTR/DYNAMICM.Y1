@@ -1,0 +1,437 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Dynamic memory management. 	    (c) 1989, 1990 YGP.
+
+;   За да може да ▒е ░еализи░а Dispose ▒е п░едп░иема ▒ледно▓о:
+; в║в FreeQueue пи╕е ко┐ е п║░ва▓а д│пка в heap-а а в║в в▒┐ка д│пка пи╕е
+; ко┐ е ▒ледва╣а▓а и колко е д║лга ▓ази. В▒┐ка д│пка е поне една д│ма
+; (два бай▓а) и паме▓ ▒е заема винаги на ╖е▓ен ад░е▒. Ако д│пка▓а е ▓о╖но
+; два бай▓а ▓о в по▒ледни┐ и би▓ пи╕е 1 (а ина╖е ▓░┐бва да е 0 за╣о▓о в▒и╖ки
+; ад░е▒и ▒а ╖е▓ни).
+
+; ------- Get Words -------
+; mnemonic: GetWrds
+; Stack:    { N } -> { addr }
+; Action:   Allocate memory with size <N> words and
+;	    return start address
+
+GetWrds 	proc
+		pla			; get size (in words)
+		plb
+		asla			; and multiply by 2
+		rolb			; to calc size in bytes
+		sta	Dest+1
+		stb	Dest
+
+		ldx	#FreeQueue
+		stx	wrk2		; p2:= addr(FreeQueue);
+		ldx	#0
+		stx	wrk3		; p3:= nil;
+		dex
+		stx	Src		; current size (много гол┐м)
+		ldx	FreeQueue	; p1:= FreeQueue
+		beq	NoSuchHole
+					; while (p1 <> nil) and
+loop		jsr	GetHoleSize	;	(p1^.size >= size) do
+		cmpb	Dest		;	    по-гол┐ма о▓ ▓║░▒ена▓а
+		bne	branch		;	    п║░во ▒░авн┐ваме ▒▓а░╕и▓е
+		cmpa	Dest+1		;      по▒ле млад╕и┐ бай▓ (ако ▒▓а░╕и▓е
+branch		bcs	Next		;			      ▒║впада▓)
+		beq	Match
+		cmpb	Src		; а по-малка ли е о▓ до▒ега наме░ена▓а
+		bne	branch1
+		cmpa	Src+1
+branch1 	bcc	Next		; по-гол┐м е о▓ до▒ега наме░ена▓а д│пка
+		stx	wrk3		;  p3:= p1;
+		sta	Src+1		; как▓о ▒помена╡ в Src е големина▓а
+		stb	Src		; най-малка▓а д│пка
+Next
+		stx	wrk2		;  p2:= p1;
+		jsr	GetNextHole	;  p1:= p1^.next;
+		bne	loop		;  end; { while }
+		ldx	wrk3
+		beq	NoSuchHole
+
+		lda	Src+1
+		ldb	Src
+		suba	Dest+1
+		sbcb	Dest
+		jsr	PutHoleSize
+		adda	wrk3+1		; return(p3 + p3^.size)
+		adcb	wrk3
+		bra	PushResult
+Match		lda	x, 1		; p2^.next:= p1^.next
+		ldb	x, 0
+		anda	#$fe
+		stx	wrk
+		ldx	wrk2
+		sta	wrk1
+		lda	x, 1
+		anda	#1
+		ora	wrk1
+		sta	x, 1
+		stb	x, 0
+		bra	PushWRK
+NoSuchHole
+		ldx	Dest		; И▒каме 0 бай▓а, о▓иваме ▒и.
+		beq	PushX		; ка▓о в░║╣аме NIL. (не╖е▓ен addr!!!)
+		ldb	#1		; word boundary
+		int	_GetMem
+		cpx	#0
+		bne	PushX
+Push_NIL_err	=	*		; push NIL or report an error
+		ldx	StdVarsPtr	; да п║╡нем NIL и да ▒и ╡одим
+		lda	x, SpecialFlags ; или да ▒е ░азпла╖ем ╖е н┐ма паме▓
+		ldx	#0		; най-млад╕и┐ би▓ о▓ млад╕и┐ бай▓
+		bita	#1
+		bne	PushX
+MemError_near	=	*
+		jmp	MemFull
+
+Mark		=	*		; ------- Mark Heap -------
+		ldx	HiMemPtr	; function Mark: pointer;
+					; action:   return HiMem
+
+PushX				      =*; Push Xregister
+		stx	wrk		; push in positive ByteSex
+PushWrk 	lda	wrk+1
+		ldb	wrk
+PushResult
+PushAB				      =*; Push AB and jump to MainLoop
+		pha
+		phb
+		jmp	MainLoop
+		endp;	GetWrds
+
+; ------- Get words from data stack -------
+; mnemonic: getW_d
+; Stack:    { N } -> { addr }
+; Action:   get <N> words from data stack (not from heap)
+
+getW_D		proc
+		pla
+		plb
+		asla			; по две за░ади д│ми▓е
+		rolb
+		adda	LoMemPtr+1
+		adcb	LoMemPtr
+		ldx	LoMemPtr	; ▓░┐бва да в║░нем на╖ало▓о
+		cmpb	HiMemPtr
+		bcc	Push_NIL_err
+                stb     LoMemPtr        ; │вели╖аване на LoMemPtr
+		sta	LoMemPtr+1
+		jmp	PushX
+		endp;	getW_D
+
+; ------- Free Words from data stack -------
+; mnemonic: freeW_d
+; Stack:    { addr, N } -> { }
+; Action:   free <N> words from data stack (not from heap)
+;	    оба╖е ▓░┐бва MS < addr + 2*N = LoMemPtr
+
+freeW_d 	proc
+		plb
+		pla
+		ins			; не ▒е п░ави п░ове░ка
+		ins			; дали addr + 2*N = LoMemPtr
+		cmpb	MS
+		bhi	OK
+		bcs	MemError_near
+		cmpa	MS+1
+		bls	MemError_near
+OK              sta     LoMemPtr+1      ; Намал┐ване на LoMem (п║░во запи▒ваме
+                stb     LoMemPtr        ; млад╕и┐)
+		jmp	MainLoop
+		endp;	freeW_d
+
+; ------- Release Marked Heap -------
+; procedure Release(p: pointer);
+; action:   cut back heap
+
+Release 	proc
+		tsx
+		ldx	x		; get value of a pointer
+		ins
+		ins
+; ▒ега ▓░┐бва да ▓░║гнем по ░еди╖ка▓а о▓ д│пки и да ма╡нем о▓ не┐
+; в▒и╖ки д│пки де▓о ▒а п░еди ▓ова кое▓о ▒е releas-ва
+
+		stx	Src
+		ldx	FreeQueue
+		beq	OK
+loop		jsr	TestXregSrc	; Xreg < Src? (▓.е. д│пка▓а п░еди
+		bhi	OK		; Src ли е?)
+		bne	GetNext 	; ако ▒а ░авни ▓░┐бва да release-нем
+		jsr	GetHoleSize	; heap-а о▓ p1 + p1^.size
+		adda	Src+1
+		adcb	Src
+		sta	Src+1
+		stb	Src
+GetNext 	jsr	GetNextHole
+		bne	loop
+OK		stx	FreeQueue
+		ldx	Src
+		int	_Release
+		jmp	MainLoop
+		endp;	Release
+
+; ------- MaxAvail -------
+; function MaxAvail: Natural;
+; Action   Return the size of the largest contigiuous free block
+;	   in the heap. (Return size in words)
+
+MaxAvl		proc
+		bsr	FreeMemSize
+		beq	PushDestDiv2
+loop		jsr	GetHoleSize	; колко е ▓ази д│пка?
+		cmpb	Dest		; по-гол┐ма ли о▓ до▒ега╕на▓а
+		bne	branch		; п║░во ▒░авн┐ваме ▒▓а░╕и▓е
+		cmpa	Dest+1		; по▒ле млад╕и┐ бай▓ (ако ▒▓а░╕и▓е
+branch		bls	Less		;			  ▒║впада▓)
+		sta	Dest+1		; да ама е по-гол┐ма о▓ до▒ег╕на▓а
+		stb	Dest
+Less		jsr	GetNextHole
+		bne	loop
+		bra	PushDestDiv2
+		endp;	MaxAvl
+
+; ------- MemAvail -------
+; function MemAvail: Natural;
+; Action   Return the sum of the free blocks in the heap. (in words)
+
+MemAvl		proc
+		bsr	FreeMemSize
+		beq	PushDestDiv2
+loop		jsr	IncSize
+		jsr	GetNextHole
+		bne	loop
+PushDestDiv2	=	*
+		lda	Dest+1
+		ldb	Dest
+		lsrb
+		rora
+		jmp	PushBA
+		endp;	MemAvl
+
+; ------- Calc Size of Free Memory between Stack and LoMemPtr -------
+; Dest:= големина▓а на ▒вободна▓а паме▓ межд│ SP и LoMemPtr
+
+FreeMemSize	proc
+		sts	wrk
+		lda	wrk+1
+		ldb	wrk
+		decb			; поне $100 бай▓а г│╕а за П║лдин╖о
+		suba	LoMemPtr+1
+		sbcb	LoMemPtr
+		sta	Dest+1
+		stb	Dest
+		ldx	FreeQueue	; ▓ова е по▒▓авено ▓│ка за╣о▓о н┐маме
+		rts			; м┐▒▓о в ▓║пи┐ ROM
+		endp;	FreeMemSize
+
+; ------- FreeMemWords -------
+; procedure FreeMemWords(p: pointer; size: integer);
+
+FreeWrd 	proc
+		pla			; get size
+		plb
+		asla			; times 2 because of word size
+		rolb
+		sta	Dest+1		; Dest = size of area to free
+		stb	Dest
+		bcc	sizeOK		; о▒вобождаваме п░екалено много паме▓
+Error		jmp	disposeError	; а п║к в П║лдин има ▒амо 64 Kbytes
+sizeOK		plb			; get ptr to area (Bsex+)
+		pla
+		pha			; preserve for later use
+		phb
+		sta	Src+1		; Src = ptr to hole
+		stb	Src
+		bita	#1		; must free only on word boundary
+		bne	Error
+		adda	Dest+1		; add size and calc ending address
+		adcb	Dest
+		sta	LongWork+1	; LongWork = address after hole
+		stb	LongWork
+
+		ldx	#0		; p2:= nil;
+		stx	wrk2
+		stx	LongWork+2	; address after p2 hole
+		ldx	FreeQueue	; p1:= FreeQueue
+loop		stx	wrk1		; while (p1 <> nil) and (p1 < p) do
+		beq	IsNil		;
+		jsr	TestXregSrc	;
+		bcc	EndLoop 	;  begin { while }
+		stx	wrk2		;  p2:= p1;
+		jsr	GetNextHole	;  p1:= p1^.next;
+		bra	loop		;  end; { while }
+IsNil		ldx	HeapBeforeRun
+EndLoop 	stx	Src		; Src:= p1 / HeapBeforRun
+		ldx	LongWork	; if p + size > Src
+		jsr	TestXregSrc	;   then error
+		bhi	Error
+
+		plb			; get Src again
+		pla
+					; BUG кой▓о е поп░авен по-к║▒но
+		cpx	#0		; free 0 bytes, from NIL?
+		bne	NotZeroNil	; yes, do nothing!
+		jmp	Quit
+
+NotZeroNil
+		sta	Src+1
+		stb	Src
+
+		ldx	wrk2		; if p2 <> nil
+		beq	Nil2
+		jsr	GetHoleSize
+		adda	wrk2+1		; calc address after wrk2
+		adcb	wrk2
+		sta	LongWork+3	; LongWork+2 = p2 + p2^.size
+		stb	LongWork+2	; if p2 = nil ▓о в
+		ldx	LongWork+2	; LongWork+2 ве╖е има 0
+		bra	Test2
+Nil2		ldx	HiMemPtr
+Test2		jsr	TestXregSrc
+		bhi	Error
+
+		ldx	Src
+		lda	wrk1+1		; p^.next:= p1;
+		ldb	wrk1
+		sta	x, 1
+		stb	x, 0
+
+		ldx	wrk2		; if p2 <> nil
+		bne	Not_Nil_2	;   then p2^.next:= p
+		ldx	#FreeQueue	;   else FreeQueue:= p;
+Not_Nil_2	lda	x, 1		; ако д║лжина▓а е 1 д│ма
+		anda	#1		; ▓ова ▓░┐бва да ▒е запази
+		ora	Src+1
+		ldb	Src
+		sta	x, 1
+		stb	x, 0
+
+		ldx	wrk1
+		cpx	LongWork
+		bne	NotConsecutive1
+		bsr	IncSize
+		lda	x, 1		; p^.next:= p1^.next
+		anda	#$fe
+		ldb	x, 0
+		ldx	Src
+		sta	x, 1
+		stb	x, 0
+NotConsecutive1
+		ldx	LongWork+2
+		cpx	Src
+		bne	NotConsecutive2
+		ldx	wrk2
+		bsr	IncSize
+		ldx	Src
+		lda	x, 1
+		ldb	x, 0
+		ldx	wrk2		; p2^.next:= p^.next
+		sta	x, 1
+		stb	x, 0
+		stx	Src		; p:= p2
+NotConsecutive2
+		ldx	Src		; if p = HiMemPtr
+		cpx	HiMemPtr
+		bne	NotOnTop
+		ldx	x, 0		; FreeQueue:= p^.next
+		stx	FreeQueue
+		lda	Src+1
+		ldb	Src
+		adda	Dest+1
+		adcb	Dest
+		sta	Src+1
+		stb	Src
+		ldx	Src
+		int	_Release
+		bra	Quit
+NotOnTop
+		lda	Dest+1
+		ldb	Dest
+		bsr	PutHoleSize
+Quit		jmp	MainLoop
+
+		endp;	FreeWrd
+
+; ------- Put hole size -------
+; Import: X ptr to hole, BA size of hole
+; Warning: X^.next must be even
+; Ни▓о един о▓ ░еги▒▓░и▓е не ▒е ▒капва
+
+PutHoleSize	proc
+		tstb
+		bne	NotOneWordSize
+		cmpa	#2
+		bne	NotOneWordSize
+		inc	x, 1		; Set LSBit of ptr to next
+		rts
+NotOneWordSize
+		sta	x, 3
+		stb	x, 2
+		rts
+		endp;	PutDest
+
+; ------- Increment Dest by Size of a Hole -------
+; Import: X ptr to current hole
+; Export: Dest:= Dest + sizeof(hole)
+; Uses:   A, B
+
+IncSize 	proc			; Import: X ptr to hole
+		bsr	GetHoleSize	; Export: inc(Dest, X^.size);
+		adda	Dest+1		; inc(dest, X^.size)
+		adcb	Dest
+		sta	Dest+1
+		stb	Dest
+		rts
+		endp;	IncSize
+
+; ------- Get Next Hole -------
+; Import: X ptr to current hole
+; Export: X ptr to next hole (or nil)
+; Uses:   wrkF, A
+
+GetNextHole	proc
+		ldx	x, 0		; get next Hole address
+		stx	wrkF		; but if this is a one word hole
+		lda	wrkF+1		; then it address to next hole has
+		anda	#$fe		; it's LSBit set
+		sta	wrkF+1		; so mask off LSBit
+		ldx	wrkF
+		rts
+		endp;	GetNextHole
+
+; ------- Test (unsigned comparison between Xreg and Src) -------
+; Import: Xreg first operand, Src second operand of comparison
+; Export: Carry set according to unsigned comparison Xreg - Src
+; Uses:   wrkF, A
+
+TestXregSrc	proc
+		stx	wrkF		; compare MSBytes
+		lda	wrkF
+		cmpa	Src
+		bne	rts		; if differ cary is OK
+		lda	wrkF+1		; compare LSBytes
+		cmpa	Src+1
+rts		rts
+		endp;	TestXregSrc
+
+; ------- Get Hole Size -------
+; Import: X ptr to hole
+; Export: BA - hole size
+
+GetHoleSize	proc
+		lda	x, 1
+		anda	#1
+		bne	OneWordHole
+		lda	x, 3
+		ldb	x, 2
+		rts
+OneWordHole	asla
+		clrb
+		rts
+		endp;	GetHoleSize
+
+;------------------------------------------------------------------------------

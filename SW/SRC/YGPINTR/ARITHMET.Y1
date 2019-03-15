@@ -1,0 +1,902 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Top of stack arithmetics.		    (c) 1989, 1990 YGP.
+
+; ------- convert Integer TO LongInt -------
+; mnemonic: ItoL
+; Stack:    { i } -> { li }
+; Action:   Convert TOS's integer to long integer by inserting
+;	    either 0 or $ff as HiWord
+
+ItoL		tsx
+                ldb     x, 1            ; get MSByte
+		bpl	WtoD		; positive, so insert 0 as HiWord
+		ldb	#$ff		; HiWord = $ff
+		db	_cmpb_		; trick to jump over clrb
+
+; ------- convert Word TO Double word -------
+; mnemonic: WtoD
+; Stack:    { w } -> { dw }
+; Action:   Convert TOS's word to double word by inserting HiWord 0
+
+WtoD		clrb
+		tsx
+                lda     x, 1            ; get MSByte
+		stb	x, 1
+		pha
+                lda     x, 0            ; get LSByte
+		stb	x, 0
+		pha
+		bra	MainLoop_short
+
+; ------- BitWize And words -------
+; mnemonic: andW
+; Stack:    { w2, w1 } -> { w }
+; Action:   w:= w1 and w2
+
+andW		pla			; get second opernad
+		plb
+		tsx
+		anda	x, 0
+		andb	x, 1
+		bra	FixX_BA_
+
+; ------- BitWize OR words -------
+; mnemonic: orW
+; Stack:    { w2, w1 } -> { w }
+; Action:   w:= w1 or w2
+
+orW		pla			; get second opernad
+		plb
+		tsx
+		ora	x, 0
+		orb	x, 1
+		bra	FixX_BA_
+
+; ------- BitWize XOR words -------
+; mnemonic: xorW
+; Stack:    { w2, w1 } -> { w }
+; Action:   w:= w1 xor w2
+
+xorW		pla			; get second opernad
+		plb
+		tsx
+		xora	x, 0
+		xorb	x, 1
+FixX_BA_	=	*
+		jmp	FixX_BA
+
+; ------- BitWize And Long words -------
+; mnemonic: andL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 and l2
+
+andL		pla			; get second opernad
+		plb			; LSWord
+		tsx
+		anda	x, 2
+		andb	x, 3
+		sta	x, 2
+		stb	x, 3
+		pla
+		plb
+		anda	x, 4
+		andb	x, 5
+fixX45_ba
+		sta	x, 4
+		stb	x, 5
+MainLoop_short	jmp	MainLoop
+
+; ------- BitWize OR Long words -------
+; mnemonic: orL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 or l2
+
+orL		pla			; get second opernad
+		plb
+		tsx
+		ora	x, 2
+		orb	x, 3
+		sta	x, 2
+		stb	x, 3
+		pla
+		plb
+		ora	x, 4
+		orb	x, 5
+		bra	fixX45_ba
+
+; ------- BitWize XOR Long words -------
+; mnemonic: xorL
+; Stack:    { l1, l1 } -> { l }
+; Action:   l:= l1 xor l2
+
+xorL		pla			; get second opernad
+		plb
+		tsx
+		xora	x, 2
+		xorb	x, 3
+		sta	x, 2
+		stb	x, 3
+		pla
+		plb
+		xora	x, 4
+		xorb	x, 5
+		bra	fixX45_ba
+
+; ------- Subtract words -------
+; mnemonic: subW
+; Stack:    { w2, w1 } -> { w }
+; Action:   w:= w1 - w2
+
+subW		pla			; вадим в▓о░и┐ опе░анд
+		plb			; │множаваме го по -1
+		nega
+		adcb	#0
+		negb
+		db	_cpx_		; и п░од║лжаваме ▒║▒ add
+
+; ------- Add words -------
+; mnemonic: addW
+; Stack:    { w2, w1 } -> { w }
+; Action:   w:= w1 + w2
+
+addW		pla			; get second opernad
+		plb
+		tsx
+		adda	x, 0		; add with first
+		adcb	x, 1
+		jmp	FixX_BA 	; and patch TOS
+
+; ------- Divide integers -------
+; mnemonic: divI
+; Stack:    { i2, i1 } -> { i }
+; Action:   i:= i1 div i2
+
+divI		clra			; и п░опадаме в modI
+
+; ------- Modulo integers -------
+; mnemonic: modI
+; Stack:    { i2, i1 } -> { i }
+; Action:   i:= i1 mod i2
+
+modI		proc
+		sta	wrk1+1		; 0 - divi, <> 0 - modi
+		clra
+		tsx
+                ldb     x, 3            ; MSByte на делимо▓о
+                bpl     PosDvsr         ; делимо▓о е положи▓елно
+                neg     x, 2            ; ако е о▓░и╢а▓елно ▒е negate-ва
+		adcb	#0
+		negb
+		stb	x, 3
+		coma			; и ▒е о▓бел┐зва ╖е знака е ▒менен
+PosDvsr 	sta	wrk1		; 0 - положи▓елно, <> 0 о▓░и╢а▓елно
+
+                pla                     ; вземаме дели▓ел┐
+		plb
+		tstb
+                bpl     PosDvdnt        ; ако е положи▓елен доб░е
+		nega			; ина╖е го п░авим ▓акова
+		adcb	#0
+		negb
+
+                tst     wrk1+1          ; v1.55 -> знака на mod е = на делимо▓о
+                bne     modiv_          ; ако имаме мод│л не гледаме ▓ози знак
+
+		com	wrk1		; и об░║╣аме знака на ░ез│л▓а▓а
+
+modiv_		=	*		; ▓│ка идваме о▓ modC, divC
+
+PosDvdnt
+		tsx			; pointer to divident
+                bsr     modivc          ; modulo or divide
+                ;tsx               v1.65 ; prepare for FixX_BA (╣о б║░заме)
+		tst	wrk1+1		; какво ▒ме имали деление или мод│л
+                bne     _MOD_           ; v1.55 (бе╕е OK)
+		lda	wrk+1
+		ldb	wrk
+_MOD_
+                tst     wrk1            ; а как║в ▓░┐бва да м│ е знака?
+                beq     OK
+		nega
+		adcb	#0
+		negb
+OK
+                jmp     FixS_BA         ; corrected v1.65
+                ;jmp     FixX_BA        ; го░е ▒е подго▓в┐╕е ╖░ез tsx
+		endp;	modI
+
+; ------- Divide Cardinals -------
+; mnemonic: divC
+; Stack:    { c2, c1 } -> { c }
+; Action:   c:= c1 div c2
+
+divC		clra			; и п░опадаме в modC
+
+; ------- Modulo Cardinals -------
+; mnemonic: modI
+; Stack:    { c2, c1 } -> { c }
+; Action:   c:= c1 mod c2
+
+modC		sta	wrk1+1		; 0 - divC, <> 0 - modC
+		pla			; get divisor
+		plb
+		clr	wrk1		; имаме положи▓елно винаги
+		bra	modiv_		; и п░од║лжаваме ка▓о п░и integer
+
+; ------- Modulo and Divide cardinals Subroutine -------
+; On Entry: B,A - дели▓ел. X - address(делимо) (BSex-).
+; On Exit:  B,A - о▒▓а▓║к. wrk(16) - ░ез│л▓а▓(о▓ деление▓о) Bsex+
+
+modivc		proc
+		sta	wrk2+1		; дели▓ел┐
+		stb	wrk2
+		ora	wrk2		; п░ове░┐ваме дали е <> 0
+		bne	Not_0
+		jmp	DivByZero
+Not_0
+		lda	x, 0		; вземаме делимо▓о
+		ldb	x, 1
+		beq	div8bit 	; ▒▓а░╕и┐ м│ бай▓ е = 0
+		ldx	#17
+ShiftLoop	sec
+		rola			; ▓│ка изв║░╕ваме ╖а▒▓ о▓ ╢ик║ла
+		rolb			; кога▓о ▓░┐бва ▒амо да ▒е shift-ва
+		dex
+		bcc	ShiftLoop
+		sta	wrk+1
+		stb	wrk
+		lda	#0		; н│ли░аме о▒▓а▓║ка
+		tab			; clr ░азвал┐ Carry
+loop		rola
+		rolb
+		suba	wrk2+1
+		sbcb	wrk2
+		bcc	OKcontinue
+		adda	wrk2+1		; о▒▓а▓║ка е по-мал║к о▓ дели▓ел┐
+		adcb	wrk2		; и не е ▓░┐бвало да вадим
+OKcontinue	rol	wrk+1
+		rol	wrk
+		dex
+		bne	loop
+		com	wrk+1		; пол│╖или ▒ме об░а▓но би▓ове▓е
+		com	wrk
+		rts
+
+div8bit 	ldb	wrk2		; ▒▓а░╕и┐ бай▓ на дели▓ел┐ е 0?
+		beq	div8		; да зна╖и можем да делим
+		clrb			; ако не, зна╖и делимо▓о < дели▓ел┐
+		bra	quit8		; и ░ез│л▓а▓а е 0
+div8		tab			; ▓ова е млад╕и┐ бай▓ на б║де╣и┐ result
+		clra
+		ldx	#9
+loop_8		rola
+		suba	wrk2+1
+		bcc	OKcont_8
+		adda	wrk2+1
+OKcont_8	rolb
+		dex
+		bne	loop_8
+		comb
+quit8		stb	wrk+1
+		clrb			; ▒▓а░╕и┐ бай▓ на о▒▓а▓║ка е н│ла
+		stb	wrk		; как▓о и MSByte на ░ез│л▓а▓а
+		rts
+		endp;	modivc
+
+; ------- Absolute value of integer -------
+; mnemonic: absI
+; Stack:    { i1 } -> { i }
+; Action:   i:= abs(i1)
+; Note:     This is a Long Y code instruction
+
+absI		tsx
+		ldb	x, 1		; Get MSByte
+		;bmi	 negI
+		;bra	 ShortMainLoop
+                bpl     ShortMainLoop   ; do nothing if positive
+		; roll down to negI if negative
+
+; ------- Negative value of integer -------
+; mnemonic: negI
+; Stack:    { i1 } -> { i }
+; Action:   i:= -i1
+; Note:     This is a Long Y code instruction
+
+negI		pla
+		plb
+		nega
+		adcb	#0
+		negb
+		jmp	PushBA
+
+; ------- Absolute value of long integer -------
+; mnemonic: absL
+; Stack:    { l1 } -> { l }
+; Action:   l:= abs(l1)
+; Note:     This is a Long Y code instruction
+
+absL		tsx
+		ldb	x, 3		; Get MSByte
+		;bmi	 negL
+		;bra	 ShortMainLoop
+                bpl     ShortMainLoop   ; do nothing if positive
+		; roll down to negL if negative
+
+; ------- Negative value of long integer -------
+; mnemonic: negL
+; Stack:    { l1 } -> { l }
+; Action:   l:= -l1
+; Note:     This is a Long Y code instruction
+
+negL		bsr	NegLongTOS
+ShortMainLoop
+		jmp	MainLoop
+
+NegLongTOS				; negate long integer on TOS
+		tsx			; 0 - TOS(long integer)
+NegLongX_2				; neagte long integer on (X+2)
+		clrb
+		clra
+		neg	x, 0 +2 	; + 2 за░ади return address
+		sbca	x, 1 +2
+		sta	x, 1 +2
+		tba			; we need Carry
+		sbca	x, 2 +2
+		sbcb	x, 3 +2
+		sta	x, 2 +2
+		stb	x, 3 +2
+		rts
+
+; ------- Subtract LongInts -------
+; mnemonic: subL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 - l2
+
+subL		bsr	NegLongTos	; L1 - L2 = L1 + (-L2)
+		; и п░опадаме в addL
+
+; ------- Add LongInts -------
+; mnemonic: addL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 + l2
+
+addL
+		tsx
+		pla			; get second opernad
+		plb
+		adda	x, 4		; add with first
+		adcb	x, 5
+		sta	x, 4
+		stb	x, 5
+		pla
+		plb
+		adca	x, 6
+		adcb	x, 7
+		sta	x, 6
+		stb	x, 7
+		jmp	MainLoop
+
+; ------- MULtiply Cardinals -------
+; mnemonic: mulC
+; Stack:    { c2, c1 } -> { c }
+; Action:   c:= c1 * c2
+
+mulC					; ▒║╣о▓о ка▓о за integers
+
+; ------- MULtiply Integers -------
+; mnemonic: mulI
+; Stack:    { i2, i1 } -> { i }
+; Action:   i:= i1 * i2
+
+mulI					; за ▒ега п░о╢ед│░а▓а за │множение
+		pla			; ░або▓и как▓о за signed ▓ака и за
+		plb			; unsigned words
+                .ifdef  check
+                 clr     sign            ; ▓░┐бва да ▒е наме░и м┐▒▓о за sign
+                 tstb
+                 bpl     positive1
+                 nega
+                 adcb    #0
+                 negb
+                 com     sign
+positive1       .endif
+		sta	wrk+1
+		stb	wrk
+		pla
+		plb
+                .ifdef  check
+                 tstb
+                 bpl     positive2
+                 nega
+                 adcb    #0
+                 negb
+                 com     sign
+positive2       .endif
+		bsr	mply_16
+                .ifdef  check
+                 tst     sign           ; ▓░┐бва ли да об║░не знака ?
+                 beq     no_change
+                 nega
+                 adcb    #0
+                 negb
+no_change       .endif
+		jmp	PushBA
+
+; ------- Multiply Subroutine (16bit) -------
+; On Entry: BA - operand, wrk(16) operand
+;	    (both operands are in Bsex+)
+; On Exit:  BA:= BA * wrk
+; SideEffects: wrk and wrk2 destroied, X reg = 0
+
+mply_16 	proc
+                .ifNdef old_mpl
+                 .ifNdef check
+                  sta     wrk2+1          ; op2
+                  stb     wrk2
+                 .else
+                  cmpB    wrk             ; ▒лагаме по малко▓о в op2
+                  bcs     do_mul          ; ▓ова е за │▒ко░┐ване, в║п░еки ╖е
+                  bhi     swap_ops        ; може би не е н│жно, за╣о▓о забав┐
+                  cmpA    wrk+1           ; доп║лни▓елно ▒ ▓║па▓а ▒и п░ове░ка
+                  bls     do_mul
+swap_ops          ldx     wrk             ; use X reg as work
+                  stx     wrk2
+                  sta     wrk+1
+                  stb     wrk
+                  bra     multiply
+do_mul            sta     wrk2+1          ; op2
+                  stb     wrk2
+                 .endif
+multiply        .else
+                 sta     wrk2+1          ; op2
+                 stb     wrk2
+                .endif
+		clra			; result:= 0;
+		clrb
+                .ifdef  old_mpl
+                 ldx     #16             ; cnt:= 16;
+                .endif
+loop					; repeat
+		lsr	wrk2		;   op2:= op2 shr 1;
+		ror	wrk2+1
+		bcc	DontAdd 	;   if HasCarry
+		adda	wrk+1		;     then Inc(result, op1);
+		adcb	wrk
+DontAdd 	asl	wrk+1		;   op1:= op1 shl 1;
+		rol	wrk
+                .ifdef  old_mpl
+                 dex                     ;   Dec(cnt);
+                .else
+                 ldx     wrk2            ; op2 = 0 ?
+                .endif
+                bne     loop            ; until op2 = 0;
+		rts
+		endp;	Mply_16
+
+; ------- Square Cardinals -------
+; mnemonic: sqrC
+; Stack:    { c1 } -> { c }
+; Action:   c:= c1 * c1
+; Note:     This is a Long Ycode
+
+sqrC					; ▒║╣о▓о ка▓о за integers
+
+; ------- Square Integers -------
+; mnemonic: sqrI
+; Stack:    { i1 } -> { i }
+; Action:   i:= i1 * i1
+; Note:     This is a Long Ycde
+
+sqrI					; за ▒ега п░о╢ед│░а▓а за │множение
+		pla			; ░або▓и как▓о за signed ▓ака и за
+		plb			; unsigned words
+		sta	wrk+1
+		stb	wrk
+		bsr	mply_16
+		jmp	PushBA
+
+; ------- MULtiply Long integers -------
+; mnemonic: mull
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 * l2
+
+mull		proc
+		ldx	#8
+PopLoop 	pla
+		sta	wrk-1, x
+		dex
+		bne	PopLoop
+
+		bsr	Mply_32
+push_LongWork                         =*; п║╡а LongWork и ▒ка╖а в mainloop
+                lda     LongWork+0      ; added in version 1.65
+		pha
+		lda	LongWork+1
+		pha
+		ldb	LongWork+2
+		lda	LongWork+3
+		jmp	PushBA
+		endp;	mull
+
+; ------- Multiply Subroutine (32bit) -------
+; On Entry: wrk(32) - op1, wrk2(32) - op2 (both in Bsex+)
+; On Exit:  LongWork(32):= op1 * op2 (in Bsex+)
+; SideEffects: wrk2 and wrk destroyed, X reg = 0
+
+Mply_32 	proc
+                ldx     #0              ; result:= 0;
+                stx     LongWork+0
+                stx     LongWork+2
+                .ifdef  old_mpl
+                 ldx     #32             ; cnt:= 32;
+                .else
+                 .ifdef  check
+                  ; ▓│к ▒и за▒л│жава да ▒е п░ове░┐▓ зна╢и▓е и да ▒е об║░на▓
+                  ; ако има о▓░и╢а▓елни. Разби░а ▒е ако има об░║╣ане ▓░┐бва
+                  ; да ▒е нап░ави необ╡одимо▓о за оп░ав┐не на зна╢и▓е по▒ле
+
+                  lda     wrk2+0        ; compare MSBytes
+                  cmpa    wrk +0
+                  bcs     do_mply
+                  bhi     do_swap
+                  lda     wrk2+1
+                  cmpa    wrk +1
+                  bcs     do_mply
+                  bhi     do_swap
+                  lda     wrk2+2
+                  cmpa    wrk +2
+                  bcs     do_mply
+                  bhi     do_swap
+                  lda     wrk2+3
+                  cmpa    wrk +3
+                  bcc     do_mply
+do_swap           ldx     #wrk
+swap_loop         lda     x, 0
+                  ldb     x, wrk2-wrk
+                  sta     x, wrk2-wrk
+                  stb     x, 0
+                  inx
+                  cpx     #wrk+4
+                  bne     swap_loop
+do_mply          .endif
+                .endif
+                clra                    ; longwork+3
+loop					; repeat
+		lsr	wrk2+0		;   Shr(op2);
+		ror	wrk2+1
+		ror	wrk2+2
+		ror	wrk2+3
+		bcc	DontAdd 	;   if HasCarry
+                ;lda     LongWork+3      ;     then Inc(result, op1);
+		adda	wrk+3
+                ;sta     LongWork+3
+		ldb	LongWork+2
+		adcb	wrk+2
+		stb	LongWork+2
+                ldb     LongWork+1
+                adcb    wrk+1
+                stb     LongWork+1
+		ldb	LongWork+0
+		adcb	wrk+0
+		stb	LongWork+0
+DontAdd
+		asl	wrk+3		;   Asl(op1);
+		rol	wrk+2
+		rol	wrk+1
+		rol	wrk+0
+
+                .ifdef  old_mpl
+                 dex                     ;   Dec(cnt);
+                .else
+                 ldx     wrk2+2          ; op2 = ?
+                 bne     loop            ; loop untill op2 = 0
+                 ldx     wrk2
+                .endif
+		bne	loop		; until cnt = 0;
+                sta     LongWork+3
+		rts
+		endp;	Mply_32
+
+; ------- Square Long integers -------
+; mnemonic: sqrL
+; Stack:    { l1 } -> { l }
+; Action:   l:= l1 * l1
+; Note:     This is a Long Ycde
+
+sqrL		proc
+		ldx	#4
+PopLoop 	pla
+		sta	wrk-1, x
+		sta	wrk2-1, x
+		dex
+		bne	PopLoop
+
+                bsr     Mply_32
+
+                bra     push_LongWork   ; added in version 1.65
+
+                ;lda     LongWork+0
+                ;pha
+                ;lda     LongWork+1
+                ;pha
+                ;ldb     LongWork+2
+                ;lda     LongWork+3
+                ;jmp     PushBA
+		endp;	sqrL
+
+; ------- Divide Long integers -------
+; mnemonic: divL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 div l2
+
+divL		clra			; и п░опадаме в modL
+
+; ------- Modulo Long integers -------
+; mnemonic: modL
+; Stack:    { l2, l1 } -> { l }
+; Action:   l:= l1 mod l2
+
+modL		proc
+		sta	wrk2+1		; 0 - divl, <> 0 - modl
+		pla			; get divisor
+		plb
+		sta	wrk+3
+		stb	wrk+2
+		pla
+		plb
+		sta	wrk+1
+		stb	wrk+0
+		tsx			; pointer to divident
+		;jsr	modivl		; modulo or divide
+
+; ------- Modulo and Divide LongIntegers Subroutine -------
+; On Entry: wrk(32) - дели▓ел (BSex+). X - address(делимо) (BSex-)
+; On Exit:  LongWork(32) - о▒▓а▓║к. X(32) - ░ез│л▓а▓(о▓ деление▓о) (BSex-)
+;	    wrk2(8) - sign (0 / $ff) на о▒▓а▓║ка и ░ез│л▓а▓а
+
+modivl		proc
+		clra
+		sta	wrk2		; clear sign
+		sta	LongWork+0	; clear remainder
+		sta	LongWork+1
+		sta	LongWork+2
+		sta	LongWork+3
+
+		ldb	wrk		; п░ове░┐ваме знака на дели▓ел┐
+		bmi	DvsrNeg 	; negative divisor
+		bne	DvsrNot0	; divisor <> 0
+		orb	wrk+1
+		orb	wrk+2
+		orb	wrk+3
+		bne	DvsrNot0	; divisor <> 0
+		jmp	DivByZero	; divisor = 0
+DvsrNeg         tab                     ; A бе╕е 0 до▒ега (CLRB ▒капва Carry)
+		subb	wrk+3		; negate divisor
+		stb	wrk+3
+		tab
+		sbcb	wrk+2
+		stb	wrk+2
+		tab
+		sbcb	wrk+1
+		stb	wrk+1
+		tab
+		sbcb	wrk+0
+		stb	wrk+0
+
+                ldb     wrk2+1          ; mod/div ? v1.55 (if mod to be calc'ed
+                bne     _MOD_           ; sign of result = sign of divident)
+		com	wrk2		; complement sign
+_MOD_
+DvsrNot0
+		ldb	x, 3
+		bpl	DvdntPos	; divident positive
+		tab
+		subb	x, 0		; negate divident
+		stb	x, 0
+		tab
+		sbcb	x, 1
+		stb	x, 1
+		tab
+		sbcb	x, 2
+		stb	x, 2
+		tab
+		sbcb	x, 3
+		stb	x, 3
+		com	wrk2		; complement sign
+DvdntPos
+		ldb	#33
+		clc
+Loop
+		rol	LongWork+3
+		rol	LongWork+2
+		rol	LongWork+1
+		rol	LongWork+0
+
+		lda	LongWork+3	; вадим ▒амо за да видим о▓но╕ение▓о
+		suba	wrk+3
+		lda	LongWork+2
+		sbca	wrk+2
+		lda	LongWork+1
+		sbca	wrk+1
+		lda	LongWork+0
+		sbca	wrk+0
+		clc
+                blt     Label           ; blt не ползва carry
+		sta	LongWork+0	; MSByte calculated
+		lda	LongWork+3	; ве╖е вадим наи▒▓ина
+		suba	wrk+3
+		sta	LongWork+3
+		lda	LongWork+2
+		sbca	wrk+2
+		sta	LongWork+2
+		lda	LongWork+1
+		sbca	wrk+1
+		sta	LongWork+1
+		;lda	 LongWork+0	; MSByte already calculated
+		;sbca	 wrk+0
+		;sta	 LongWork+0
+		sec
+Label		rol	x, 0		; ако ▒ме до╕ли о▓ blt label (C=0)
+		rol	x, 1		;		ина╖е ▓░┐бва (C=1)
+		rol	x, 2
+		rol	x, 3
+		decb
+		bne	Loop
+		;rts
+		endp;	modivl
+
+                lda     wrk2+1
+                beq     _div_           ; п░и деление ░ез│л▓а▓а е в ▒▓ека
+                tsx
+		lda	LongWork+3
+		sta	x, 0
+		lda	LongWork+2
+		sta	x, 1
+		lda	LongWork+1
+		sta	x, 2
+		lda	LongWork+0
+		sta	x, 3
+_div_
+                lda     wrk2            ; ако <> 0 ▓░┐бва да вземем о▓░и╢.
+                beq     OKpositive      ; negate TOS
+		jsr	NegLongTOS
+OKpositive      jmp     MainLoop
+		endp;	modL
+
+; ------- Random / Randomize -------
+; mnemonic: Random byte
+; Stack:    { X } -> { Y }
+;	      X = ▓олкова бай▓а колко▓о пи╕е в млад╕и┐ пол│бай▓ на <byte>
+;	      Y = ▓олкова бай▓а колко▓о пи╕е в ▒▓а░╕и┐ пол│бай▓ на <byte>
+; Action: <byte> = $0x - initialize random generator (x bytes in TOS x = 2/4)
+;		   $22 - return cardinal random number < TOS
+;		   $40 - return real random number (▒▓а░и┐ ва░иан▓)
+;			 ▓ой ве╖е не ▒е подд║░жа. (до░и не помн┐ о▓ кога е)
+
+Random		proc
+		ldx	ipc		; x points at operand
+
+                lda     x, 0
+
+		bita	#%11110000	; initialize ?
+		beq	InitRnd
+
+		;bita	 #%00001111	; real or cardinal
+		;bne	 CardRandom	; по п░ин╢ип не ▓░┐бва да има
+		;jmp	 UnImp		; гене░и░ан ▓ак║в код
+
+CardRandom
+		bsr	GetAddrRnd
+
+		pla			; вземаме по мод│л ▓ова кое▓о е в ▒▓ека
+		plb			; ако не е 0 може да делим
+		tstb
+		bne	GetMod
+		tsta			; и две▓е ▒а 0 ▓.е. в ▒▓ека има 0
+		bne	GetMod		; и ▓огава (и две▓е 0) не вземаме мод│л
+		lda	x, 0
+		ldb	x, 1
+		bra	DontMod
+GetMod		jsr	modivc
+
+DontMod 	phb			; push на о▒▓а▓║ка о▓ деление▓о
+		pha
+
+		bsr	MakeNewRnd
+
+		jmp	BumpIPC
+
+InitRnd 	proc
+		; На ▒▓ека има A бай▓а ▒ кои▓о ▓░┐бва да ▒е ини╢иализи░а
+		; гене░а▓о░а на ▒л│╖айни ╖и▒ла. Ако ▓ова ╖и▒ло е н│ла
+		; гене░а▓о░а ▒е ини╢иализи░а ▒л│╖айно.
+
+		tsta
+		beq	RandomInit
+
+FromStack	lsra
+		lsra			; 0/1
+		sta	wrk1		; save number of bytes to pop
+		ldx	StdVarsPtr
+
+		pla
+		sta	x, RandSeed
+		plb
+		stb	x, RandSeed+1
+		ora	x, RandSeed+1	; дали не ини╢иализи░аме ▒ 0
+		ldb	wrk1		; 2 или 4 бай▓а
+		bne	OK_has4
+Push2		lda	#$77
+		pha
+		pha
+
+OK_has4 	plb
+		stb	x, RandSeed+2
+		ora	x, RandSeed+2
+		plb
+		stb	x, RandSeed+3
+		ora	x, RandSeed+3
+		beq	Push2
+		jmp	BumpIPC
+
+RandomInit	int	_GetTime
+		pha			; push time
+		phb
+		inx			; ensure not 0
+		stx	wrk
+		lda	wrk+1
+		ldb	wrk
+		phb
+		pha
+		lda	#4
+		bra	FromStack
+		endp;	InitRnd
+
+		endp;	Random
+
+; ------- Get Address of RandSeed -------
+; Export: wrk3 & x = RandSeed
+
+GetAddrRnd	lda	#RandSeed
+		clrb
+		adda	StdVarsPtr+1
+		adcb	StdVarsPtr	; get address of random number
+		sta	IObuff+1
+		stb	IObuff
+		ldx	IObuff
+		rts
+
+; ------- MakeNewRnd -------
+; Import: IObuff address of 4 bytes (randseed)
+; Export: NewRandom Number
+
+MakeNewRnd	proc
+
+; п░авим ново ▒л│╖айно ╖и▒ло
+
+		ldx	IObuff
+		lda	#7
+		sta	wrk
+		lda	x, 0
+		ldb	x, 1
+
+loop		asla
+		rol	x, 2
+		rolb
+		rol	x, 3
+		bmi	Bit31
+		tsta
+		bpl	Same
+		bra	Differ
+Bit31		tsta
+		bmi	Same
+Differ		inca
+Same		dec	wrk
+		bne	loop
+
+		sta	x, 0
+		stb	x, 1
+		rts
+		endp;	MakeNewRnd
+
+;------------------------------------------------------------------------------

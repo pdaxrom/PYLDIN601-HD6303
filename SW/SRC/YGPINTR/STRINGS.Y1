@@ -1,0 +1,259 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. String handling instructions.	    (c) 1989, 1990 YGP.
+
+; ------- Convert TOS character to string -------
+; mnemonic: Ch2Str
+; Stack:    { ch } -> { addr }
+; Action:   На в║░╡а на ▒▓ека има б│ква да ▒е об║░не в об░а▓ен Bsex
+;	    ▓.е. в ▒▓а░╕и┐ бай▓ ╣е имаме н│ла
+
+ch2str		plb			; get char
+		ins			; pop MSByte (▓░┐бва да б║де н│ла
+		clra			; но понеже не е 100% га░ан▓и░ано ▒е
+		jmp	PushBA		; п░ави clra)
+
+; ------- LESs than strings -------
+; mnemonic: lesStr
+; Stack:    { s2, s1 } -> { b }
+; Action:   push result of comparison <s1> < <s2>
+;	    stack contains addresses not values
+
+lesStr		lda	#%010
+		db	_cpx_		; trick to jump over next lda
+
+; ------- Less than or EQual strings -------
+; mnemonic: leqStr
+; Stack:    { s2, s1 } -> { b }
+; Action:   push result of comparison <s1> <= <s2>
+;	    stack contains addresses not values
+
+leqStr		lda	#%011
+		db	_cpx_
+
+; ------- Not EQual strings -------
+; mnemonic: neqStr
+; Stack:    { s1, s2 } -> { b }
+; Action:   push result of comparison <s1> <> <s2>
+;	    stack contains addresses not values
+
+neqStr		lda	#%110
+		db	_cpx_
+
+; ------- EQUal strings -------
+; mnemonic: equStr
+; Stack:    { s2, s1 } -> { b }
+; Action:   push result of comparison <s1> = <s2>
+;	    stack contains addresses not values
+
+equStr		proc
+		lda	#%001		; %ABC
+		sta	wrk3		;  A: >, B: <, C: =
+
+		bsr	GetStrAddrWrk	; get addresses of second operand
+		ldb	x, 0		; get length of second string
+		inx			; ад░е▒а на string[1]
+		stx	Dest
+		ins			; pop only second one
+		ins			; на м┐▒▓о▓о на п║░ви┐ ╣е ▒ложим ░ез│л▓
+		bsr	GetStrAddrWrk	; first operand
+		lda	x, 0		; get length of first string
+		inx			; addr(string[1])
+		stx	Src
+
+; п░ове░ка за едноб│квени не╣а (▒▓а░╕и┐ бай▓ на ад░е▒а е 0)
+; межд│ вп░о╖ем ▒амо едно о▓ две▓е може да е ▓акова за▓ова и два▓а п║▓и ▒е
+; използ│ва GetStrAddrWrk
+
+; ▒ега в A,B имаме ▒║о▓ве▓но д║лжина▓а на п║░ви┐ и в▓о░и┐ низ
+; а в║в Src, Dest ад░е▒и▓е на п║░ви▓е б│кви о▓ ▒║о▓ве▓но п║░ви┐ и в▓о░и┐ низ
+
+		phb			; preserve lengths
+		pha
+		cba
+		bls	Aless		; вземаме по-малки┐ о▓ два▓а
+		tba
+
+Aless		clrb			; в BA пол│╖аваме 16 би▓ова д║лжина
+		tsta
+		beq	ZeroLength	; б║░зо ▒░авн┐ване ▒ п░азен низ
+		jsr	CmpBytes	; ▒░авн┐ваме
+
+ZeroLength	pla			; pull не зака╖а▓ Processor status
+		plb
+		bne	IsDiffer
+		cba
+IsDiffer	jmp	_Unsigned
+		endp;	equStr
+
+; ------- Get String Address -------
+; Common routine for String handling
+; Import: TOS is string address or char in Bsex+
+; Export: X address of string
+; Action: if TOS is a char (MSByte = 0) => make dummy string
+;	  за ░або▓ен (dummy) string да ▒е използва м┐▒▓о▓о │казано о▓ X
+; Side Effect: uses wrkF, acc A
+
+GetStrAddrWrk	ldx	#WorkBuff	; use WrkBuff
+
+GetStrAddr	proc
+		stx	wrkF
+		tsx
+		lda	x, 2		; TOS is return address
+		beq	IsChar
+		ldx	x, 2		; get address of string
+		rts
+IsChar		lda	x, 3		; get character
+		ldx	wrkF
+		sta	x, 1		; make dummy string
+		lda	#1
+		sta	x, 0
+		rts
+		endp;	GetStrAddr
+
+; ------- String Assign -------
+; mnemonic: SAS byte
+; Stack:    { src, dest } -> { }
+; Action:   assign string pointed at by src to string
+;	    pointed at by dest (max size of dest is <byte>)
+
+sas		proc
+		tsx
+		ldx	x, 2		; get destination address
+		stx	Dest
+
+		bsr	GetStrAddrWrk	; get source address
+		stx	Src
+		ins			; pop Source Address
+		ins
+		ins			; pop Dest addresses
+		ins
+
+		lda	x, 0		; get source string size
+		ldx	ipc
+		ldb	x, 0		; get dest size (instr parameter)
+		inx
+		stx	ipc
+sas_		=	*
+		cba			; compare src with dest size
+		bls	sizeOK
+		jmp	s2long
+
+sizeOK		clrb
+		adda	#1
+		adcb	#0
+		bsr	MoveMemory
+		jmp	MainLoop
+		endp;	sas
+
+; ------- String Assign (formal) -------
+; mnemonic: SASf
+; Stack:    { src, sz, dest } -> { }
+; Action:   assign string pointed at by src to string
+;	    pointed at by dest (max size of dest is <sz>)
+sasf		tsx
+		ldx	x, 4		; get destination address
+		stx	Dest
+
+		bsr	GetStrAddrWrk	; get source address
+		stx	Src
+		ins			; pop Source Address
+		ins
+
+		plb			; max string size (size of dest)
+		ins
+
+		ins			; pop Dest addresses
+		ins
+
+		lda	x, 0		; compare with src size
+		bra	sas_
+
+; ------- Put address of null String -------
+; mnemonic: nulStr
+; Stack:    { } -> { addr }
+; Action:   Push address of null string
+;	    Null string is in Standard globals
+
+nullStr 	lda	#/NullString	; за░еждаме об░а▓но ад░е▒а
+		ldb	#NullString	; ╣о▓о ╣е полз│ваме об░а▓ен ▓ип push
+		jmp	PushBA
+
+; ------- Get string length -------
+; mnemonic: Slen
+; Stack:    { addr } -> { w }
+; Action:   get string length
+
+slen		proc
+		lda	#1
+		tsx
+		ldb	x, 0
+		beq	is_char
+		ldx	x
+		lda	x, 0		; get length
+                ;tsx              v1.65 ; един бай▓ келепи░ (кой и го дава)
+is_char 	clrb
+                jmp     fixS_BA         ; corrected v1.65
+                ;jmp     fixX_BA
+		endp;	slen
+
+; ------- Move Memory -------
+; Import:   BA - Size
+;	   Src - source address
+;	  Dest - Destination address
+;   Uses: tempS, IOsize, tempX, all registers
+;   Note: П░о╢ед│░а▓а ▒ама оп░едел┐ нак║де да ме▒▓и
+;	  Рабо▓а▓а е ▓акава: Src > Dest - left
+;			     Src = Dest - в▒е едно нак║де
+;			     Src < Dest - right
+
+MoveMemory	proc
+		sei			; леко, леко по ▓е░ли╢и
+		sts	tempS
+
+		adda	Src+1		; calc Src + Size = SrcEnd
+		adcb	Src
+		sta	IOsize+1	; use IOsize as SrcEnd
+		stb	IOsize
+
+		suba	Src+1		; най-ле▒ни┐ на╖ин да пол│╖им BA
+		sbcb	Src		; какво▓о е било п░еди SrcEnd
+
+		adda	Dest+1		; calc Dest + Size = DestEnd
+		adcb	Dest
+		sta	tempX+1 	; use tempX as DestEnd
+		stb	tempX
+					; ▒░авн┐ваме Src < Dest?, но може
+		cmpb	IOsize		; да ▒░авн┐ваме SrcEnd < DestEnd
+		bne	CheckHi
+		cmpa	IOsize+1
+CheckHi         bls     MvLeft
+
+MvRight 	lds	tempX		; lds DestEnd = Dest + Size
+		des
+		ldx	IOsize		; ldx SrcEnd = Src + Size
+		bra	CheckRight
+right_loop
+		dex
+		lda	x, 0
+		pha
+CheckRight	cpx	Src
+		bne	right_loop	; 21 micro seconds per byte
+		bra	endMove
+
+MvLeft		lds	Src
+		des
+		ldx	Dest
+		bra	CheckLeft
+left_loop
+		pla
+		sta	x, 0
+		inx
+CheckLeft	cpx	tempX		; cpx DestEnd
+		bne	left_loop	; 20 micro seconds per byte
+
+endMove 	lds	tempS
+		cli			; ╡а ▒ега може и ка▓о ▒лон
+		rts
+		endp;	MoveMemory
+
+;------------------------------------------------------------------------------

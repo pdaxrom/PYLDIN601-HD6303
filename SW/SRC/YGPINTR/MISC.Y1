@@ -1,0 +1,123 @@
+;------------------------------------------------------------------------------
+; Ycode Interpreter. Miscellaneous instructions.	    (c) 1989, 1990 YGP.
+
+; ------- Check I/O result -------
+; mnemonic: IOchk
+; Stack:    { } -> { }
+; Action:   check IOresult and force run time error if <> 0
+;	    ’ §¨ ¯°®¶¥¤³°  ¥ ­ ¯° ¢¥­  ­  ¨­±²°³ª¶¨¿ §  ¤  ±¥ ¯¥±²¨ ª®¤.
+;	    (£¥­¥°¨°  ±¥ ±° ¢­¨²¥«­® ·¥±²®), ­® ¯® ±¢®¿²  ¤º«¡®ª®
+;	    ´¨«®±®´±ª  ±º¹­®±² ±¥ ®²­ ±¿ ªº¬ StdPF.
+
+IOchk           proc
+                ldx     IOresult
+                ;beq     OK             ; ¯®­¥¦¥ ±¬¥ ¬­®£® ¡«¨§®
+                ;jmp     IOerror        ; ¬®¦¥ ¤  ¯®«§¢ ¬¥ bne
+                bne     IOerror         ; corrected v1.65
+OK              bra     main_loop_near  ;   ¨ ²³ª  ±¬¥ ¡«¨§ª® ¤® ¶¥«² 
+		endp
+
+; ------- convert Double word TO Word -------
+; mnemonic: DtoW
+; Stack:    { d } -> { w }
+; Action:   Convert TOS's double word to word by poping HiWord
+
+DtoW		pla			; get LoWord
+		plb
+FixS_BA                               =*; tsx + FixX_BA
+		tsx			; pop HiWord
+FixX_BA 			      =*; Store BA in (X) and jump to MainLoop
+                sta     x, 0
+		stb	x, 1
+main_loop_near  jmp     MainLoop
+
+; ------- Check Segment -------
+; mnemonic: ChkSeg byte
+; Stack:    {} -> {}
+; Action:   Force RunTime error if segment is in intialize
+
+ChkSeg          jsr     GetSegInfo      ; get segment info address
+		ldb	x, SegFlags
+                bitb    #%0010_0000      ; test in init?
+                beq     main_loop_near
+                bra     RecursiveUnits
+
+; ------- Increment/Decrement Word -------
+; mnemonic: IncDecW byte
+; Stack:    if (<byte> = 0) or (<byte> = $80)
+;	      then { word, addr } -> { }
+;	      else { addr } -> { }
+; Action:   inc/dec-rement word pointed at by <addr> by <byte> or by <word>
+;    ˆ±²®°¨¿²  ¥ ±«¥¤­ ² :  ª® <byte> ¥ ° §«¨·­® ®² 0 ¨ ®² $80 ²®:
+; ¡ ©²  ±¥ ¢º§¯°¨¥¬  ª ²® signed byte ¨ ±¥ ° §¸¨°¿¢  ¤® ¤³¬ , ª ²® ±² °¸¨¿
+; ¡ ©² ­  ² §¨ ¤³¬  ±¥ § ¯º«¢  ±º± ±² °¸¨¿ ¡¨² ­  ¡ ©²  ($00/$ff) ±«¥¤ ª®¥²®
+; ² ª  ¯®«³·¥­ ²  ¤³¬  ±¥ ¤®¡ ¢¿ ªº¬ ¤³¬ ²  ·¨©²®  ¤°¥± ¥ ­  TOS.
+; €ª® ®¡ ·¥ <byte> = 0 ²® ¢ ±²¥ª  ¨¬  ¤³¬  ª®¿²® ²°¿¡¢  ¤  ±¥ ¤®¡ ¢¨ ªº¬ ¤³¬ ² 
+; ·¨©²®  ¤°¥± ¥ ¯®¤ ­¥¿ ¢ ±²¥ª ,    ª® <byte> = $80 ²® ²°¿¡¢  ¤³¬ ²  ®² ¢º°µ 
+; ­  ±²¥ª  ¤  ±¥ ¨§¢ ¤¨   ­¥ ¤  ±¥ ¯°¨¡ ¢¨.
+
+IncDecW 	proc
+		ldx	ipc
+		lda	x, 0		; get parameter of instruction
+		bita	#%01111111	; constant parameter?
+		beq	incw0		; ­¥, ­¥ ¥ ¶®­±² ­²¥­.
+		clrb
+		tsta			; ª®­±² ­²   ¬  ª ª¢  (+/-) ?
+		bpl	incw1		; ¯®«®¦¨²¥«­  (B=0 already)
+		decb			; B:= $FF (¡¥¸¥ 0)
+		bra	incw1
+
+incw0		asla			; Set carry according to
+		pla			; operation (Inc or Dec)
+		plb
+		bcc	incw1
+		nega			; ¯ ° ¬¥²º°  ¥ ¡¨« $80 (negate)
+		adcb	#0		; BA:= - BA;
+		negb
+incw1		tsx
+		ldx	x, 0		; get address of word
+		adda	x, 0
+		adcb	x, 1
+		stb	x, 1
+IncDecW_	=	*
+		sta	x, 0
+		ins			; pop address
+		ins
+		jmp	BumpIPC
+		endp;	IncDecW
+
+; ------- Increment/Decrement Byte -------
+; mnemonic: IncDecB byte
+; Stack:    if (<byte> = 0) or (<byte> = $80)
+;	      then { word, offs, addr } -> { }
+;	      else { offs, addr } -> { }
+; Action:   inc/dec-rement byte pointed at by <addr+offset> by <byte>
+;    ˆ±²®°¨¿²  ¥ ±«¥¤­ ² :  ª® <byte> ¥ ° §«¨·­® ®² 0 ¨ ®² $80 ²®:
+; ¡ ©²  ±¥ ³¢¥«¨· ¢  (­ ¬ «¿¢  ± ­³¦­®²®)
+; €ª® ®¡ ·¥ <byte> = 0 ²® ¢ ±²¥ª  ¨¬  ¤³¬  ª®¿²® ²°¿¡¢  ¤  ±¥ ¤®¡ ¢¨ ªº¬ ¡ ©² 
+; ·¨©²®  ¤°¥± ¥ ¯®¤ ­¥¿ ¢ ±²¥ª ,    ª® <byte> = $80 ²® ²°¿¡¢  ¤³¬ ²  ®² ¢º°µ 
+; ­  ±²¥ª  ¤  ±¥ ¨§¢ ¤¨   ­¥ ¤  ±¥ ¯°¨¡ ¢¨.
+
+IncDecB 	proc
+		ldx	ipc
+		lda	x, 0		; get parameter of instruction
+		bita	#%01111111	; constant parameter?
+		bne	incw1		; ¤  ª®­±² ­²¥­ ¥
+		asla			; Set carry according to
+		pla			; operation (Inc or Dec)
+		ins			; pop MSByte
+		bcc	incw1
+		nega			; ¯ ° ¬¥²º°  ¥ ¡¨« $80 (negate)
+incw1		tsx
+		plb			; LSByte of offset
+		addb	x, 3		; add with LSByte of base address
+		stb	wrk+1
+		plb			; MSByte of offset
+		adcb	x, 2		; add with MSByte of base address
+		stb	wrk
+		ldx	wrk		; get address of byte
+		adda	x, 0
+		bra	IncDecW_
+		endp;	IncDecB
+
+;------------------------------------------------------------------------------
