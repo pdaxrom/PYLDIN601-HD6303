@@ -1944,10 +1944,15 @@ int_37		proc
 		bne	ok
 		ldx	#sysrts 	;force return
 		stx	swix
-		clrb			;don't change page
+;		clrb			;don't change page
+		ldab	MEMPAGE_SEL	;don't change page
 ok
 		tsx
-		stab	2,x		;corresponding page
+		ldaa	2,x
+		anda	#MEMPAGE_FMASK|MEMPAGE_HI
+		andb	#$0F
+		aba
+		staa	2,x		;corresponding page
 
 		ldd	swix		;go to it via rts exit from this int
 		std	8,x		;pc
