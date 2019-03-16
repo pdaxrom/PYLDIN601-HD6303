@@ -55,7 +55,7 @@ romstart	equ	$C000
 swipag		equ	$ED80
 swivec		equ	$EE00
 screen		equ	$2000		; VPU internal screen address
-computer_name	equ	$FFDC
+computer_name	equ	$FFCE
 serial_no	equ	$FFDA
 bios_date	equ	$FFDE
 bios_version	equ	$FFE0
