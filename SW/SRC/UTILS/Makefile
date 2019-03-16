@@ -5,7 +5,7 @@ all: $(UNIAS)		\
     LOADPAGE.CMD	\
     COPYPAGE.CMD	\
     LOADBIOS.CMD	\
-    TRAP.CMD		\
+    TRAP.PGM		\
     XONIX.CMD		\
     HCMSSPI.PGM		\
     CHIPTUNE.CMD	\
