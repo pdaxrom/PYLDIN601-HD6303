@@ -30,7 +30,7 @@
                 .define shorten_TBL     ; ¤  ±¥ ±ªº±¿² «¨ ² ¡«¨¶¨²¥ ­  LYC
 
                 .ifNdef PControler
-                 .define show_segload    ; show segmentation (ú) at clock line
+;                 .define show_segload    ; show segmentation (ú) at clock line
                 .endif
 
 		include interrup.inc

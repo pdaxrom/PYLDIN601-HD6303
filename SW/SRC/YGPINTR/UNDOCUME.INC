@@ -29,7 +29,11 @@ PIA_drB         =       IOarea +$29     ; MC6820 Data register B
 PIA_crA         =       IOarea +$2a     ; MC6820 Control register A
 PIA_crB         =       IOarea +$2b     ; MC6820 Control register B
 
-ROMswitch       =       IOarea +$f0     ; ROM page No register
+		.ifdef	lilith
+ROMswitch	equ	$17		; ROM page No register
+		.else
+ROMswitch	equ	$e6f0		; ROM page No register
+		.endif
 
 		section 0
 _Save_INT_Rtrn	ds	2		; Return to Interrupt handler

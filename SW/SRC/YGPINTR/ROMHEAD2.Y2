@@ -46,7 +46,7 @@ DoNothing	=	*		; make it global address
                 .ifNdef PControler
 Hello            db      10, 'UniPASCAL (R) Interpreter  Version '
                  db      $30 + Version, '.'                      ; Version.
-                 db      $30 + Flavour/10, $30 + Flavour\10      ; Flavour
+                 db      $30 + Flavour/10, $30 + Flavour%10      ; Flavour
                  db      0
                 .endif
 		endp;	InitBank2

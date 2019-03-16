@@ -13,6 +13,9 @@ MV_to_RAM
 
 		lda	#0		; Switch to Bank1	       ; 2 | 2
 		sta	ROMswitch	; used by Bank 2	       ; 3 | 5
+		.ifdef	lilith
+		nop
+		.endif
 NOPcode
 MainLoop	proc						      ;byte Clck
 		ldx	ipc					       ; 2 | 4
@@ -35,6 +38,9 @@ PatchHi 	ldx	HiTable 				       ; 3 | .
 								       ;31 |45
 
 InterPageJump	stb	ROMswitch
+		.ifdef	lilith
+		nop
+		.endif
 		jmp	x, 0
 
                 error   * - (SystemPage +$f6)   ; ²³© ²°¿¡¢  ¤  ¥ ­  $xxF6

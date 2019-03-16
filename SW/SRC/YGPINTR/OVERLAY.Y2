@@ -323,6 +323,7 @@ put_on_27        proc                   ; ±ª ¯¢  B ¨ X
                  ldx     system_scrbase
                  pha
                  lda     ComputerModel
+                 anda    #$BF
                  pla
                  beq     _601
                  stb     x, 80 +77

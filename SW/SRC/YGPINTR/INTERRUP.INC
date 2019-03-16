@@ -1,9 +1,15 @@
 ;------------------------------------------------------------------------------
 ;  UniDOS (R) & BIOS interrupts.				 YGP mnemonics.
 
+		.ifdef	lilith
+InDOSflag	=	$28		; don't enter DOS
+
+EquipmentBYTE	=	$29		; Equipment Byte
+		.else
 InDOSflag	=	$00		; don't enter DOS
 
 EquipmentBYTE	=	$01		; Equipment Byte
+		.endif
 EquipKernel	=	$80		;   UniDOS kernel present
 EquipGraph	=	$40		;   Graphics BIOS
 EquipBASIC	=	$20		;   BASIC interpreter present
@@ -11,6 +17,24 @@ EquipYcode	=	$10		;   Ycode interpreter present
 Equip_2Mhz	=	$08		;   Working on 2 Mhz
 EquipShell	=	$01		;   UniDOS Shell present
 
+		.ifdef	lilith
+ComputerName	=	$ffce
+BIOSdate	=	$ffde
+BIOSversion	=	$ffe0
+ComputerModel	=	$ffe9
+_model_601      =         $00
+_model_lilith601=         $40
+_model_601A     =         $80
+_model_601M     =         $c0
+_model_601T     =         $e0
+
+		section $2C		; save MC6800 regs
+SWI_P		ds	1		;   processor status register
+SWI_B		ds	1		;   register B
+SWI_A		ds	1		;   register A
+SWI_X		ds	2		;   register X
+		ends
+		.else
 ComputerName	=	$ffdc
 BIOSdate	=	$ffec
 BIOSversion	=	$ffee
@@ -26,6 +50,7 @@ SWI_B		ds	1		;   register B
 SWI_A		ds	1		;   register A
 SWI_X		ds	2		;   register X
 		ends
+		.endif
 
 ;------------------------------ BIOS interrupts -------------------------------
 _50_Hz		=	$5		; every 20 mili seconds
