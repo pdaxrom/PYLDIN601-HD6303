@@ -6,10 +6,14 @@ CircOut         db      0
 CircBuf          db   '(C) Copyright Sowtware R&D Lab. 1989'
                  db   'Written by D. Georgiev -  MAG , 1989'
 
-
+		.ifdef	lilith
+vpuconfig	=	$E613
+vpucurson	=	$04
+		.else
 piaadrb         =       $e629
 crtaddr         =       $e604
 crtdata         =       $e605
+		.endif
 
 ; --- Cursor control procedures ---
 ;
@@ -20,6 +24,13 @@ SetCrsrXY       proc
                 int     GotoXY
                 endp; SetCrsrXY
 SetCrsrOn       proc
+		.ifdef	lilith
+		ldaa	vpuconfig
+		oraa	#vpucurson
+		endp
+setvpu		staa	vpuconfig
+		rts
+		.else
                 lda     piaadrb
                 lsra
                 ldb     #10
@@ -38,6 +49,7 @@ set6845
                 stb     crtaddr
                 sta     crtdata
                 rts
+		.endif
 ;;clrmsg          db      ':>ClrCrsr',0
 ;;msg68           db      ':>Set6845',0
 ClrCrsr         proc
@@ -46,9 +58,15 @@ ClrCrsr         proc
 ;;                jsr     Msg1
 ;;                jsr     lodregs
                 pha
+		.ifdef	lilith
+		ldaa	vpuconfig
+		anda	#$FF^vpucurson
+		bsr	setvpu
+		.else
                 ldb     #10
                 lda     #$20
                 jsr     set6845
+		.endif
                 pla
 exit            rts
                 endp ; ClrCrsr

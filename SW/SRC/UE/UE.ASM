@@ -3,13 +3,19 @@
 ;* alt correction by YGP (see file USER.UE) 			*
 ;****************************************************************
 ;-
+		.define	lilith
+
                 org     $100
 ; Constants:
 ;
 MaxLineSize     =       250     ; maximum line size
 Step            =       8       ; left / right screen adjust step
 
+		.ifdef	lilith
+swia            =       $2e
+		.else
 swia            =       6
+		.endif
 
                 section $80
 minx            ds      2
