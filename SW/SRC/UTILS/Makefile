@@ -19,7 +19,8 @@ all: $(UNIAS)		\
     PAGEINFO.CMD	\
     IRQTEST.CMD		\
     VPUGRF.CMD		\
-    P601EGRF.PGM
+    P601EGRF.PGM	\
+    BPT.PGM
 
 #    HELLO.CMD		\
 #    INOUT.CMD
