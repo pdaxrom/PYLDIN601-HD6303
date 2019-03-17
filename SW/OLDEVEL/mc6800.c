@@ -28,6 +28,7 @@ static byte app[] = {
 static	byte	MEM[0x10000];
 
 static word LOMEM = 0x100 + sizeof(app);
+static word HIMEM = 0xFF00;
 
 static int ARGC;
 static char **ARGV;
@@ -116,7 +117,7 @@ static int MC6800Init(byte *app, word size)
     memcpy(&MEM[0x100], app, size);
 
     PC = 0x100;
-    SP = 0xFF00;
+    SP = HIMEM - 1;
 
     return 0;
 }
@@ -654,7 +655,7 @@ static int MC6800Step()
 static void SWIemulator()
 {
     FILE *f = NULL;
-    long pos;
+    long pos, pos1;
     char *str;
     word tmp, tmp1;
     byte swin = MEM[PC++];
@@ -673,6 +674,38 @@ static void SWIemulator()
 		return;
     case 0x22:	printf("%c", A); return;
     case 0x23:	printf("%s", &MEM[X]); return;
+    case 0x24:	printf("%d", X); return;
+    case 0x25:	printf("%02X", A); return;
+    case 0x2A:
+		tmp = SP - 0x200 - LOMEM;
+		if (tmp < X + 2) {
+		    X = 0;
+		} else {
+		    tmp1 = (((HIMEM - X) >> B) << B) - 2;
+    fprintf(stderr, "Alloc ptr %04X align %d with %d bytes\n", tmp1, B, X);
+		    memmove(&MEM[tmp1 - (HIMEM - SP)], &MEM[SP], HIMEM - SP);
+		    SP = tmp1 - (HIMEM - SP);
+		    MEM[tmp1    ] = HIMEM >> 8;
+		    MEM[tmp1 + 1] = HIMEM & 0xFF;
+		    HIMEM = tmp1 - 1;
+		    X = tmp1 + 2;
+		}
+		return;
+    case 0x2B:
+		if (X == 0) return;
+		tmp = X - 2;
+		tmp1 = (MEM[tmp] << 8) | MEM[tmp + 1];
+    fprintf(stderr, "Dealloc ptr %04X, new HiMem %04X\n", tmp, tmp1);
+		memmove(&MEM[tmp1 - (HIMEM - SP)], &MEM[SP], HIMEM - SP);
+		SP = tmp1 - (HIMEM - SP);
+		X = tmp1 - X;
+		HIMEM = tmp1 - 1;
+		return;
+    case 0x2D:
+		tmp = (B << 8) | A;
+		memmove((char *)&MEM[(MEM[X + 2] << 8) | MEM[X + 3]], (char *)&MEM[(MEM[X] << 8) | MEM[X + 1]], tmp);
+		X = tmp;
+		return;
     case 0x2F:	if (A == 0x04) return; // User interrupt (Ctrl+C), ignore
 		if (A == 0x07) return; // Critical error, ignore
 		break;
@@ -796,6 +829,27 @@ static void SWIemulator()
 		    A = 0;
 		}
 		return;
+    case 0x51:
+		if (!fdtab[A]) {
+		    A = 16;
+		    return;
+		}
+		pos1 = ftell(fdtab[A]);
+		if (pos1 >= 0) {
+		    fseek(fdtab[A], 0, SEEK_END);
+		    pos = ftell(fdtab[A]);
+		    fseek(fdtab[A], pos1, SEEK_SET);
+		    if (pos >= 0) {
+			MEM[X    ] = (pos >> 24)       ;
+			MEM[X + 1] = (pos >> 16) & 0xFF;
+			MEM[X + 2] = (pos >>  8) & 0xFF;
+			MEM[X + 3] = (pos      ) & 0xFF;
+			A = 0;
+			return;
+		    }
+		}
+		A = 24;
+		return;
     case 0x53:
 		if (!fdtab[A]) {
 		    A = 16;
@@ -815,6 +869,7 @@ static void SWIemulator()
     }
 
     fprintf(stderr, "%04X: INT $%02X - Unimplemented!\n", PC, swin);
+    fprintf(stderr, "A=%02X B=%02X X=%04X SP=%04X PC=%04X H=%d I=%d N=%d Z=%d V=%d C=%d\n", A, B, X, SP, PC, h, i, n, z, v, c);
 
     exit(1);
 }
