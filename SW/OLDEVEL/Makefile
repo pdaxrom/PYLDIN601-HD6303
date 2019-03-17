@@ -1,4 +1,4 @@
-all: uniasm unilib unilink 6800 uasm ulink
+all: unicross unilib unilink 6800 uasm ulink
 
 CFLAGS = -g -Ofast
 
@@ -23,4 +23,4 @@ ULINK.MEM: ULINK.CMD
 	fpc -g -gl $<
 
 clean:
-	rm -f *.o uniasm unilib unilink 6800 uasm ulink *.MEM
+	rm -f *.o unicross unilib unilink 6800 uasm ulink *.MEM
