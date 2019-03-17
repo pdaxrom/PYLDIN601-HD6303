@@ -1,31 +1,26 @@
-all: uniasm unilib unilink 6800
+all: uniasm unilib unilink 6800 uasm ulink
 
-.SUFFIXES: .pas .ASM .OBJ .EXP .INC
+CFLAGS = -g -Ofast
+
+uasm: mc6800.c UASM.MEM
+	$(CC) -o $@ mc6800.c -DAPP=\"UASM.MEM\" -Wall $(CFLAGS)
+
+ulink: mc6800.c ULINK.MEM
+	$(CC) -o $@ mc6800.c -DAPP=\"ULINK.MEM\" -Wall $(CFLAGS)
+
+UASM.MEM: UASM.CMD
+
+ULINK.MEM: ULINK.CMD
+
+#.SUFFIXES: .ASM .CMD .PGM .MEM
+
+.SUFFIXES: .pas .CMD .MEM
+
+.CMD.MEM:
+	hexdump -v -e '"\t" 16/1 "0x%02x, " "\n"' $< | sed 's/0x  ,//g' > $@
 
 .pas:
 	fpc -g -gl $<
 
-#CLIB.EXP: CLIB.INC
-#	./exportsym.sh $< > $@
-
-.INC.EXP:
-	./exportsym.sh $< > $@
-
-.INC.H:
-	./exporthdr.sh ../$< > $@
-
-CLIB.OBJ: CLIB.EXP
-
-LIBROM.OBJ: LIBROM.EXP
-
-.ASM.OBJ:
-	./uniasm $< $(basename $@) $@
-
-BOOTROM.H: ../BOOTROM.INC
-	./exporthdr.sh $< > $@
-
-DEVMAP.H: ../DEVMAP.INC
-	./exporthdr.sh $< > $@
-
 clean:
-	rm -f *.o uniasm unilib unilink 6800 *.EXP *.OBJ *.LST DEVMAP.H BOOTROM.H
+	rm -f *.o uniasm unilib unilink 6800 uasm ulink *.MEM
