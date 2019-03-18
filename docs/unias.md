@@ -25,3 +25,8 @@
 
 - Неподдерживается директива управления трансляцией RADIX
 
+## Пример
+
+[Видео на Youtube](https://www.youtube.com/watch?v=Ddma90RLDQ8)
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/Ddma90RLDQ8/0.jpg)](https://www.youtube.com/watch?v=Ddma90RLDQ8)
