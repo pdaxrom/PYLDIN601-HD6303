@@ -14,15 +14,13 @@
 
 [UniBASIC](https://pyldin.info/document/unibasic_rus.htm)
 
-### Компилятор Small-C
+### Компилятор C
 
 [Small-C](small-c.md)
 
 ### Компилятор Паскаля
 
-[UniPASCAL часть 1](https://pyldin.info/document/unipas_rus.htm)
-
-[UniPASCAL часть 2](https://pyldin.info/document/unipas2_rus.htm)
+[UniPASCAL](upc.md)
 
 ### Среда разработки ТриЛого
 
