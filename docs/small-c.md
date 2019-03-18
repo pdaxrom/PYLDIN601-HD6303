@@ -35,3 +35,7 @@ main()
 Запустите собранную программу:
 
 `hello`
+
+[Видео на Youtube](https://www.youtube.com/watch?v=PHO3cEp_rjQ)
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/PHO3cEp_rjQ/0.jpg)](https://www.youtube.com/watch?v=PHO3cEp_rjQ)
