@@ -18,28 +18,15 @@
 
 ## Программное обеспечение
 
-### Средства разработки
+[Базовая система и системный монитор](https://pyldin.info/document/unibios_rus.htm)
 
-#### Ассемблер
+[Игры]()
 
-[UniAS](unias.md) является основным и главным системным ассемблером, поддерживающим новые команды процессора HD6303 и используется для сборки все системных прошивок ПЗУ, UniDOS и утилит.
+[Обучающие программы]()
 
-[Ассемблер UniAS](unias.md)
+[Операционная система UniDOS](https://pyldin.info/document/unidos_rus.htm)
 
-[Ассемблер UniASM](https://pyldin.info/document/uniasm_rus.htm)
+[Текстовый редактор UniED](https://pyldin.info/document/unied_rus.htm)
 
-[Ассемблер UniCross](https://pyldin.info/document/unicross_rus.htm)
-
-#### Интерпретатор Basic
-
-[UniBASIC](https://pyldin.info/document/unibasic_rus.htm)
-
-#### Компилятор Small-C
-
-[Small-C](small-c.md)
-
-#### Компилятор Паскаля
-
-[UniPASCAL часть 1](https://pyldin.info/document/unipas_rus.htm)
-[UniPASCAL часть 2](https://pyldin.info/document/unipas2_rus.htm)
+[Языки программирования и инструменты разработчика](devtools.md)
 
