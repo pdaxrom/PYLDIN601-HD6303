@@ -9,7 +9,9 @@
 
 ## Запуск ассемблера:
 
-`unias [-l [prog.lst]][-o prog[.cmd|.pgm]]prog.asm`
+`unias [-D IDENT][-l [prog.lst]][-o prog[.cmd|.pgm]]prog.asm`
+
+`-D IDENT` - определить идентификатор для использования с директивами `.ifdef` и `.ifndef`.
 
 `-l [prog.lst]` - вывод листинга (если без указания файла, то выводится на экран).
 
