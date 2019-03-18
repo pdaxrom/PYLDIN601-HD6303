@@ -4,7 +4,7 @@
 
 [Видео на Youtube](https://www.youtube.com/watch?v=-_IdSySlPXs)
 
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/-_IdSySlPXs/0.jpg)](https://www.youtube.com/watch?v=-_IdSySlPXs)
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/-_IdSySlPXs/0.jpg | width=320)](https://www.youtube.com/watch?v=-_IdSySlPXs)
 
 Проект включает в себя не только аппаратную часть, но и BIOS, системные ПЗУ, операционную систему и утилиты для работы с обновленным железом.
 
