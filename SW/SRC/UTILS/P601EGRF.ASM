@@ -24,12 +24,12 @@
 		ldaa	#0
 		staa	IO_TIM_CONFIG
 
-; Set 2 Hz interrupts
-; 12MHz/2 = 6000000 = $5B8D80
+; Set 10 Hz interrupts
+; 12MHz/10 = 1200000 = $124F80
 ;
-		ldaa	#$5B
+		ldaa	#$12
 		staa	IO_TIM_DIV
-		ldx	#$8D80
+		ldx	#$4F80
 		stx	IO_TIM_DIV+1
 ; Enable interrupts and start timer
 		ldaa	#(IO_TIM_IEN | IO_TIM_RUN)
