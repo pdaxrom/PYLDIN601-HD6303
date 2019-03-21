@@ -1,0 +1,157 @@
+
+;********************
+;*		    *
+;*    VDISK 1.00    *
+;*		    *
+;*     4-Mar-90     *
+;*		    *
+;********************
+
+swia	=	$2e
+
+	asc	'VDISK 1.00 (c) Todor Todorov, 4-Mar-90'
+
+	sect	.
+diskadr dw	0
+dirbuf	ds	66
+tmp1	dw	0
+tmp2	dw	0
+tmp3	dw	0
+	ends
+
+vdisk	main
+	ldaa	#1
+	ldx	#$80
+	int	$3c
+	ldab	x
+	subb	#'0'
+	cmpb	#'9'
+	bhi	:defsiz
+	ldaa	1,x
+	suba	#'0'
+	cmpa	#'9'
+	bhi	:last
+	aslb
+	aba
+	aslb
+	aslb
+	aba
+	tab
+	ldaa	2,x
+	suba	#'0'
+	cmpa	#'9'
+	bls	:memerr
+:last	cmpb	#2
+	bhs	:alloc
+:defsiz ldab	#32
+:alloc	aslb
+	stab	sectors
+	aslb
+	bcs	:memerr
+	stab	$80
+	clr	$81
+	ldab	#8
+	ldx	$80
+	int	$2a
+	dex
+	inx
+	beq	:memerr
+	stx	diskadr
+	ldaa	#$fe
+	staa	x
+	inca
+	staa	1,x
+	staa	2,x
+	inca
+	ldab	#6
+:zero	clr	3,x
+	inx
+	inca
+	bne	:zero
+	decb
+	bne	:zero
+	int	$45
+	psha
+	ldab	#<-1
+:loop	incb
+	tba
+	int	$44
+	tsta
+	beq	:loop
+	pula
+	int	$44
+	addb	#'A'
+	stab	:letter
+	ldx	#header
+	int	$5d
+	tsta
+	bne	:err
+	int	$2c
+	ldx	#:msg1
+	int	$23
+	ldx	$80
+	int	$24
+	ldx	#:msg2
+	bra	:exit
+:memerr ldaa	#66
+:err	ldx	#$80
+	int	$3d
+:exit	int	$23
+	int	$38
+
+:msg1	dfb	'VDISK 1.0 virtual disk '
+:letter dfb	'C:',13,10
+	asc	'Buffer size = '
+:msg2	asc	' bytes.'
+
+read	clrb
+	dfb	$7d
+write	ldab	#<-1
+	ldaa	#7
+	staa	swia
+	ldaa	3,x
+	bne	exit
+	ldaa	4,x
+	cmpa	sectors
+	bhs	exit
+	asla
+	adda	diskadr
+	staa	tmp2
+	clr	tmp2+1
+	ldx	x
+	stx	tmp1
+	stx	tmp3
+	ldx	#tmp2
+	tstb
+	beq	:move
+	dex
+	dex
+:move	clra
+	ldab	#2
+	int	$2d
+init	clr	swia
+exit	rts
+
+header	dw	init
+	dw	read
+	dw	write
+	dfb	0
+	dw	fatbuf
+	dw	dirbuf
+	ds	3
+	dw	$200
+	dfb	1
+	dfb	0
+	dfb	1
+	dw	32
+sectors =	.+1
+	dw	0
+	dfb	$fe
+	dfb	1
+	dfb	8
+	dfb	1
+
+	sect	.
+fatbuf	ds	$200
+
+

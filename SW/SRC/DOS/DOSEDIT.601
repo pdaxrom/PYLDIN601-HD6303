@@ -1,0 +1,155 @@
+
+;********************
+;*		    *
+;*  The DOS Editor  *
+;*		    *
+;*     1-Mar-90     *
+;*		    *
+;********************
+
+minlen	=	3
+bufsize =	2048
+
+	sect	$2d
+swib	dfb	0
+swia	dfb	0
+swix	dw	0
+	ends
+
+stkptr	dw	stack
+bufptr	dw	0
+stkbtm	dw	stack
+
+edit	stx	bufptr
+	int	$14
+	psha
+	pshb
+	clra
+	bra	:5
+:down	cpx	stkbtm
+	beq	:0
+	ldaa	x
+	inx
+	tsta
+	bne	:down
+	cpx	stkbtm
+	bne	:setptr
+:0	ldx	#stack
+	bra	:setptr
+:up	tsta
+	bne	:1
+	cpx	stkbtm
+	bne	:4
+:1	cpx	#stack
+	bne	:2
+	cpx	stkbtm
+	beq	:edit
+	ldx	stkbtm
+:2	dex
+:3	dex
+	tst	x
+	bne	:3
+	inx
+:setptr stx	stkptr
+:4	ldaa	swib
+	clrb
+	ldx	#stkptr
+	int	$2d
+:edit	pulb
+	pula
+	psha
+	pshb
+	int	$15
+	ldaa	#<-1
+:5	ldab	swib
+	ldx	swix
+	psha
+	int	$67
+	staa	swia
+	pula
+	ldx	stkptr
+	subb	#$c3
+	beq	:down
+	decb
+	beq	:up
+	addb	#4
+	bne	:edit
+	ins
+	ins
+	tsta
+	beq	:store
+	sts	tmp
+	sei
+	txs
+	ldx	swix
+:cmp	pulb
+	cmpb	x
+	sec
+	bne	:6
+	inx
+	tstb
+	bne	:cmp
+:6	lds	tmp
+	cli
+	bcc	:exit
+:store	ldaa	stkbtm+1
+	ldab	stkbtm
+	suba	#<limit
+	sbcb	#>limit
+	bcs	:10
+	ldx	#lead0
+	stx	tmp2
+:7	tsta
+	beq	:9
+:8	deca
+:9	inx
+	stx	tmp
+	ldx	stkbtm
+	dex
+	stx	stkbtm
+	ldx	tmp
+	tst	x
+	bne	:7
+	tsta
+	bne	:8
+	ldab	#>bufsize
+	ldx	#tmp
+	int	$2d
+:10	ldaa	swia
+	clrb
+	cmpa	#minlen
+	bcs	:exit
+	ldx	#bufptr
+	int	$2d
+	sec
+	adca	stkbtm+1
+	adcb	stkbtm
+	staa	stkbtm+1
+	stab	stkbtm
+	ldx	stkbtm
+	stx	stkptr
+	dex
+	clr	x
+:exit	rts
+
+init	main
+	ldaa	#$21
+	ldx	#edit
+	int	$2f
+	int	$2c
+	int	$38
+
+	dfb	0
+
+	asc	'The DOS Editor (c) Todor Todorov, 1-Mar-90'
+
+lead0	=	.-1
+stack	dfb	0
+
+	sect	.
+	ds	bufsize-1
+limit	=	.-$100
+tmp	dw	0
+tmp2	dw	0
+
+
