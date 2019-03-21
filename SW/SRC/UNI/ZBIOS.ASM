@@ -536,9 +536,12 @@ loop		jsr	uart_in
 		beq	cmd_save
 		cmpa	#'G'
 		beq	cmd_go
+		cmpa	#'Q'
+		beq	ret
 		ldaa	#'E'
 		jsr	uart_out
 		bra	loop
+ret		rts
 
 cmd_load	bsr	get_block_addr
 cmd_lo1		jsr	uart_in
@@ -1944,17 +1947,17 @@ int_37		proc
 		bne	ok
 		ldx	#sysrts 	;force return
 		stx	swix
-;		clrb			;don't change page
 		ldab	MEMPAGE_SEL	;don't change page
 ok
 		tsx
+		andb	#$0F
+		beq	skip
 		ldaa	2,x
 		anda	#MEMPAGE_FMASK|MEMPAGE_HI
-		andb	#$0F
 		aba
 		staa	2,x		;corresponding page
 
-		ldd	swix		;go to it via rts exit from this int
+skip		ldd	swix		;go to it via rts exit from this int
 		std	8,x		;pc
 
 		ldaa	3,x		;pass original ZP parms
