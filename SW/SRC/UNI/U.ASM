@@ -11,7 +11,8 @@
 ; ***********************************************************
 ; *							    *
 ; *			  File System			    *
-; *		  Version 3.10 / 07-May-1990		    *
+; *		  Version 3.12 / 04-Apr-1991		    *
+; *	  5 години от сватбата на YGP (дървена сватба)	    *
 ; *							    *
 ; ***********************************************************
 		list	off
@@ -431,6 +432,8 @@ con_buff	ds	80+1
 trunc_x 	ds	2
 cr_flag 	ds	1
 eol_flag	ds	1
+
+alloc_x1	ds	2
 ;
 		ERROR	*/$E600        ;E5E0
 ;
@@ -439,7 +442,7 @@ eol_flag	ds	1
 ;----------------------------------------------------------
 
 		org	code
-		dw	$5AA5
+		dw	$A55A
 		db	'UniDOS  '
 		jmp	init_buffers
 		jmp	print_version
@@ -555,9 +558,9 @@ eol_flag	ds	1
 		db	0
 ;		dw	0
 
-version_no	db	3,10
+version_no	db	3,12
 
-version 	db	10, 'UniDOS (R) kernel  Version 3.10', 0
+version 	db	10, 'UniDOS (R) kernel  Version 3.12', 0
 ;copyright	 db	 10, '(c) Ivo Nenov & Orlin Shopov - Eagle software, 1988-89',10,0
 
 print_version	proc
@@ -1662,20 +1665,20 @@ alloc_clust	proc
 		clrb
 		bsr	clust_to_sec
 		bcs	alloc_ret
-		stx	x1
+		stx	alloc_x1
 
 		ldaa	fat_drive
 		jsr	get_head_addr
 		ldaa	x, tns+1
-		suba	x1+1
-		staa	x1+1
+		suba	alloc_x1+1
+		staa	alloc_x1+1
 		ldaa	x, tns
-		sbca	x1
-		staa	x1
+		sbca	alloc_x1
+		staa	alloc_x1
 
 		ldaa	x, spc
 		clrb
-		ldx	x1
+		ldx	alloc_x1
 		int	$29
 		stx	alloc_n_clust
 loop
@@ -4328,6 +4331,8 @@ calc_sec	;X- cluster
 		staa	x, hndl_cur_clust
 		ldaa	x1+1
 		staa	x, hndl_cur_clust+1
+		ldaa	x, hndl_drive
+		staa	fat_drive
 		ldx	x1
 		jsr	clust_to_sec
 		bcs	calc_ret
@@ -5416,7 +5421,7 @@ int_52		proc
 		tsta
 		bne	error
 
-		ldaa	fat_drive
+;??????????	ldaa	fat_drive		; commented 30.Jun.1990
 		ldx	#2
 		clrb
 		jsr	clust_to_sec
