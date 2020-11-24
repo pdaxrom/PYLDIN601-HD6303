@@ -1,10 +1,9 @@
 ifneq (Microsoft, $(findstring Microsoft, $(shell uname -r)))
-SCUBACMD = /opt/diamond/3.9_x64/ispfpga/bin/lin64/scuba
-FOUNDRY  = /opt/diamond/3.9_x64/ispfpga
+SCUBACMD = /usr/local/diamond/3.11_x64/ispfpga/bin/lin64/scuba
+FOUNDRY  = /usr/local/diamond/3.11_x64/ispfpga
 SCUBA = \
-	export LD_LIBRARY_PATH="/opt/diamond/3.9_x64/tcltk/lib:/opt/diamond/3.9_x64/ispfpga/bin/lin64:/opt/diamond/3.9_x64/bin/lin64:/opt/diamond/3.9_x64/ispfpga/bin/lin64"; \
+	export LD_LIBRARY_PATH="/usr/local/diamond/3.11_x64/tcltk/lib:/usr/local/diamond/3.11_x64/ispfpga/bin/lin64:/usr/local/diamond/3.11_x64/bin/lin64:/usr/local/diamond/3.11_x64/ispfpga/bin/lin64"; \
 	export FOUNDRY="$(FOUNDRY)"; \
-	export WSLENV="$WSLENV:FOUNDRY/l"; \
 	$(SCUBACMD)
 else
 SCUBACMD = /mnt/Storage/Games/lscc/diamond/3.10_x64/ispfpga/bin/nt64/scuba.exe
