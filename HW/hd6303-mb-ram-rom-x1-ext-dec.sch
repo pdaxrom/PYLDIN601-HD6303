@@ -19443,7 +19443,7 @@ Based on the following sources:
 <classes>
 <class number="0" name="default" width="0.1524" drill="0">
 </class>
-<class number="1" name="power" width="0.3048" drill="0">
+<class number="1" name="power" width="0.4572" drill="0">
 </class>
 </classes>
 <parts>
